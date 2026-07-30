@@ -1,0 +1,2 @@
+-- Data normalization is intentionally irreversible. Converting mergedIds
+-- back to a scalar would violate the public v1 activity contract.

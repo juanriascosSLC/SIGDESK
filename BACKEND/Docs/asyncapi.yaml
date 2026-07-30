@@ -1,0 +1,740 @@
+asyncapi: 3.0.0
+
+info:
+  title: SIG-Desk — Bus de Eventos de Dominio
+  version: "1.0.0"
+  description: >
+    Contrato formal de eventos de dominio para SIG-Desk, generado a partir de
+    domain-events.yaml. Cubre la coreografía basada en eventos entre todos los
+    microservicios (organization_service, resource_service, tickets_service,
+    workflow_service, notification_service, ai_advisor_service, audit_service).
+
+    Excepción documentada: la validación de recurso/agente IT al crear un
+    ticket es síncrona vía HTTP, no pasa por este bus (ver ADR-0001).
+
+    Tecnología de bus: PENDIENTE DE CONFIRMAR (Kafka, RabbitMQ u otra —
+    ver pendientes_abiertos en sig-desk-architecture-spec.yaml).
+  tags:
+    - name: organization_service
+    - name: resource_service
+    - name: tickets_service
+    - name: workflow_service
+    - name: notification_service
+    - name: ai_advisor_service
+
+defaultContentType: application/json
+
+servers:
+  event-bus:
+    host: "TBD"
+    protocol: "TBD"
+    description: >
+      Placeholder — tecnología de bus de mensajería aún no elegida.
+      Actualizar host/protocol una vez definido (Kafka, RabbitMQ, etc.)
+
+channels:
+
+  # ── organization_service ──────────────────────────────────────────
+  CompanyCreada:
+    address: organization_service.CompanyCreada
+    messages:
+      CompanyCreada.message:
+        $ref: '#/components/messages/CompanyCreada'
+  CompanyActualizada:
+    address: organization_service.CompanyActualizada
+    messages:
+      CompanyActualizada.message:
+        $ref: '#/components/messages/CompanyActualizada'
+  UsuarioCreado:
+    address: organization_service.UsuarioCreado
+    messages:
+      UsuarioCreado.message:
+        $ref: '#/components/messages/UsuarioCreado'
+  UsuarioActualizado:
+    address: organization_service.UsuarioActualizado
+    messages:
+      UsuarioActualizado.message:
+        $ref: '#/components/messages/UsuarioActualizado'
+  UsuarioDesactivado:
+    address: organization_service.UsuarioDesactivado
+    messages:
+      UsuarioDesactivado.message:
+        $ref: '#/components/messages/UsuarioDesactivado'
+  AgenteITCreado:
+    address: organization_service.AgenteITCreado
+    messages:
+      AgenteITCreado.message:
+        $ref: '#/components/messages/AgenteITCreado'
+  AgenteITHabilidadActualizada:
+    address: organization_service.AgenteITHabilidadActualizada
+    messages:
+      AgenteITHabilidadActualizada.message:
+        $ref: '#/components/messages/AgenteITHabilidadActualizada'
+  AgenteITCapacidadCargaActualizada:
+    address: organization_service.AgenteITCapacidadCargaActualizada
+    messages:
+      AgenteITCapacidadCargaActualizada.message:
+        $ref: '#/components/messages/AgenteITCapacidadCargaActualizada'
+  RolCreado:
+    address: organization_service.RolCreado
+    messages:
+      RolCreado.message:
+        $ref: '#/components/messages/RolCreado'
+  RolPermisosActualizado:
+    address: organization_service.RolPermisosActualizado
+    messages:
+      RolPermisosActualizado.message:
+        $ref: '#/components/messages/RolPermisosActualizado'
+
+  # ── resource_service ───────────────────────────────────────────────
+  RecursoCreado:
+    address: resource_service.RecursoCreado
+    messages:
+      RecursoCreado.message:
+        $ref: '#/components/messages/RecursoCreado'
+  RecursoEstadoCambiado:
+    address: resource_service.RecursoEstadoCambiado
+    messages:
+      RecursoEstadoCambiado.message:
+        $ref: '#/components/messages/RecursoEstadoCambiado'
+  RecursoResponsableAsignado:
+    address: resource_service.RecursoResponsableAsignado
+    messages:
+      RecursoResponsableAsignado.message:
+        $ref: '#/components/messages/RecursoResponsableAsignado'
+  RecursoCompartidoConCompany:
+    address: resource_service.RecursoCompartidoConCompany
+    messages:
+      RecursoCompartidoConCompany.message:
+        $ref: '#/components/messages/RecursoCompartidoConCompany'
+  LicenciaProximaAVencer:
+    address: resource_service.LicenciaProximaAVencer
+    messages:
+      LicenciaProximaAVencer.message:
+        $ref: '#/components/messages/LicenciaProximaAVencer'
+  MantenimientoProgramado:
+    address: resource_service.MantenimientoProgramado
+    messages:
+      MantenimientoProgramado.message:
+        $ref: '#/components/messages/MantenimientoProgramado'
+  RecursoDadoDeBaja:
+    address: resource_service.RecursoDadoDeBaja
+    messages:
+      RecursoDadoDeBaja.message:
+        $ref: '#/components/messages/RecursoDadoDeBaja'
+
+  # ── tickets_service ────────────────────────────────────────────────
+  TicketCreado:
+    address: tickets_service.TicketCreado
+    messages:
+      TicketCreado.message:
+        $ref: '#/components/messages/TicketCreado'
+  TicketAsignado:
+    address: tickets_service.TicketAsignado
+    messages:
+      TicketAsignado.message:
+        $ref: '#/components/messages/TicketAsignado'
+  TicketReasignado:
+    address: tickets_service.TicketReasignado
+    messages:
+      TicketReasignado.message:
+        $ref: '#/components/messages/TicketReasignado'
+  TicketEscaladoAIT:
+    address: tickets_service.TicketEscaladoAIT
+    messages:
+      TicketEscaladoAIT.message:
+        $ref: '#/components/messages/TicketEscaladoAIT'
+  TicketEstadoCambiado:
+    address: tickets_service.TicketEstadoCambiado
+    messages:
+      TicketEstadoCambiado.message:
+        $ref: '#/components/messages/TicketEstadoCambiado'
+  TicketSLAEnRiesgo:
+    address: tickets_service.TicketSLAEnRiesgo
+    messages:
+      TicketSLAEnRiesgo.message:
+        $ref: '#/components/messages/TicketSLAEnRiesgo'
+  TicketSLAIncumplido:
+    address: tickets_service.TicketSLAIncumplido
+    messages:
+      TicketSLAIncumplido.message:
+        $ref: '#/components/messages/TicketSLAIncumplido'
+  TicketDestinatariosActualizados:
+    address: tickets_service.TicketDestinatariosActualizados
+    messages:
+      TicketDestinatariosActualizados.message:
+        $ref: '#/components/messages/TicketDestinatariosActualizados'
+  TicketResuelto:
+    address: tickets_service.TicketResuelto
+    messages:
+      TicketResuelto.message:
+        $ref: '#/components/messages/TicketResuelto'
+  TicketCerrado:
+    address: tickets_service.TicketCerrado
+    messages:
+      TicketCerrado.message:
+        $ref: '#/components/messages/TicketCerrado'
+  TicketReabierto:
+    address: tickets_service.TicketReabierto
+    messages:
+      TicketReabierto.message:
+        $ref: '#/components/messages/TicketReabierto'
+  SugerenciaAplicada:
+    address: tickets_service.SugerenciaAplicada
+    messages:
+      SugerenciaAplicada.message:
+        $ref: '#/components/messages/SugerenciaAplicada'
+  SugerenciaDescartada:
+    address: tickets_service.SugerenciaDescartada
+    messages:
+      SugerenciaDescartada.message:
+        $ref: '#/components/messages/SugerenciaDescartada'
+
+  # ── workflow_service ───────────────────────────────────────────────
+  WorkflowPublicado:
+    address: workflow_service.WorkflowPublicado
+    messages:
+      WorkflowPublicado.message:
+        $ref: '#/components/messages/WorkflowPublicado'
+  WorkflowDesactivado:
+    address: workflow_service.WorkflowDesactivado
+    messages:
+      WorkflowDesactivado.message:
+        $ref: '#/components/messages/WorkflowDesactivado'
+  ReglaEjecutada:
+    address: workflow_service.ReglaEjecutada
+    messages:
+      ReglaEjecutada.message:
+        $ref: '#/components/messages/ReglaEjecutada'
+
+  # ── notification_service ──────────────────────────────────────────
+  NotificacionEnviada:
+    address: notification_service.NotificacionEnviada
+    messages:
+      NotificacionEnviada.message:
+        $ref: '#/components/messages/NotificacionEnviada'
+  NotificacionFallida:
+    address: notification_service.NotificacionFallida
+    messages:
+      NotificacionFallida.message:
+        $ref: '#/components/messages/NotificacionFallida'
+
+  # ── ai_advisor_service ─────────────────────────────────────────────
+  SugerenciaGenerada:
+    address: ai_advisor_service.SugerenciaGenerada
+    messages:
+      SugerenciaGenerada.message:
+        $ref: '#/components/messages/SugerenciaGenerada'
+  EscaladoAAgenteHumano:
+    address: ai_advisor_service.EscaladoAAgenteHumano
+    messages:
+      EscaladoAAgenteHumano.message:
+        $ref: '#/components/messages/EscaladoAAgenteHumano'
+
+operations:
+
+  onCompanyCreada:
+    action: send
+    channel: { $ref: '#/channels/CompanyCreada' }
+    tags: [{ name: organization_service }]
+    description: "Publicado por organization_service. Consumidores: audit_service"
+  onCompanyActualizada:
+    action: send
+    channel: { $ref: '#/channels/CompanyActualizada' }
+    tags: [{ name: organization_service }]
+    description: "Publicado por organization_service. Consumidores: audit_service"
+  onUsuarioCreado:
+    action: send
+    channel: { $ref: '#/channels/UsuarioCreado' }
+    tags: [{ name: organization_service }]
+    description: "Publicado por organization_service. Consumidores: audit_service, notification_service"
+  onUsuarioActualizado:
+    action: send
+    channel: { $ref: '#/channels/UsuarioActualizado' }
+    tags: [{ name: organization_service }]
+    description: "Publicado por organization_service. Consumidores: audit_service"
+  onUsuarioDesactivado:
+    action: send
+    channel: { $ref: '#/channels/UsuarioDesactivado' }
+    tags: [{ name: organization_service }]
+    description: "Publicado por organization_service. Consumidores: tickets_service, audit_service"
+  onAgenteITCreado:
+    action: send
+    channel: { $ref: '#/channels/AgenteITCreado' }
+    tags: [{ name: organization_service }]
+    description: "Publicado por organization_service. Consumidores: audit_service"
+  onAgenteITHabilidadActualizada:
+    action: send
+    channel: { $ref: '#/channels/AgenteITHabilidadActualizada' }
+    tags: [{ name: organization_service }]
+    description: "Publicado por organization_service. Consumidores: workflow_service, audit_service"
+  onAgenteITCapacidadCargaActualizada:
+    action: send
+    channel: { $ref: '#/channels/AgenteITCapacidadCargaActualizada' }
+    tags: [{ name: organization_service }]
+    description: "Publicado por organization_service. Consumidores: tickets_service"
+  onRolCreado:
+    action: send
+    channel: { $ref: '#/channels/RolCreado' }
+    tags: [{ name: organization_service }]
+    description: "Publicado por organization_service. Consumidores: audit_service"
+  onRolPermisosActualizado:
+    action: send
+    channel: { $ref: '#/channels/RolPermisosActualizado' }
+    tags: [{ name: organization_service }]
+    description: "Publicado por organization_service. Consumidores: audit_service"
+
+  onRecursoCreado:
+    action: send
+    channel: { $ref: '#/channels/RecursoCreado' }
+    tags: [{ name: resource_service }]
+    description: "Publicado por resource_service. Consumidores: audit_service"
+  onRecursoEstadoCambiado:
+    action: send
+    channel: { $ref: '#/channels/RecursoEstadoCambiado' }
+    tags: [{ name: resource_service }]
+    description: "Publicado por resource_service. Consumidores: tickets_service, audit_service"
+  onRecursoResponsableAsignado:
+    action: send
+    channel: { $ref: '#/channels/RecursoResponsableAsignado' }
+    tags: [{ name: resource_service }]
+    description: "Publicado por resource_service. Consumidores: notification_service"
+  onRecursoCompartidoConCompany:
+    action: send
+    channel: { $ref: '#/channels/RecursoCompartidoConCompany' }
+    tags: [{ name: resource_service }]
+    description: "Publicado por resource_service. Consumidores: audit_service"
+  onLicenciaProximaAVencer:
+    action: send
+    channel: { $ref: '#/channels/LicenciaProximaAVencer' }
+    tags: [{ name: resource_service }]
+    description: "Publicado por resource_service. Consumidores: notification_service"
+  onMantenimientoProgramado:
+    action: send
+    channel: { $ref: '#/channels/MantenimientoProgramado' }
+    tags: [{ name: resource_service }]
+    description: "Publicado por resource_service. Consumidores: notification_service"
+  onRecursoDadoDeBaja:
+    action: send
+    channel: { $ref: '#/channels/RecursoDadoDeBaja' }
+    tags: [{ name: resource_service }]
+    description: "Publicado por resource_service. Consumidores: tickets_service, audit_service"
+
+  onTicketCreado:
+    action: send
+    channel: { $ref: '#/channels/TicketCreado' }
+    tags: [{ name: tickets_service }]
+    description: "Publicado por tickets_service. Consumidores: workflow_service, ai_advisor_service, notification_service, audit_service"
+  onTicketAsignado:
+    action: send
+    channel: { $ref: '#/channels/TicketAsignado' }
+    tags: [{ name: tickets_service }]
+    description: "Publicado por tickets_service. Consumidores: notification_service, audit_service"
+  onTicketReasignado:
+    action: send
+    channel: { $ref: '#/channels/TicketReasignado' }
+    tags: [{ name: tickets_service }]
+    description: "Publicado por tickets_service. Consumidores: notification_service, audit_service"
+  onTicketEscaladoAIT:
+    action: send
+    channel: { $ref: '#/channels/TicketEscaladoAIT' }
+    tags: [{ name: tickets_service }]
+    description: "Publicado por tickets_service. Consumidores: notification_service, audit_service"
+  onTicketEstadoCambiado:
+    action: send
+    channel: { $ref: '#/channels/TicketEstadoCambiado' }
+    tags: [{ name: tickets_service }]
+    description: "Publicado por tickets_service. Consumidores: notification_service, ai_advisor_service, audit_service"
+  onTicketSLAEnRiesgo:
+    action: send
+    channel: { $ref: '#/channels/TicketSLAEnRiesgo' }
+    tags: [{ name: tickets_service }]
+    description: "Publicado por tickets_service. Consumidores: notification_service"
+  onTicketSLAIncumplido:
+    action: send
+    channel: { $ref: '#/channels/TicketSLAIncumplido' }
+    tags: [{ name: tickets_service }]
+    description: "Publicado por tickets_service. Consumidores: notification_service, audit_service"
+  onTicketDestinatariosActualizados:
+    action: send
+    channel: { $ref: '#/channels/TicketDestinatariosActualizados' }
+    tags: [{ name: tickets_service }]
+    description: "Publicado por tickets_service. Consumidores: notification_service"
+  onTicketResuelto:
+    action: send
+    channel: { $ref: '#/channels/TicketResuelto' }
+    tags: [{ name: tickets_service }]
+    description: "Publicado por tickets_service. Consumidores: notification_service, ai_advisor_service"
+  onTicketCerrado:
+    action: send
+    channel: { $ref: '#/channels/TicketCerrado' }
+    tags: [{ name: tickets_service }]
+    description: "Publicado por tickets_service. Consumidores: notification_service, audit_service"
+  onTicketReabierto:
+    action: send
+    channel: { $ref: '#/channels/TicketReabierto' }
+    tags: [{ name: tickets_service }]
+    description: "Publicado por tickets_service. Consumidores: notification_service, audit_service"
+  onSugerenciaAplicada:
+    action: send
+    channel: { $ref: '#/channels/SugerenciaAplicada' }
+    tags: [{ name: tickets_service }]
+    description: "Publicado por tickets_service. Consumidores: ai_advisor_service, audit_service"
+  onSugerenciaDescartada:
+    action: send
+    channel: { $ref: '#/channels/SugerenciaDescartada' }
+    tags: [{ name: tickets_service }]
+    description: "Publicado por tickets_service. Consumidores: ai_advisor_service, audit_service"
+
+  onWorkflowPublicado:
+    action: send
+    channel: { $ref: '#/channels/WorkflowPublicado' }
+    tags: [{ name: workflow_service }]
+    description: "Publicado por workflow_service. Consumidores: audit_service"
+  onWorkflowDesactivado:
+    action: send
+    channel: { $ref: '#/channels/WorkflowDesactivado' }
+    tags: [{ name: workflow_service }]
+    description: "Publicado por workflow_service. Consumidores: audit_service"
+  onReglaEjecutada:
+    action: send
+    channel: { $ref: '#/channels/ReglaEjecutada' }
+    tags: [{ name: workflow_service }]
+    description: >
+      Publicado por workflow_service, en reacción a TicketCreado.
+      Consumidores: tickets_service, notification_service, audit_service.
+      Pieza central de la coreografía: TicketCreado -> ReglaEjecutada ->
+      tickets_service aplica la acción (asignar, marcar SLA, definir destinatarios).
+
+  onNotificacionEnviada:
+    action: send
+    channel: { $ref: '#/channels/NotificacionEnviada' }
+    tags: [{ name: notification_service }]
+    description: "Publicado por notification_service. Consumidores: audit_service"
+  onNotificacionFallida:
+    action: send
+    channel: { $ref: '#/channels/NotificacionFallida' }
+    tags: [{ name: notification_service }]
+    description: "Publicado por notification_service. Consumidores: audit_service"
+
+  onSugerenciaGenerada:
+    action: send
+    channel: { $ref: '#/channels/SugerenciaGenerada' }
+    tags: [{ name: ai_advisor_service }]
+    description: "Publicado por ai_advisor_service. Consumidores: tickets_service"
+  onEscaladoAAgenteHumano:
+    action: send
+    channel: { $ref: '#/channels/EscaladoAAgenteHumano' }
+    tags: [{ name: ai_advisor_service }]
+    description: "Publicado por ai_advisor_service. Consumidores: tickets_service, notification_service"
+
+components:
+  messages:
+
+    CompanyCreada:
+      payload:
+        type: object
+        properties:
+          company_id: { type: string, format: uuid }
+          tipo: { type: string, enum: [empresa, departamento, equipo] }
+          parent_id: { type: string, format: uuid, nullable: true }
+        required: [company_id, tipo]
+
+    CompanyActualizada:
+      payload:
+        type: object
+        properties:
+          company_id: { type: string, format: uuid }
+          cambios: { type: object, additionalProperties: true }
+        required: [company_id, cambios]
+
+    UsuarioCreado:
+      payload:
+        type: object
+        properties:
+          usuario_id: { type: string, format: uuid }
+          company_id: { type: string, format: uuid }
+          role_id: { type: string, format: uuid }
+        required: [usuario_id, company_id, role_id]
+
+    UsuarioActualizado:
+      payload:
+        type: object
+        properties:
+          usuario_id: { type: string, format: uuid }
+          cambios: { type: object, additionalProperties: true }
+        required: [usuario_id, cambios]
+
+    UsuarioDesactivado:
+      payload:
+        type: object
+        properties:
+          usuario_id: { type: string, format: uuid }
+        required: [usuario_id]
+
+    AgenteITCreado:
+      payload:
+        type: object
+        properties:
+          agente_it_id: { type: string, format: uuid }
+          usuario_id: { type: string, format: uuid }
+          habilidad: { type: string }
+        required: [agente_it_id, usuario_id, habilidad]
+
+    AgenteITHabilidadActualizada:
+      payload:
+        type: object
+        properties:
+          agente_it_id: { type: string, format: uuid }
+          habilidad_nueva: { type: string }
+        required: [agente_it_id, habilidad_nueva]
+
+    AgenteITCapacidadCargaActualizada:
+      payload:
+        type: object
+        properties:
+          agente_it_id: { type: string, format: uuid }
+          capacidad: { type: integer, minimum: 0 }
+        required: [agente_it_id, capacidad]
+
+    RolCreado:
+      payload:
+        type: object
+        properties:
+          role_id: { type: string, format: uuid }
+        required: [role_id]
+
+    RolPermisosActualizado:
+      payload:
+        type: object
+        properties:
+          role_id: { type: string, format: uuid }
+          permisos: { type: object, additionalProperties: true }
+        required: [role_id, permisos]
+
+    RecursoCreado:
+      payload:
+        type: object
+        properties:
+          recurso_id: { type: string, format: uuid }
+          tipo: { type: string, enum: [hardware, software_licencia, infraestructura_red] }
+        required: [recurso_id, tipo]
+
+    RecursoEstadoCambiado:
+      payload:
+        type: object
+        properties:
+          recurso_id: { type: string, format: uuid }
+          estado_anterior: { type: string, enum: [adquisicion, en_uso, mantenimiento, baja] }
+          estado_nuevo: { type: string, enum: [adquisicion, en_uso, mantenimiento, baja] }
+        required: [recurso_id, estado_anterior, estado_nuevo]
+
+    RecursoResponsableAsignado:
+      payload:
+        type: object
+        properties:
+          recurso_id: { type: string, format: uuid }
+          usuario_id: { type: string, format: uuid }
+        required: [recurso_id, usuario_id]
+
+    RecursoCompartidoConCompany:
+      payload:
+        type: object
+        properties:
+          recurso_id: { type: string, format: uuid }
+          company_id: { type: string, format: uuid }
+        required: [recurso_id, company_id]
+
+    LicenciaProximaAVencer:
+      payload:
+        type: object
+        properties:
+          recurso_id: { type: string, format: uuid }
+          fecha_vencimiento: { type: string, format: date-time }
+        required: [recurso_id, fecha_vencimiento]
+
+    MantenimientoProgramado:
+      payload:
+        type: object
+        properties:
+          recurso_id: { type: string, format: uuid }
+          fecha_mantenimiento: { type: string, format: date-time }
+        required: [recurso_id, fecha_mantenimiento]
+
+    RecursoDadoDeBaja:
+      payload:
+        type: object
+        properties:
+          recurso_id: { type: string, format: uuid }
+        required: [recurso_id]
+
+    TicketCreado:
+      payload:
+        type: object
+        properties:
+          ticket_id: { type: string, format: uuid }
+          recurso_id: { type: string, format: uuid }
+          creador_id: { type: string, format: uuid }
+          categoria_id: { type: string, format: uuid }
+        required: [ticket_id, recurso_id, creador_id, categoria_id]
+
+    TicketAsignado:
+      payload:
+        type: object
+        properties:
+          ticket_id: { type: string, format: uuid }
+          agente_it_id: { type: string, format: uuid }
+          tipo_asignacion: { type: string, enum: [automatica, manual] }
+        required: [ticket_id, agente_it_id, tipo_asignacion]
+
+    TicketReasignado:
+      payload:
+        type: object
+        properties:
+          ticket_id: { type: string, format: uuid }
+          agente_it_anterior: { type: string, format: uuid }
+          agente_it_nuevo: { type: string, format: uuid }
+        required: [ticket_id, agente_it_anterior, agente_it_nuevo]
+
+    TicketEscaladoAIT:
+      payload:
+        type: object
+        properties:
+          ticket_id: { type: string, format: uuid }
+          agente_it_id: { type: string, format: uuid }
+        required: [ticket_id, agente_it_id]
+
+    TicketEstadoCambiado:
+      payload:
+        type: object
+        properties:
+          ticket_id: { type: string, format: uuid }
+          estado_anterior: { type: string, enum: [abierto, en_progreso, resuelto, cerrado, reabierto] }
+          estado_nuevo: { type: string, enum: [abierto, en_progreso, resuelto, cerrado, reabierto] }
+        required: [ticket_id, estado_anterior, estado_nuevo]
+
+    TicketSLAEnRiesgo:
+      payload:
+        type: object
+        properties:
+          ticket_id: { type: string, format: uuid }
+          tiempo_restante: { type: integer, description: "segundos — unidad a confirmar" }
+        required: [ticket_id, tiempo_restante]
+
+    TicketSLAIncumplido:
+      payload:
+        type: object
+        properties:
+          ticket_id: { type: string, format: uuid }
+          tiempo_excedido: { type: integer, description: "segundos — unidad a confirmar" }
+        required: [ticket_id, tiempo_excedido]
+
+    TicketDestinatariosActualizados:
+      payload:
+        type: object
+        properties:
+          ticket_id: { type: string, format: uuid }
+          destinatarios:
+            type: array
+            items: { type: string, format: uuid }
+        required: [ticket_id, destinatarios]
+
+    TicketResuelto:
+      payload:
+        type: object
+        properties:
+          ticket_id: { type: string, format: uuid }
+        required: [ticket_id]
+
+    TicketCerrado:
+      payload:
+        type: object
+        properties:
+          ticket_id: { type: string, format: uuid }
+        required: [ticket_id]
+
+    TicketReabierto:
+      payload:
+        type: object
+        properties:
+          ticket_id: { type: string, format: uuid }
+          motivo: { type: string }
+        required: [ticket_id, motivo]
+
+    SugerenciaAplicada:
+      payload:
+        type: object
+        properties:
+          ticket_id: { type: string, format: uuid }
+          sugerencia_id: { type: string, format: uuid }
+          decision: { type: string, enum: [aplicada, descartada] }
+        required: [ticket_id, sugerencia_id, decision]
+
+    SugerenciaDescartada:
+      payload:
+        type: object
+        properties:
+          ticket_id: { type: string, format: uuid }
+          sugerencia_id: { type: string, format: uuid }
+          decision: { type: string, enum: [aplicada, descartada] }
+        required: [ticket_id, sugerencia_id, decision]
+
+    WorkflowPublicado:
+      payload:
+        type: object
+        properties:
+          workflow_id: { type: string, format: uuid }
+          categoria_id: { type: string, format: uuid }
+          version: { type: integer }
+        required: [workflow_id, categoria_id, version]
+
+    WorkflowDesactivado:
+      payload:
+        type: object
+        properties:
+          workflow_id: { type: string, format: uuid }
+        required: [workflow_id]
+
+    ReglaEjecutada:
+      payload:
+        type: object
+        properties:
+          workflow_id: { type: string, format: uuid }
+          ticket_id: { type: string, format: uuid }
+          accion_resultante: { type: string }
+        required: [workflow_id, ticket_id, accion_resultante]
+
+    NotificacionEnviada:
+      payload:
+        type: object
+        properties:
+          notificacion_id: { type: string, format: uuid }
+          canal: { type: string, enum: [email, push, sms, in_app] }
+          destinatario: { type: string }
+        required: [notificacion_id, canal, destinatario]
+
+    NotificacionFallida:
+      payload:
+        type: object
+        properties:
+          notificacion_id: { type: string, format: uuid }
+          canal: { type: string, enum: [email, push, sms, in_app] }
+          error: { type: string }
+        required: [notificacion_id, canal, error]
+
+    SugerenciaGenerada:
+      payload:
+        type: object
+        properties:
+          ticket_id: { type: string, format: uuid }
+          tipo_sugerencia: { type: string, enum: [triage, copiloto, chatbot] }
+          contenido: { type: string }
+        required: [ticket_id, tipo_sugerencia, contenido]
+
+    EscaladoAAgenteHumano:
+      payload:
+        type: object
+        properties:
+          ticket_id: { type: string, format: uuid }
+          contexto: { type: object, additionalProperties: true }
+        required: [ticket_id, contexto]

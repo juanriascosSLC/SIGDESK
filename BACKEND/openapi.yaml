@@ -1,0 +1,864 @@
+openapi: 3.1.0
+info:
+  title: SIG-DESK API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080/api/v1
+paths:
+  /tickets:
+    get:
+      operationId: listTickets
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/TicketStatus" }
+        - name: priority
+          in: query
+          schema: { $ref: "#/components/schemas/TicketPriority" }
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: site
+          in: query
+          schema: { type: string }
+        - name: assignee
+          in: query
+          schema: { type: string }
+        - name: unassigned
+          in: query
+          schema: { type: boolean }
+        - name: q
+          in: query
+          description: Free-text search over title, description and human id.
+          schema: { type: string }
+        - name: cursor
+          in: query
+          description: Opaque keyset-pagination cursor from a previous response's nextCursor.
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: mergedInto
+          in: query
+          description: Overrides the default (exclude merged tickets) and returns only tickets absorbed into this human id.
+          schema: { type: string }
+      responses:
+        "200":
+          description: Ticket page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, hasMore]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Ticket"
+                  nextCursor:
+                    type: string
+                  hasMore:
+                    type: boolean
+    post:
+      operationId: createTicket
+      deprecated: true
+      description: Legacy creation path. New INC records use POST /entities/INC.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTicket"
+      responses:
+        "201":
+          description: Ticket created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+  /tickets/{id}:
+    parameters:
+      - $ref: "#/components/parameters/TicketID"
+    get:
+      operationId: getTicket
+      responses:
+        "200":
+          description: Ticket detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+        "404":
+          description: Ticket not found
+  /tickets/{id}/status:
+    parameters:
+      - $ref: "#/components/parameters/TicketID"
+    patch:
+      operationId: updateTicketStatus
+      deprecated: true
+      description: Legacy transition path. New INC records use the metadata runtime transition endpoint.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  $ref: "#/components/schemas/TicketStatus"
+                actorName:
+                  type: [string, "null"]
+      responses:
+        "200":
+          description: Updated ticket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+        "409":
+          description: Invalid status transition
+  /tickets/{id}/assign:
+    parameters:
+      - $ref: "#/components/parameters/TicketID"
+    post:
+      operationId: assignTicket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                assigneeName:
+                  type: [string, "null"]
+                  description: Null unassigns the ticket.
+                actorName:
+                  type: [string, "null"]
+      responses:
+        "200":
+          description: Updated ticket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+  /tickets/{id}/merge:
+    parameters:
+      - $ref: "#/components/parameters/TicketID"
+    post:
+      operationId: mergeTickets
+      description: Merges other tickets into this one; the merged tickets are marked resolved and linked via mergedIntoId.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mergedIds]
+              properties:
+                mergedIds:
+                  type: array
+                  items: { type: string }
+                actorName:
+                  type: [string, "null"]
+      responses:
+        "200":
+          description: Primary ticket after merge
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+  /tickets/{id}/unmerge/{mergedId}:
+    parameters:
+      - $ref: "#/components/parameters/TicketID"
+      - name: mergedId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: unmergeTicket
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                actorName:
+                  type: [string, "null"]
+      responses:
+        "200":
+          description: Primary ticket after unmerge
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+  /tickets/{id}/comments:
+    parameters:
+      - $ref: "#/components/parameters/TicketID"
+    get:
+      operationId: listTicketComments
+      responses:
+        "200":
+          description: Comments in chronological order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Comment" }
+    post:
+      operationId: addTicketComment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                authorName: { type: string }
+                body: { type: string }
+                isInternal: { type: boolean, default: false }
+      responses:
+        "201":
+          description: Comment created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Comment" }
+  /tickets/{id}/attachments:
+    parameters:
+      - $ref: "#/components/parameters/TicketID"
+    get:
+      operationId: listTicketAttachments
+      responses:
+        "200":
+          description: Attachments in chronological order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Attachment" }
+    post:
+      operationId: uploadTicketAttachment
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                uploaderName: { type: string }
+      responses:
+        "201":
+          description: Attachment stored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Attachment" }
+  /attachments/{attachmentId}/download:
+    parameters:
+      - name: attachmentId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: downloadTicketAttachment
+      responses:
+        "200":
+          description: Raw file bytes
+          content:
+            application/octet-stream: {}
+        "404":
+          description: Attachment not found
+  /tickets/{id}/watchers:
+    parameters:
+      - $ref: "#/components/parameters/TicketID"
+    get:
+      operationId: listTicketWatchers
+      responses:
+        "200":
+          description: Watchers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Watcher" }
+    post:
+      operationId: addTicketWatcher
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [watcherName]
+              properties:
+                watcherName: { type: string }
+      responses:
+        "204":
+          description: Watcher added
+  /tickets/{id}/watchers/{watcherName}:
+    parameters:
+      - $ref: "#/components/parameters/TicketID"
+      - name: watcherName
+        in: path
+        required: true
+        schema: { type: string }
+    delete:
+      operationId: removeTicketWatcher
+      responses:
+        "204":
+          description: Watcher removed
+  /tickets/{id}/activity:
+    parameters:
+      - $ref: "#/components/parameters/TicketID"
+    get:
+      operationId: listTicketActivity
+      responses:
+        "200":
+          description: Activity stream in chronological order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ActivityEntry" }
+  /catalog/definitions:
+    get:
+      operationId: listCatalogDefinitions
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [published]
+      responses:
+        "200":
+          description: Definition versions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/CatalogDefinition" }
+    post:
+      operationId: createCatalogDefinitionDraft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CatalogDefinitionDraft" }
+      responses:
+        "201":
+          description: Immutable draft version created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogDefinition" }
+        "422":
+          description: Invalid metamodel
+  /catalog/definitions/{entityKey}:
+    parameters:
+      - $ref: "#/components/parameters/EntityKey"
+    get:
+      operationId: getPublishedCatalogDefinition
+      responses:
+        "200":
+          description: Current published executable definition
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogDefinition" }
+        "404":
+          description: No published definition
+  /catalog/definitions/{entityKey}/versions/{version}/validate:
+    parameters:
+      - $ref: "#/components/parameters/EntityKey"
+      - $ref: "#/components/parameters/DefinitionVersion"
+    post:
+      operationId: validateCatalogDefinitionPublication
+      description: Resolves module-owned resources and validates version compatibility.
+      responses:
+        "200":
+          description: Publication validation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicationValidation" }
+  /catalog/definitions/{entityKey}/versions/{version}/publish:
+    parameters:
+      - $ref: "#/components/parameters/EntityKey"
+      - $ref: "#/components/parameters/DefinitionVersion"
+    post:
+      operationId: publishCatalogDefinition
+      description: Compiles and persists an immutable, version-locked executable manifest.
+      responses:
+        "200":
+          description: Published definition
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogDefinition" }
+        "422":
+          description: Publication validation failed
+  /catalog/definitions/{entityKey}/versions/{version}/manifest:
+    parameters:
+      - $ref: "#/components/parameters/EntityKey"
+      - $ref: "#/components/parameters/DefinitionVersion"
+    get:
+      operationId: getExecutableDefinitionManifest
+      responses:
+        "200":
+          description: Immutable executable manifest
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExecutableDefinitionManifest" }
+  /entities/{entityKey}:
+    parameters:
+      - $ref: "#/components/parameters/EntityKey"
+    get:
+      operationId: listEntityRecords
+      responses:
+        "200":
+          description: Entity records
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/EntityRecord" }
+    post:
+      operationId: createEntityRecord
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "201":
+          description: Record created by the metadata runtime
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EntityRecord" }
+  /entities/{entityKey}/{entityID}/transitions/{transitionKey}:
+    parameters:
+      - $ref: "#/components/parameters/EntityKey"
+      - name: entityID
+        in: path
+        required: true
+        schema: { type: string }
+      - name: transitionKey
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: transitionEntityRecord
+      responses:
+        "200":
+          description: Record after interpreting the transition
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EntityRecord" }
+        "409":
+          description: Concurrent state change
+        "422":
+          description: Transition is not available from the current state
+  /catalog/definitions/{entityKey}/submit:
+    parameters:
+      - name: entityKey
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: submitCatalogIntake
+      deprecated: true
+      description: |
+        Compatibility alias for POST /entities/{entityKey}. The generic
+        metadata runtime creates the entity and emits a transactional outbox
+        event. Tickets asynchronously projects INC entities into its read
+        model and does not revalidate fields or lifecycle rules.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "201":
+          description: Generic entity created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityRecord"
+        "404":
+          description: No published definition for entityKey
+        "422":
+          description: Submitted data failed the definition's validation
+components:
+  parameters:
+    EntityKey:
+      name: entityKey
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[A-Z][A-Z0-9_]{1,31}$"
+    DefinitionVersion:
+      name: version
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    TicketID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^INC-[0-9]{6}$"
+  schemas:
+    ResourceBinding:
+      type: object
+      required: [module, resourceType, resourceId]
+      properties:
+        module:
+          type: string
+          enum: [iam, sla, automations, integrations, notifications, reports]
+        resourceType: { type: string }
+        resourceId: { type: string }
+        resourceVersion: { type: string }
+        contractVersion: { type: string }
+        required: { type: boolean, default: false }
+    ResourceReference:
+      allOf:
+        - $ref: "#/components/schemas/ResourceBinding"
+        - type: object
+          required: [resourceVersion, contractVersion, required]
+    CatalogSpecification:
+      type: object
+      required: [identity, fields, lifecycle]
+      properties:
+        description: { type: string }
+        identity:
+          type: object
+          required: [prefix]
+          properties:
+            prefix: { type: string }
+        fields:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [key, label, type, required]
+            additionalProperties: true
+        lifecycle:
+          type: object
+          required: [states, transitions]
+          properties:
+            states:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                required: [key, label]
+                additionalProperties: true
+            transitions:
+              type: array
+              items:
+                type: object
+                required: [key, label, from, to]
+                additionalProperties: false
+                properties:
+                  key: { type: string }
+                  label: { type: string }
+                  from: { type: string }
+                  to: { type: string }
+        bindings:
+          type: array
+          items: { $ref: "#/components/schemas/ResourceBinding" }
+        views:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+        events:
+          type: array
+          items: { type: object, additionalProperties: true }
+        actions:
+          type: array
+          items: { type: object, additionalProperties: true }
+        extensions:
+          type: object
+          additionalProperties: true
+    CatalogDefinitionDraft:
+      type: object
+      required: [entityKey, name, specification]
+      properties:
+        entityKey: { type: string }
+        name: { type: string }
+        specification: { $ref: "#/components/schemas/CatalogSpecification" }
+    CatalogDefinition:
+      allOf:
+        - $ref: "#/components/schemas/CatalogDefinitionDraft"
+        - type: object
+          required: [id, version, metamodelVersion, status, createdAt]
+          properties:
+            id: { type: string }
+            version: { type: integer, minimum: 1 }
+            metamodelVersion: { type: string }
+            status:
+              type: string
+              enum: [draft, validating, published, deprecated, retired, archived]
+            manifest: { $ref: "#/components/schemas/ExecutableDefinitionManifest" }
+            checksum: { type: string, pattern: "^[a-f0-9]{64}$" }
+            createdAt: { type: string, format: date-time }
+            publishedAt: { type: string, format: date-time }
+    ExecutableDefinitionManifest:
+      type: object
+      required:
+        [definitionVersionId, entityKey, version, metamodelVersion, specification, resources, checksum, compiledAt]
+      properties:
+        definitionVersionId: { type: string }
+        entityKey: { type: string }
+        version: { type: integer }
+        metamodelVersion: { type: string }
+        specification: { $ref: "#/components/schemas/CatalogSpecification" }
+        resources:
+          type: array
+          items: { $ref: "#/components/schemas/ResourceReference" }
+        checksum: { type: string, pattern: "^[a-f0-9]{64}$" }
+        compiledAt: { type: string, format: date-time }
+    PublicationValidation:
+      type: object
+      required: [valid, issues]
+      properties:
+        valid: { type: boolean }
+        issues:
+          type: array
+          items:
+            type: object
+            required: [path, code, message, severity]
+            properties:
+              path: { type: string }
+              code: { type: string }
+              message: { type: string }
+              severity: { type: string, enum: [error, warning] }
+        manifest: { $ref: "#/components/schemas/ExecutableDefinitionManifest" }
+    EntityRecord:
+      type: object
+      required:
+        [id, humanId, entityKey, definitionId, definitionVersionId, definitionVersion,
+         schemaVersion, manifestChecksum, state, data, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        humanId: { type: string }
+        entityKey: { type: string }
+        definitionId: { type: string }
+        definitionVersionId: { type: string }
+        definitionVersion: { type: integer }
+        schemaVersion: { type: string }
+        manifestChecksum: { type: string }
+        state: { type: string }
+        data:
+          type: object
+          additionalProperties: true
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    TicketStatus:
+      type: string
+      enum: [open, in_progress, pending_review, resolved]
+    TicketPriority:
+      type: string
+      enum: [low, medium, high, critical]
+    CreateTicket:
+      type: object
+      required: [title, description, priority, category]
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 160
+        description:
+          type: string
+          minLength: 10
+          maxLength: 10000
+        priority:
+          $ref: "#/components/schemas/TicketPriority"
+        category:
+          type: string
+        requesterName:
+          type: string
+        assetId:
+          type: [string, "null"]
+        site:
+          type: [string, "null"]
+    Ticket:
+      allOf:
+        - $ref: "#/components/schemas/CreateTicket"
+        - type: object
+          required: [id, status, requesterName, createdAt, mergedCount]
+          properties:
+            id:
+              type: string
+            status:
+              $ref: "#/components/schemas/TicketStatus"
+            requesterName:
+              type: string
+            assigneeName:
+              type: [string, "null"]
+            createdAt:
+              type: string
+              format: date-time
+            mergedCount:
+              type: integer
+              minimum: 0
+            mergedIntoId:
+              type: [string, "null"]
+              description: Set when this ticket was absorbed by another ticket via merge.
+    Comment:
+      type: object
+      required: [id, ticketId, authorName, body, isInternal, createdAt]
+      properties:
+        id: { type: string }
+        ticketId: { type: string }
+        authorName: { type: string }
+        body: { type: string }
+        isInternal: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    Attachment:
+      type: object
+      required: [id, ticketId, uploaderName, fileName, contentType, sizeBytes, createdAt]
+      properties:
+        id: { type: string }
+        ticketId: { type: string }
+        uploaderName: { type: string }
+        fileName: { type: string }
+        contentType: { type: string }
+        sizeBytes: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+    Watcher:
+      type: object
+      required: [ticketId, watcherName, createdAt]
+      properties:
+        ticketId: { type: string }
+        watcherName: { type: string }
+        createdAt: { type: string, format: date-time }
+    ActivityEntry:
+      type: object
+      required: [id, ticketId, kind, contractVersion, payload, createdAt]
+      properties:
+        id: { type: string }
+        ticketId: { type: string }
+        kind:
+          type: string
+          enum: [created, status_changed, assigned, commented, attached, merged, unmerged, watcher_added, watcher_removed, fields_updated]
+        contractVersion:
+          type: integer
+          const: 1
+          description: Version of the activity payload contract returned by this API.
+        actorName: { type: [string, "null"] }
+        payload:
+          anyOf:
+            - $ref: "#/components/schemas/CreatedActivityPayloadV1"
+            - $ref: "#/components/schemas/StatusChangedActivityPayloadV1"
+            - $ref: "#/components/schemas/AssignedActivityPayloadV1"
+            - $ref: "#/components/schemas/CommentedActivityPayloadV1"
+            - $ref: "#/components/schemas/AttachedActivityPayloadV1"
+            - $ref: "#/components/schemas/MergedActivityPayloadV1"
+            - $ref: "#/components/schemas/UnmergedActivityPayloadV1"
+            - $ref: "#/components/schemas/FieldsUpdatedActivityPayloadV1"
+            - $ref: "#/components/schemas/EmptyActivityPayloadV1"
+        createdAt: { type: string, format: date-time }
+    CreatedActivityPayloadV1:
+      type: object
+      additionalProperties: false
+      properties:
+        priority: { type: string }
+        category: { type: string }
+    StatusChangedActivityPayloadV1:
+      type: object
+      required: [from, to]
+      additionalProperties: false
+      properties:
+        from: { type: string }
+        to: { type: string }
+        source: { type: string }
+    AssignedActivityPayloadV1:
+      type: object
+      required: [assigneeName]
+      additionalProperties: false
+      properties:
+        assigneeName: { type: [string, "null"] }
+    CommentedActivityPayloadV1:
+      type: object
+      required: [isInternal]
+      additionalProperties: false
+      properties:
+        isInternal: { type: boolean }
+    AttachedActivityPayloadV1:
+      type: object
+      required: [fileName, sizeBytes]
+      additionalProperties: false
+      properties:
+        fileName: { type: string }
+        sizeBytes: { type: integer, minimum: 0 }
+    MergedActivityPayloadV1:
+      type: object
+      additionalProperties: false
+      properties:
+        mergedIds:
+          type: array
+          items: { type: string }
+        mergedInto: { type: string }
+      oneOf:
+        - required: [mergedIds]
+        - required: [mergedInto]
+    UnmergedActivityPayloadV1:
+      type: object
+      additionalProperties: false
+      properties:
+        unmergedId: { type: string }
+        unmergedFrom: { type: string }
+      oneOf:
+        - required: [unmergedId]
+        - required: [unmergedFrom]
+    FieldsUpdatedActivityPayloadV1:
+      type: object
+      required: [fields]
+      additionalProperties: false
+      properties:
+        fields:
+          type: array
+          items: { type: string }
+    EmptyActivityPayloadV1:
+      type: object
+      maxProperties: 0

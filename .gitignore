@@ -1,0 +1,32 @@
+# Local configuration
+.env
+.env.local
+!.env.example
+.env*.local
+
+# Go & Backend
+BACKEND/.cache/
+BACKEND/.gocache/
+BACKEND/bin/
+BACKEND/data/
+BACKEND/tmp/
+BACKEND/coverage.out
+
+# Frontend
+node_modules/
+dist/
+FRONTEND/node_modules/
+FRONTEND/dist/
+
+# Local analysis & IDE artifacts
+graphify-out/
+.agents/
+.claude/
+
+# OS and editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
