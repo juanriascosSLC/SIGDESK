@@ -1,9 +1,11 @@
 import type {
   AudienceKey,
   CatalogSpecification,
+  FieldDefinition,
   LayoutRegion,
   PageLayout,
   PagePlacement,
+  RegionName,
 } from '../metamodel';
 import { resolveLayoutDocument } from './layout-normalizer';
 
@@ -158,6 +160,80 @@ export function resolvePageLayout(
   }
   const variant = definition.variants?.find((candidate) => candidate.audienceKey === audienceKey);
   return variant ? variant.page : definition.default;
+}
+
+const REGION_NAMES: RegionName[] = ['header', 'actions', 'main', 'sidebar', 'footer'];
+
+// Drops catalog-field placements whose field is absent from `fields`, then
+// closes the horizontal gap that removal leaves behind — but only in the rows
+// that actually lost a placement, so a layout with deliberate gaps (possible
+// via the Advanced JSON editor) is never silently recompacted.
+function pruneRegionToSchema(region: LayoutRegion, knownFieldKeys: Set<string>): LayoutRegion {
+  const kept = region.placements.filter(
+    (placement) =>
+      !(
+        placement.kind === 'field' &&
+        placement.source === 'catalog' &&
+        placement.fieldKey &&
+        !knownFieldKeys.has(placement.fieldKey)
+      ),
+  );
+  if (kept.length === region.placements.length) return region;
+
+  const affectedRows = new Set(
+    region.placements.filter((placement) => !kept.includes(placement)).map((placement) => placement.row),
+  );
+  const byRow = new Map<number, PagePlacement[]>();
+  for (const placement of kept) {
+    if (!affectedRows.has(placement.row)) continue;
+    byRow.set(placement.row, [...(byRow.get(placement.row) ?? []), placement]);
+  }
+  const recompacted = new Map<string, number>();
+  for (const [, placements] of byRow) {
+    let column = 0;
+    for (const placement of [...placements].sort((left, right) => left.column - right.column)) {
+      recompacted.set(placement.id, column);
+      column += placement.columnSpan;
+    }
+  }
+
+  return {
+    ...region,
+    placements: kept.map((placement) =>
+      recompacted.has(placement.id) ? { ...placement, column: recompacted.get(placement.id)! } : placement,
+    ),
+  };
+}
+
+// Resolution for the ticket detail page. Presentation follows the CURRENT
+// published definition, so an admin redesign applies to every ticket
+// immediately; the ticket's data, field definitions and validation keep
+// coming from its own historical manifest (see TicketDetail.tsx).
+//
+// When the two disagree — the published layout places a catalog field that
+// did not exist in the schema this ticket was created under — the placement
+// is dropped rather than rendered as an anonymous empty card: the ticket has
+// no such field and never did. Falls back to the historical specification
+// when the published one is unavailable (offline, 404, still loading).
+export function resolveTicketPageLayout(
+  publishedSpecification: CatalogSpecification | undefined,
+  historicalSpecification: CatalogSpecification,
+  audienceKey: AudienceKey,
+): PageLayout {
+  if (!publishedSpecification) {
+    return resolvePageLayout(historicalSpecification, audienceKey);
+  }
+  const page = resolvePageLayout(publishedSpecification, audienceKey);
+  return pruneTicketPageToSchema(page, historicalSpecification.fields);
+}
+
+export function pruneTicketPageToSchema(page: PageLayout, fields: FieldDefinition[]): PageLayout {
+  const knownFieldKeys = new Set(fields.map((field) => field.key));
+  const pruned: PageLayout = { ...page };
+  for (const regionName of REGION_NAMES) {
+    pruned[regionName] = pruneRegionToSchema(page[regionName], knownFieldKeys);
+  }
+  return pruned;
 }
 
 // Write-time, idempotent: materializes an explicit detailPage for a

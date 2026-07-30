@@ -199,7 +199,13 @@ test('resizing a placement reflows its row without overlaps and the published pa
   await saveDraftAndPublish(page, baseline.version + 1);
 });
 
-test('a ticket created before the page redesign keeps its historical layout', async ({ page, request }) => {
+// Presentation follows the currently published definition; data stays pinned
+// to the manifest captured at creation. A redesign therefore reaches tickets
+// that already existed, without rewriting what those tickets mean.
+test('a ticket created before the page redesign adopts the new layout but keeps its historical data', async ({
+  page,
+  request,
+}) => {
   const baseline = await getPublishedIncDefinition(request);
   const historicalTitle = `Historical INC before page redesign ${randomUUID()}`;
   const historical = await jsonOrFailure<Entity>(
@@ -220,14 +226,22 @@ test('a ticket created before the page redesign keeps its historical layout', as
   );
   await waitForTicketProjection(request, historical.humanId);
 
+  // The footer starts empty, so the whole region body is the drop target.
   await openPageDesignerForINC(page);
-  await dragPaletteItemIntoEmptyRegion(page, 'page-designer-palette-content-section', 'footer');
+  await expect(page.getByTestId('page-designer-region-footer')).toBeVisible();
+  await dragPaletteItemIntoEmptyRegion(page, 'page-designer-palette-widget-statusHistory', 'footer');
+  await expect(page.getByTestId('page-designer-region-footer').getByText('Historial de estado')).toBeVisible();
   await saveDraftAndPublish(page, baseline.version + 1);
 
   await page.goto(`/app/tickets/${encodeURIComponent(historical.humanId)}`);
   await expect(page.getByTestId('ticket-detail')).toBeVisible();
+  // Data is unchanged...
   await expect(page.getByText(historicalTitle, { exact: true })).toBeVisible();
+  // ...but the layout published after this ticket existed now governs it.
+  await expect(page.getByTestId('page-layout-region-footer').getByText('Historial de estado')).toBeVisible();
 
+  // The ticket is still pinned to its original manifest — only presentation
+  // moved forward, never the schema.
   const historicalManifest = await jsonOrFailure<{ version: number }>(
     await request.get(`${apiBaseURL}/entities/INC/${historical.id}/manifest`),
     'get historical INC manifest',

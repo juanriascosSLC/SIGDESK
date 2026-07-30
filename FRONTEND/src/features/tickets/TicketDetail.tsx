@@ -28,6 +28,7 @@ import { getSlaAssessment } from '@/features/sla/api';
 import {
   getEntity,
   getEntityManifest,
+  getPublishedDefinition,
   isFieldRequired,
   updateEntity,
   type LayoutDocument,
@@ -36,7 +37,7 @@ import {
 import { DynamicField } from '@/features/catalog/DynamicField';
 import { DynamicLayout } from '@/features/catalog/runtime/DynamicLayout';
 import { filterDocumentByFieldVisibility, resolveLayoutDocument, visibleFieldPlacements } from '@/features/catalog/runtime/layout-normalizer';
-import { resolvePageLayout } from '@/features/catalog/runtime/page-layout-normalizer';
+import { resolveTicketPageLayout } from '@/features/catalog/runtime/page-layout-normalizer';
 import { listEntityRelations } from '@/features/catalog/metamodel';
 import { ApiError } from '@/lib/apiClient';
 import { PERMISSIONS } from '@/features/auth/permissions';
@@ -93,8 +94,10 @@ export default function TicketDetail() {
       !(queryError instanceof ApiError && queryError.status === 404) &&
       failureCount < 2,
   });
-  // The historical manifest used at creation time governs the detail page —
-  // a republish must never change how an existing ticket renders.
+  // The historical manifest used at creation time governs this ticket's DATA:
+  // field definitions, types, options and validation. A republish must never
+  // change what the ticket means. Its page LAYOUT comes from the currently
+  // published definition instead (see publishedDefinition below).
   const definitionManifest = useQuery({
     queryKey: [
       'catalog-definition-manifest',
@@ -103,6 +106,19 @@ export default function TicketDetail() {
     ],
     queryFn: () => getEntityManifest('INC', ticket!.entityId!),
     enabled: Boolean(ticket?.entityId && entityRecord.data?.definitionVersion),
+  });
+  // Presentation only: an admin redesigning the detail page in Catalog
+  // Builder must apply to every ticket immediately, not just to tickets
+  // created afterwards. Never used for data, types or validation. A failure
+  // here is non-fatal — resolveTicketPageLayout falls back to the historical
+  // layout — so a missing published definition degrades instead of breaking
+  // the page.
+  const publishedDefinition = useQuery({
+    queryKey: ['catalog-definition', 'INC'],
+    queryFn: () => getPublishedDefinition('INC'),
+    enabled: Boolean(ticket?.entityId),
+    retry: (failureCount, queryError) =>
+      !(queryError instanceof ApiError && queryError.status === 404) && failureCount < 2,
   });
   const entityRelations = useQuery({
     queryKey: ['catalog-entity-relations', 'INC', ticket?.entityId ?? 'unlinked'],
@@ -346,7 +362,9 @@ export default function TicketDetail() {
   }
 
   const specification = definitionManifest.data?.specification;
-  const page = specification ? resolvePageLayout(specification, 'agent') : null;
+  const page = specification
+    ? resolveTicketPageLayout(publishedDefinition.data?.specification, specification, 'agent')
+    : null;
   const context: TicketPageContext | null = specification
     ? {
         ticket,
@@ -499,9 +517,11 @@ export default function TicketDetail() {
         </div>
       )}
 
-      {/* Versioned page layout: values and structure come from the exact INC
-          definition used at creation. */}
-      {entityRecord.isLoading || definitionManifest.isLoading ? (
+      {/* Values come from the exact INC definition used at creation; the page
+          structure comes from the currently published one. publishedDefinition
+          is part of the loading gate so the layout is never rendered from the
+          historical fallback and then swapped a moment later. */}
+      {entityRecord.isLoading || definitionManifest.isLoading || publishedDefinition.isLoading ? (
         <div className="rounded-2xl border border-border/40 bg-surface-container-low p-5 text-sm text-on-surface-variant">
           Cargando la vista definida en Catalog Builder…
         </div>

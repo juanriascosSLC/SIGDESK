@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   DndContext,
   DragOverlay,
@@ -400,16 +401,31 @@ export function PageDesigner({
           />
         </div>
 
-        <DragOverlay>
-          {activeDrag && (
-            <div
-              className="rounded-2xl border-2 border-primary bg-primary/10 px-3 py-2 text-xs font-bold text-primary shadow-lg"
-              style={{ width: Math.max(96, activeDrag.span * 56) }}
-            >
-              {activeDrag.label}
-            </div>
-          )}
-        </DragOverlay>
+        {/*
+          DragOverlay positions itself with CSS `position: fixed`, computed
+          relative to the viewport. If it's rendered anywhere under an
+          ancestor with a CSS transform/filter/will-change (very common in
+          this app's layout shells), that ancestor becomes the fixed
+          positioning context instead of the viewport, and the overlay
+          renders offset from the cursor by a constant amount — exactly the
+          "floating chip appears in the wrong place" symptom. Portaling it
+          straight to document.body sidesteps any ancestor styling; the
+          DndContext React context still reaches it because portals don't
+          break the React tree, only the DOM insertion point.
+        */}
+        {createPortal(
+          <DragOverlay>
+            {activeDrag && (
+              <div
+                className="rounded-2xl border-2 border-primary bg-primary/10 px-3 py-2 text-xs font-bold text-primary shadow-lg"
+                style={{ width: Math.max(96, activeDrag.span * 56) }}
+              >
+                {activeDrag.label}
+              </div>
+            )}
+          </DragOverlay>,
+          document.body,
+        )}
       </DndContext>
 
       {previewOpen && (
