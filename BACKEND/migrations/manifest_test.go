@@ -35,6 +35,7 @@ var wantMigrations = []string{
 	"000017_single_active_catalog_draft.up.sql",
 	"000018_catalog_idempotency_keys.up.sql",
 	"000019_remove_legacy_demo_data.up.sql",
+	"000020_create_catalog_layout_versions.up.sql",
 }
 
 func embeddedNames(t *testing.T) []string {
@@ -94,6 +95,7 @@ func TestHistoricalMigrationChecksumsMatchGoldenManifest(t *testing.T) {
 		"000017_single_active_catalog_draft.up.sql":       "18b16fb5bc859be1d7ce7417b456b42c83173a1a3e7663dac12f6f88cefc6c86",
 		"000018_catalog_idempotency_keys.up.sql":          "395c58c70407e785954cf25b24fd58f4667c02dfe499b5e3d9e729087ba212eb",
 		"000019_remove_legacy_demo_data.up.sql":           "69735799508ca2e898c8382436736c381b978c4c90175b41571865a6a2c532ba",
+		"000020_create_catalog_layout_versions.up.sql":    "d42086b8b710e0e365c03150a52105e050762802ec51f23e9767560232eeb907",
 	}
 
 	for name, wantHash := range goldenHashes {

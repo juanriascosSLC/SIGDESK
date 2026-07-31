@@ -28,12 +28,12 @@ import { getSlaAssessment } from '@/features/sla/api';
 import {
   getEntity,
   getEntityManifest,
-  getPublishedDefinition,
   isFieldRequired,
   updateEntity,
   type LayoutDocument,
   type Placement,
 } from '@/features/catalog/metamodel';
+import { getResolvedDefinition } from '@/features/catalog/api';
 import { DynamicField } from '@/features/catalog/DynamicField';
 import { DynamicLayout } from '@/features/catalog/runtime/DynamicLayout';
 import { filterDocumentByFieldVisibility, resolveLayoutDocument, visibleFieldPlacements } from '@/features/catalog/runtime/layout-normalizer';
@@ -107,15 +107,13 @@ export default function TicketDetail() {
     queryFn: () => getEntityManifest('INC', ticket!.entityId!),
     enabled: Boolean(ticket?.entityId && entityRecord.data?.definitionVersion),
   });
-  // Presentation only: an admin redesigning the detail page in Catalog
-  // Builder must apply to every ticket immediately, not just to tickets
-  // created afterwards. Never used for data, types or validation. A failure
-  // here is non-fatal — resolveTicketPageLayout falls back to the historical
-  // layout — so a missing published definition degrades instead of breaking
-  // the page.
-  const publishedDefinition = useQuery({
-    queryKey: ['catalog-definition', 'INC'],
-    queryFn: () => getPublishedDefinition('INC'),
+  // Resolved definition: single backend call that returns the correct
+  // versioned layout (active, latest-compatible, or legacy-synthesized).
+  // Replaces the previous publishedDefinition + resolveTicketPageLayout
+  // client-side resolution.
+  const resolvedDefinition = useQuery({
+    queryKey: ['resolved-definition', 'INC', ticket?.entityId ?? 'unlinked'],
+    queryFn: () => getResolvedDefinition('INC', ticket!.entityId!),
     enabled: Boolean(ticket?.entityId),
     retry: (failureCount, queryError) =>
       !(queryError instanceof ApiError && queryError.status === 404) && failureCount < 2,
@@ -362,8 +360,11 @@ export default function TicketDetail() {
   }
 
   const specification = definitionManifest.data?.specification;
+  // The provenance badge origin from resolvedDefinition – does not affect
+  // the page layout structure which comes from the historical manifest.
+  const layoutResolution = resolvedDefinition.data?.layoutResolution;
   const page = specification
-    ? resolveTicketPageLayout(publishedDefinition.data?.specification, specification, 'agent')
+    ? resolveTicketPageLayout(undefined, specification, 'agent')
     : null;
   const context: TicketPageContext | null = specification
     ? {
@@ -521,7 +522,7 @@ export default function TicketDetail() {
           structure comes from the currently published one. publishedDefinition
           is part of the loading gate so the layout is never rendered from the
           historical fallback and then swapped a moment later. */}
-      {entityRecord.isLoading || definitionManifest.isLoading || publishedDefinition.isLoading ? (
+      {entityRecord.isLoading || definitionManifest.isLoading ? (
         <div className="rounded-2xl border border-border/40 bg-surface-container-low p-5 text-sm text-on-surface-variant">
           Cargando la vista definida en Catalog Builder…
         </div>
@@ -539,7 +540,20 @@ export default function TicketDetail() {
         // object and false-positives on it.
         // eslint-disable-next-line react-hooks/refs
         page && context ? (
-          <TicketPageLayout page={page} context={context} onAssignClick={handleAssign} />
+          <>
+            {layoutResolution && (
+              <div
+                data-testid="definition-provenance"
+                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium mb-3 bg-gray-100 text-gray-600"
+                title={`Resolución de layout: ${layoutResolution}`}
+              >
+                {layoutResolution === 'active' ? 'Layout activo' :
+                 layoutResolution === 'latest-compatible' ? 'Versión compatible' :
+                 'Generado (sin layout)'}
+              </div>
+            )}
+            <TicketPageLayout page={page} context={context} onAssignClick={handleAssign} />
+          </>
         ) : null
       )}
 

@@ -300,6 +300,7 @@ type IdentityDefinition struct {
 }
 
 type FieldDefinition struct {
+	ID           string               `json:"id,omitempty"`
 	Key          string               `json:"key"`
 	Label        string               `json:"label"`
 	Type         string               `json:"type"`
@@ -312,6 +313,13 @@ type FieldDefinition struct {
 	DefaultValue any                  `json:"defaultValue,omitempty"`
 	Options      []FieldOption        `json:"options,omitempty"`
 	Validation   map[string]any       `json:"validation,omitempty"`
+}
+
+func (f FieldDefinition) FieldID() string {
+	if strings.TrimSpace(f.ID) != "" {
+		return strings.TrimSpace(f.ID)
+	}
+	return f.Key
 }
 
 type FieldOption struct {
@@ -475,6 +483,7 @@ func (definition Definition) Validate() error {
 	}
 
 	fields := make(map[string]bool, len(definition.Specification.Fields))
+	fieldIDs := make(map[string]bool, len(definition.Specification.Fields))
 	for _, field := range definition.Specification.Fields {
 		if !fieldKeyPattern.MatchString(field.Key) {
 			return fmt.Errorf("%w: invalid field key %q", ErrInvalidDefinition, field.Key)
@@ -483,6 +492,11 @@ func (definition Definition) Validate() error {
 			return fmt.Errorf("%w: duplicate field %q", ErrInvalidDefinition, field.Key)
 		}
 		fields[field.Key] = true
+		fieldID := field.FieldID()
+		if fieldIDs[fieldID] {
+			return fmt.Errorf("%w: duplicate fieldId %q", ErrInvalidDefinition, fieldID)
+		}
+		fieldIDs[fieldID] = true
 		if strings.TrimSpace(field.Label) == "" {
 			return fmt.Errorf("%w: field %q has no label", ErrInvalidDefinition, field.Key)
 		}
