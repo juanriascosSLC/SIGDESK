@@ -27,6 +27,40 @@ func Apply(ctx context.Context, pool *pgxpool.Pool) error {
 // of a historical filename layout (simulating a rename). Production only ever
 // calls this through Apply, with the real embedded files.
 func applyFS(ctx context.Context, pool *pgxpool.Pool, source fs.FS) error {
+	// Detect if this execution is a fresh install vs an upgrade of an existing database.
+	// A fresh install means schema_migrations did not exist (or was empty) AND none of
+	// the core domain tables (tickets, catalog_definitions, entity_records) existed yet.
+	var schemaMigrationsCount int
+	var schemaMigrationsExists bool
+	if err := pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.tables
+			WHERE table_name = 'schema_migrations'
+			  AND table_schema = current_schema()
+		)
+	`).Scan(&schemaMigrationsExists); err != nil {
+		return fmt.Errorf("check schema_migrations existence: %w", err)
+	}
+
+	if schemaMigrationsExists {
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&schemaMigrationsCount); err != nil {
+			return fmt.Errorf("count schema_migrations: %w", err)
+		}
+	}
+
+	var domainTablesExist bool
+	if err := pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.tables
+			WHERE table_name IN ('tickets', 'catalog_definitions', 'entity_records')
+			  AND table_schema = current_schema()
+		)
+	`).Scan(&domainTablesExist); err != nil {
+		return fmt.Errorf("check domain tables existence: %w", err)
+	}
+
+	isFreshInstall := (!schemaMigrationsExists || schemaMigrationsCount == 0) && !domainTablesExist
+
 	if _, err := pool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			name TEXT PRIMARY KEY,
@@ -64,6 +98,16 @@ func applyFS(ctx context.Context, pool *pgxpool.Pool, source fs.FS) error {
 		if err != nil {
 			return fmt.Errorf("begin migration %s: %w", name, err)
 		}
+
+		freshStr := "false"
+		if isFreshInstall {
+			freshStr = "true"
+		}
+		if _, err := transaction.Exec(ctx, "SELECT set_config('sigdesk.fresh_install', $1, true)", freshStr); err != nil {
+			_ = transaction.Rollback(ctx)
+			return fmt.Errorf("set fresh_install GUC for %s: %w", name, err)
+		}
+
 		if _, err = transaction.Exec(ctx, string(script)); err != nil {
 			_ = transaction.Rollback(ctx)
 			return fmt.Errorf("apply migration %s: %w", name, err)

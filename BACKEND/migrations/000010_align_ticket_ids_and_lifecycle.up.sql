@@ -43,8 +43,9 @@ SELECT setval(
     'entity_human_id_seq',
     GREATEST(
         (
-            SELECT COALESCE(MAX(NULLIF(regexp_replace(human_id, '\D', '', 'g'), '')::bigint), 0)
+            SELECT COALESCE(MAX(substring(human_id FROM '([0-9]+)$')::bigint), 0)
             FROM tickets
+            WHERE human_id ~ '[0-9]+$'
         ),
         (SELECT last_value FROM entity_human_id_seq),
         1

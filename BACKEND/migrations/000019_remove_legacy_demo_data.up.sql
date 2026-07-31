@@ -8,14 +8,16 @@
 -- fields like title or description. A real ticket that merely resembles the
 -- demo data is untouched, because matching is by id, never by content.
 --
--- Sequence Re-adjustment:
--- After cleaning legacy demo rows, entity_human_id_seq is re-evaluated:
---   - If NO real tickets or entity_records remain (fresh installation), sequence
---     is reset using setval('entity_human_id_seq', 1, false) so the first real
+-- Sequence Re-adjustment & Safety Rules:
+-- Reads `sigdesk.fresh_install` set by the migration runner (`true` for clean installs,
+-- `false` for upgrades).
+--   - On a FRESH INSTALL with no remaining real records (max_remaining_suffix = 0),
+--     resets sequence using setval('entity_human_id_seq', 1, false) so the first real
 --     incident minted by the system receives INC-000001.
---   - If existing real records remain, sequence is set to max(numeric_suffix)
---     (is_called = true) so subsequent real tickets continue without sequence regression
---     or key collision.
+--   - On an UPGRADE of an existing database, sequence is NEVER regressed below current
+--     sequence value (`last_value`), preserving sequence history even if intermediate
+--     tickets were deleted. Sequence is set to GREATEST(current_sequence_val, max_remaining_suffix, 1)
+--     (is_called = true) to prevent sequence regression or key collisions.
 
 DO $$
 DECLARE
@@ -25,7 +27,12 @@ DECLARE
     ];
     demo_entity_ids TEXT[];
     max_remaining_suffix BIGINT;
+    current_sequence_val BIGINT;
+    is_fresh_install BOOLEAN;
 BEGIN
+    -- Read fresh install flag set by runner
+    is_fresh_install := COALESCE(current_setting('sigdesk.fresh_install', true) = 'true', false);
+
     SELECT COALESCE(array_agg(entity_id), ARRAY[]::text[])
     INTO demo_entity_ids
     FROM tickets
@@ -58,21 +65,35 @@ BEGIN
     -- self-referencing merged_into_id foreign key never has a dangling reference.
     DELETE FROM tickets WHERE human_id = ANY(demo_human_ids);
 
-    -- Conditional sequence adjustment:
-    -- Find maximum numeric suffix among remaining real tickets and entity_records.
+    -- Extract trailing numeric suffix (ignoring non-trailing numbers like 'RFC2-')
     SELECT COALESCE(
         GREATEST(
-            (SELECT MAX(NULLIF(regexp_replace(human_id, '\D', '', 'g'), '')::bigint) FROM tickets),
-            (SELECT MAX(NULLIF(regexp_replace(human_id, '\D', '', 'g'), '')::bigint) FROM entity_records)
+            (
+                SELECT MAX(substring(human_id FROM '([0-9]+)$')::bigint)
+                FROM tickets
+                WHERE human_id ~ '[0-9]+$'
+            ),
+            (
+                SELECT MAX(substring(human_id FROM '([0-9]+)$')::bigint)
+                FROM entity_records
+                WHERE human_id ~ '[0-9]+$'
+            )
         ),
         0
     ) INTO max_remaining_suffix;
 
-    IF max_remaining_suffix = 0 THEN
-        -- Fresh database with no real records: reset sequence so first real incident gets INC-000001
+    -- Current value of entity_human_id_seq
+    SELECT last_value INTO current_sequence_val FROM entity_human_id_seq;
+
+    IF is_fresh_install AND max_remaining_suffix = 0 THEN
+        -- Fresh installation: reset sequence so first real incident gets INC-000001
         PERFORM setval('entity_human_id_seq', 1, false);
     ELSE
-        -- Existing database with real records: set sequence to max real suffix so nextval continues safely
-        PERFORM setval('entity_human_id_seq', max_remaining_suffix, true);
+        -- Upgrade of existing database: NEVER regress sequence below current_sequence_val.
+        PERFORM setval(
+            'entity_human_id_seq',
+            GREATEST(current_sequence_val, max_remaining_suffix, 1),
+            true
+        );
     END IF;
 END $$;

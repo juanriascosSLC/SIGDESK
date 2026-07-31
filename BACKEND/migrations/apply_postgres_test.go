@@ -558,8 +558,8 @@ func TestUpgradeWithRealRecordsDoesNotRegressSequence(t *testing.T) {
 		t.Fatalf("insert new real ticket after upgrade: %v", err)
 	}
 
-	if nextHumanID != "INC-000006" {
-		t.Fatalf("expected next real ticket to be 'INC-000006', got %q", nextHumanID)
+	if nextHumanID != "INC-202614" {
+		t.Fatalf("expected next real ticket to be 'INC-202614', got %q", nextHumanID)
 	}
 }
 
@@ -611,4 +611,115 @@ func TestSeedDemoDoesNotPolluteRealIdentifierSequence(t *testing.T) {
 		t.Fatalf("expected second real ticket to be 'INC-000002', got %q", realID2)
 	}
 }
+
+// TestUpgradeNeverRegressesSequencePastDeletedIdentifiers proves that during an
+// upgrade of an existing database (where last_value of sequence was e.g. 500 due to
+// previously created and deleted tickets), 000019 never winds sequence backward to 6.
+func TestUpgradeNeverRegressesSequencePastDeletedIdentifiers(t *testing.T) {
+	ctx := context.Background()
+	pool := pgtest.NewDatabase(t)
+
+	// 1. Apply up to 000018 (upgrade scenario, domain tables created)
+	if err := applyFS(ctx, pool, subsetFS(t, wantMigrations[:len(wantMigrations)-1])); err != nil {
+		t.Fatalf("seed up to 000018: %v", err)
+	}
+
+	// 2. Set sequence last_value to 500 (simulating deleted tickets 6..500)
+	if _, err := pool.Exec(ctx, `SELECT setval('entity_human_id_seq', 500, true)`); err != nil {
+		t.Fatalf("set sequence to 500: %v", err)
+	}
+
+	// 3. Insert a real ticket INC-000005
+	const realTicketID = "INC-000005"
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO tickets (human_id, title, description, status, priority, requester_name)
+		VALUES ($1, 'Pre-existing real ticket', 'Existed before 000019', 'open', 'high', 'User')
+	`, realTicketID); err != nil {
+		t.Fatalf("insert INC-000005: %v", err)
+	}
+
+	// 4. Apply 000019 (upgrade path)
+	if err := Apply(ctx, pool); err != nil {
+		t.Fatalf("apply 000019: %v", err)
+	}
+
+	// 5. Create a new real ticket using DEFAULT human_id
+	var nextHumanID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO tickets (title, description, status, priority, requester_name)
+		VALUES ('New real ticket after upgrade', 'Created post-000019', 'open', 'medium', 'User')
+		RETURNING human_id
+	`).Scan(&nextHumanID); err != nil {
+		t.Fatalf("insert new real ticket: %v", err)
+	}
+
+	if nextHumanID != "INC-000501" {
+		t.Fatalf("expected next real ticket to be 'INC-000501', got %q", nextHumanID)
+	}
+}
+
+// TestUpgradeWithNoRemainingRowsStillPreservesSequence proves that during an
+// upgrade of an existing database with 0 remaining rows in tickets (where sequence
+// was at 500), 000019 preserves sequence at 500 and does NOT reset it to 1.
+func TestUpgradeWithNoRemainingRowsStillPreservesSequence(t *testing.T) {
+	ctx := context.Background()
+	pool := pgtest.NewDatabase(t)
+
+	// 1. Apply up to 000018 (upgrade scenario)
+	if err := applyFS(ctx, pool, subsetFS(t, wantMigrations[:len(wantMigrations)-1])); err != nil {
+		t.Fatalf("seed up to 000018: %v", err)
+	}
+
+	// 2. Set sequence last_value to 500
+	if _, err := pool.Exec(ctx, `SELECT setval('entity_human_id_seq', 500, true)`); err != nil {
+		t.Fatalf("set sequence to 500: %v", err)
+	}
+
+	// 3. Remove all tickets (0 remaining rows)
+	if _, err := pool.Exec(ctx, `DELETE FROM ticket_activity; DELETE FROM tickets;`); err != nil {
+		t.Fatalf("delete all tickets: %v", err)
+	}
+
+	// 4. Apply 000019 (upgrade path)
+	if err := Apply(ctx, pool); err != nil {
+		t.Fatalf("apply 000019: %v", err)
+	}
+
+	// 5. Create a new real ticket using DEFAULT human_id
+	var nextHumanID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO tickets (title, description, status, priority, requester_name)
+		VALUES ('New ticket on empty upgraded DB', 'Created post-000019', 'open', 'medium', 'User')
+		RETURNING human_id
+	`).Scan(&nextHumanID); err != nil {
+		t.Fatalf("insert new real ticket: %v", err)
+	}
+
+	if nextHumanID != "INC-000501" {
+		t.Fatalf("expected next real ticket to be 'INC-000501', got %q", nextHumanID)
+	}
+}
+
+// TestSequenceUsesOnlyTrailingNumericSuffix proves that an identifier with numbers
+// in the prefix (e.g. RFC2-000005) yields trailing numeric suffix 5, not 2000005.
+func TestSequenceUsesOnlyTrailingNumericSuffix(t *testing.T) {
+	ctx := context.Background()
+	pool := pgtest.NewDatabase(t)
+
+	if err := Apply(ctx, pool); err != nil {
+		t.Fatalf("apply migrations: %v", err)
+	}
+
+	var extracted int64
+	if err := pool.QueryRow(ctx, `
+		SELECT substring('RFC2-000005' FROM '([0-9]+)$')::bigint
+	`).Scan(&extracted); err != nil {
+		t.Fatalf("extract trailing numeric suffix from RFC2-000005: %v", err)
+	}
+
+	if extracted != 5 {
+		t.Fatalf("expected trailing numeric suffix 5 for RFC2-000005, got %d", extracted)
+	}
+}
+
 
