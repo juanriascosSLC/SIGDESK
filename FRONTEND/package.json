@@ -1,8 +1,12 @@
 {
   "name": "sig-desk",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0-beta",
   "type": "module",
+  "engines": {
+    "node": ">=22.12.0",
+    "npm": ">=10"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
