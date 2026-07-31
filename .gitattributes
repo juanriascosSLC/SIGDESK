@@ -1,0 +1,12 @@
+# The team develops on Windows and CI runs on ubuntu-latest. Without this, the
+# bytes of a go:embed'ed .up.sql (or any tracked text file) can differ between
+# the two, which breaks any content hash and makes shell scripts copied into
+# Linux images unrunnable.
+* text=auto eol=lf
+*.sql text eol=lf
+*.sh  text eol=lf
+*.ps1 text eol=crlf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
