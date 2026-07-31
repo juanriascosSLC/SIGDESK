@@ -12,6 +12,7 @@ export const KNOWN_TICKET_STATUSES = [
   'In Progress',
   'Pending Review',
   'Resolved',
+  'Closed',
 ] as const;
 
 export const KNOWN_TICKET_PRIORITIES = ['Low', 'Medium', 'High', 'Critical'] as const;

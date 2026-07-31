@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import type { Ticket, TicketStatus } from './types';
 import { KNOWN_TICKET_STATUSES } from './types';
-import { AlertCircle, Clock, CheckCircle2, CircleDashed, LayoutGrid, List as ListIcon, Filter, MoreHorizontal, Link2, User, CircleDot } from 'lucide-react';
+import { AlertCircle, Archive, Clock, CheckCircle2, CircleDashed, LayoutGrid, List as ListIcon, Filter, MoreHorizontal, Link2, User, CircleDot } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import TicketsList from './TicketsList';
 import { useTickets, useUpdateTicketStatus } from './hooks';
@@ -17,6 +17,7 @@ const knownStatusConfig: Record<string, StatusStyle> = {
   'In Progress': { icon: CircleDashed, color: 'text-cyan-400', bgColor: 'bg-cyan-400/10' },
   'Pending Review': { icon: Clock, color: 'text-amber-400', bgColor: 'bg-amber-400/10' },
   'Resolved': { icon: CheckCircle2, color: 'text-emerald-400', bgColor: 'bg-emerald-400/10' },
+  'Closed': { icon: Archive, color: 'text-slate-400', bgColor: 'bg-slate-400/10' },
 };
 
 // A state defined in the catalog Definition that we have no explicit design

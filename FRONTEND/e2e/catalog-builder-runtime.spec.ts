@@ -5,6 +5,7 @@ import {
   type APIRequestContext,
   type APIResponse,
   type Page,
+  type Response,
 } from '@playwright/test';
 import { mockAuthenticatedAdmin } from './support';
 import {
@@ -31,7 +32,7 @@ type Manifest = {
 };
 
 async function jsonOrFailure<T>(
-  response: APIResponse,
+  response: APIResponse | Response,
   operation: string,
 ): Promise<T> {
   expect(

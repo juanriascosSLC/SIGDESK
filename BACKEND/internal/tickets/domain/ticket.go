@@ -12,6 +12,7 @@ const (
 	StatusInProgress    Status = "in_progress"
 	StatusPendingReview Status = "pending_review"
 	StatusResolved      Status = "resolved"
+	StatusClosed        Status = "closed"
 )
 
 type Priority string
@@ -51,7 +52,7 @@ func (ticket Ticket) IsMerged() bool {
 
 func (status Status) Valid() bool {
 	switch status {
-	case StatusOpen, StatusInProgress, StatusPendingReview, StatusResolved:
+	case StatusOpen, StatusInProgress, StatusPendingReview, StatusResolved, StatusClosed:
 		return true
 	default:
 		return false
@@ -101,6 +102,10 @@ func CanTransition(from, to Status) bool {
 			StatusResolved:   true,
 		},
 		StatusResolved: {
+			StatusOpen:   true,
+			StatusClosed: true,
+		},
+		StatusClosed: {
 			StatusOpen: true,
 		},
 	}

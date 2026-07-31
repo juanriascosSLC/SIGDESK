@@ -18,7 +18,7 @@ import {
   useActivity,
   ticketKeys,
 } from './hooks';
-import { listTickets } from './api';
+import { listTickets, statusFromApi, statusToApi } from './api';
 import type { TicketStatus } from './types';
 import { KNOWN_TICKET_STATUSES } from './types';
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
@@ -183,14 +183,46 @@ export default function TicketDetail() {
 
   const isWatching = (watchers.data ?? []).some((w) => w.watcherName === currentUserName);
   const ticketStatus = ticket?.status;
+  const isEntityBacked = Boolean(ticket?.entityId);
 
-  // The ticket's own state must always be selectable/visible even when the
-  // catalog Definition declares a state this UI has no design for yet.
+  // For entity-backed tickets, which transitions are actually legal depends
+  // on the ticket's OWN historical lifecycle (resolvedDefinition.lifecycle,
+  // pinned to its definitionVersionId) — never on KNOWN_TICKET_STATUSES,
+  // which is only a presentation list (Kanban columns, filters). A ticket
+  // created under an older definition version may not have "closed" at all;
+  // offering it and letting the backend reject it would be a lie in the UI.
+  // KNOWN_TICKET_STATUSES is the fallback ONLY for legacy tickets that have
+  // no entityId at all (and therefore no lifecycle to consult).
+  const lifecycleTransitions = useMemo(() => {
+    if (!isEntityBacked || !ticketStatus) return null;
+    if (resolvedDefinition.isLoading || resolvedDefinition.isError) return null;
+    const lifecycle = resolvedDefinition.data?.lifecycle;
+    if (!lifecycle) return null;
+    const currentBackendState = statusToApi(ticketStatus);
+    return lifecycle.transitions.filter((transition) => transition.from === currentBackendState);
+  }, [isEntityBacked, ticketStatus, resolvedDefinition.isLoading, resolvedDefinition.isError, resolvedDefinition.data]);
+
+  const canChangeStatus = isEntityBacked ? lifecycleTransitions !== null : true;
+
   const statusOptions = useMemo(() => {
+    if (!ticketStatus) return [] as TicketStatus[];
+    if (isEntityBacked) {
+      // Still loading, errored, or no lifecycle available: show only the
+      // current status rather than a list the backend might reject.
+      if (lifecycleTransitions === null) return [ticketStatus];
+      const options = lifecycleTransitions.map((transition) => statusFromApi(transition.to));
+      return options.includes(ticketStatus) ? options : [ticketStatus, ...options];
+    }
+    // Legacy ticket, no entityId, no lifecycle to consult: previous behavior.
     const options: TicketStatus[] = [...KNOWN_TICKET_STATUSES];
-    if (ticketStatus && !options.includes(ticketStatus)) options.push(ticketStatus);
+    if (!options.includes(ticketStatus)) options.push(ticketStatus);
     return options;
-  }, [ticketStatus]);
+  }, [ticketStatus, isEntityBacked, lifecycleTransitions]);
+
+  // Reabrir is only offered when the ticket's historical lifecycle actually
+  // declares a transition from its current state to "open" — never assumed
+  // just because the status happens to be Resolved/Closed.
+  const canReopen = Boolean(lifecycleTransitions?.some((transition) => transition.to === 'open'));
 
   const timeline: TimelineItem[] = useMemo(() => {
     const activityItems: TimelineItem[] = (activity.data ?? [])
@@ -428,6 +460,7 @@ export default function TicketDetail() {
           onAssign: handleAssign,
           onStatusChange: handleStatusChange,
           statusOptions,
+          canChangeStatus,
           updateStatusPending: updateStatus.isPending,
           updateStatusError: updateStatus.error?.message,
           onMerge: handleMerge,
@@ -443,6 +476,8 @@ export default function TicketDetail() {
           watchersCount: watchers.data?.length ?? 1,
           onToggleWatch: toggleWatch,
           onResolve: () => handleStatusChange('Resolved'),
+          canReopen,
+          onReopen: () => handleStatusChange('Open'),
         },
       }
     : null;

@@ -44,8 +44,11 @@ function labelToApi(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, '_');
 }
 
-const statusFromApi = labelFromApi;
-const statusToApi = labelToApi;
+// Exported so callers that need to match a ticket's displayed status against
+// backend-shaped data (e.g. a lifecycle's transition `from`/`to` keys, which
+// are always snake_case) can convert without duplicating this mapping.
+export const statusFromApi = labelFromApi;
+export const statusToApi = labelToApi;
 const priorityFromApi = labelFromApi;
 const priorityToApi = labelToApi;
 

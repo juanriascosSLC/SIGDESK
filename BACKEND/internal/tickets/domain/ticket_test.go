@@ -13,6 +13,10 @@ func TestTicketStatusTransitions(t *testing.T) {
 		{name: "pending review to resolved", from: StatusPendingReview, to: StatusResolved, want: true},
 		{name: "resolved can reopen", from: StatusResolved, to: StatusOpen, want: true},
 		{name: "open cannot skip to pending review", from: StatusOpen, to: StatusPendingReview, want: false},
+		{name: "resolved to closed", from: StatusResolved, to: StatusClosed, want: true},
+		{name: "closed can reopen", from: StatusClosed, to: StatusOpen, want: true},
+		{name: "open cannot skip to closed", from: StatusOpen, to: StatusClosed, want: false},
+		{name: "closed cannot skip to in progress", from: StatusClosed, to: StatusInProgress, want: false},
 	}
 
 	for _, test := range tests {

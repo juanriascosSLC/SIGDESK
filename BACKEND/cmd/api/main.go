@@ -179,6 +179,7 @@ func main() {
 		moduleRegistry.Register(resource, changeService.HandleCommand)
 	}
 	seedIncidentDefinitionV2(ctx, logger, catalogService)
+	seedIncidentDefinitionV3(ctx, logger, catalogService)
 	seedProblemDefinition(ctx, logger, catalogService)
 	seedChangeDefinition(ctx, logger, catalogService)
 	outboxStore, ok := catalogRepository.(catalogPorts.OutboxStore)

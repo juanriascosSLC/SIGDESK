@@ -51,6 +51,29 @@ export interface ResolvedLayoutDocument {
   detail?: PageLayout | { default?: PageLayout; variants?: Array<{ audienceKey: string; page: PageLayout }> };
 }
 
+// Mirrors domain.StateDefinition / domain.TransitionDefinition
+// (BACKEND/internal/catalog/domain/definition.go) exactly — this is the
+// entity's OWN historical lifecycle (pinned to its definitionVersionId), not
+// whatever is currently published, so it is the only source of truth for
+// which status transitions a given ticket may actually perform.
+export interface LifecycleStateDefinition {
+  key: string;
+  label: string;
+  initial?: boolean;
+}
+
+export interface LifecycleTransitionDefinition {
+  key: string;
+  label: string;
+  from: string;
+  to: string;
+}
+
+export interface LifecycleDefinition {
+  states: LifecycleStateDefinition[];
+  transitions: LifecycleTransitionDefinition[];
+}
+
 /** The shape returned by GET /entities/{entityKey}/{entityID}/resolved-definition */
 export interface ResolvedDefinition {
   entityId: string;
@@ -64,7 +87,7 @@ export interface ResolvedDefinition {
   layoutVersion: number | null;
   layoutResolution: LayoutResolutionMode;
   fields: FieldDefinition[];
-  lifecycle: Record<string, unknown>;
+  lifecycle: LifecycleDefinition;
   layouts: ResolvedLayoutDocument;
 }
 

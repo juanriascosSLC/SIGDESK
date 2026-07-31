@@ -108,7 +108,8 @@ export function useSimulatedTicketContext(specification: CatalogSpecification): 
       canEditFields: true,
       onAssign: () => {},
       onStatusChange: setStatus,
-      statusOptions: ['Open', 'In Progress', 'Pending Review', 'Resolved'],
+      statusOptions: ['Open', 'In Progress', 'Pending Review', 'Resolved', 'Closed'],
+      canChangeStatus: true,
       updateStatusPending: false,
       onMerge: () => {},
       canMerge: true,
@@ -118,6 +119,8 @@ export function useSimulatedTicketContext(specification: CatalogSpecification): 
       watchersCount: isWatching ? 1 : 0,
       onToggleWatch: () => setIsWatching((current) => !current),
       onResolve: () => setStatus('Resolved'),
+      canReopen: status === 'Resolved' || status === 'Closed',
+      onReopen: () => setStatus('Open'),
     },
   };
 
