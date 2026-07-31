@@ -27,51 +27,51 @@ var (
 )
 
 type CatalogLayoutVersion struct {
-	ID            string                 `json:"id"`
-	EntityKey     string                 `json:"entityKey"`
-	Version       int                    `json:"version"`
-	Status        LayoutStatus           `json:"status"`
-	Document      map[string]any         `json:"document"`
+	ID            string                    `json:"id"`
+	EntityKey     string                    `json:"entityKey"`
+	Version       int                       `json:"version"`
+	Status        LayoutStatus              `json:"status"`
+	Document      map[string]any            `json:"document"`
 	Compatibility *CompatibilityFingerprint `json:"compatibility,omitempty"`
-	Checksum      string                 `json:"checksum,omitempty"`
-	IsActive      bool                   `json:"isActive"`
-	CreatedAt     time.Time              `json:"createdAt"`
-	PublishedAt   *time.Time             `json:"publishedAt,omitempty"`
+	Checksum      string                    `json:"checksum,omitempty"`
+	IsActive      bool                      `json:"isActive"`
+	CreatedAt     time.Time                 `json:"createdAt"`
+	PublishedAt   *time.Time                `json:"publishedAt,omitempty"`
 }
 
 type CompatibilityPlacement struct {
-	PlacementID          string   `json:"placementId"`
-	Kind                 string   `json:"kind"`
-	Source               string   `json:"source,omitempty"`
-	FieldID              string   `json:"fieldId,omitempty"`
-	FieldType            string   `json:"fieldType,omitempty"`
-	WidgetKey            string   `json:"widgetKey,omitempty"`
-	WidgetContractVersion string  `json:"widgetContractVersion,omitempty"`
-	Region               string   `json:"region"`
-	AudienceKey          string   `json:"audienceKey"`
-	RequiredPermissions  []string `json:"requiredPermissions,omitempty"`
-	AllowMultiple        bool     `json:"allowMultiple"`
+	PlacementID           string   `json:"placementId"`
+	Kind                  string   `json:"kind"`
+	Source                string   `json:"source,omitempty"`
+	FieldID               string   `json:"fieldId,omitempty"`
+	FieldType             string   `json:"fieldType,omitempty"`
+	WidgetKey             string   `json:"widgetKey,omitempty"`
+	WidgetContractVersion string   `json:"widgetContractVersion,omitempty"`
+	Region                string   `json:"region"`
+	AudienceKey           string   `json:"audienceKey"`
+	RequiredPermissions   []string `json:"requiredPermissions,omitempty"`
+	AllowMultiple         bool     `json:"allowMultiple"`
 }
 
 type CompatibilityFingerprint struct {
-	Placements      []CompatibilityPlacement `json:"placements"`
+	Placements       []CompatibilityPlacement `json:"placements"`
 	MandatoryWidgets []string                 `json:"mandatoryWidgets"`
 }
 
 type ResolvedDefinitionResponse struct {
-	EntityID            string            `json:"entityId"`
-	HumanID             string            `json:"humanId"`
-	EntityKey           string            `json:"entityKey"`
-	DefinitionVersionID string            `json:"definitionVersionId"`
-	SchemaVersion       string            `json:"schemaVersion"`
-	WorkflowVersion     string            `json:"workflowVersion"`
-	MetamodelVersion    string            `json:"metamodelVersion"`
-	LayoutVersionID     *string           `json:"layoutVersionId"`
-	LayoutVersion       *int              `json:"layoutVersion"`
-	LayoutResolution    string            `json:"layoutResolution"`
-	Fields              []FieldDefinition `json:"fields"`
+	EntityID            string              `json:"entityId"`
+	HumanID             string              `json:"humanId"`
+	EntityKey           string              `json:"entityKey"`
+	DefinitionVersionID string              `json:"definitionVersionId"`
+	SchemaVersion       string              `json:"schemaVersion"`
+	WorkflowVersion     string              `json:"workflowVersion"`
+	MetamodelVersion    string              `json:"metamodelVersion"`
+	LayoutVersionID     *string             `json:"layoutVersionId"`
+	LayoutVersion       *int                `json:"layoutVersion"`
+	LayoutResolution    string              `json:"layoutResolution"`
+	Fields              []FieldDefinition   `json:"fields"`
 	Lifecycle           LifecycleDefinition `json:"lifecycle"`
-	Layouts             map[string]any    `json:"layouts"`
+	Layouts             map[string]any      `json:"layouts"`
 }
 
 // ComputeCanonicalChecksum returns a deterministic SHA-256 string for the document and compatibility.

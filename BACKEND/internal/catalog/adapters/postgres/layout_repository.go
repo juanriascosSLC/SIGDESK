@@ -182,8 +182,7 @@ func (r *LayoutRepository) UpdateDraft(ctx context.Context, entityKey string, do
 func (r *LayoutRepository) PublishDraft(
 	ctx context.Context,
 	entityKey string,
-	compat *domain.CompatibilityFingerprint,
-	checksum string,
+	validate ports.Validate,
 ) (*domain.CatalogLayoutVersion, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -196,7 +195,10 @@ func (r *LayoutRepository) PublishDraft(
 		return nil, err
 	}
 
-	// 2. Lock draft row FOR UPDATE
+	// 2. Lock draft row FOR UPDATE — every read of the document after this
+	// point (including the one `validate` receives below) reflects the
+	// LATEST committed UpdateDraft, never a stale snapshot taken before this
+	// lock was acquired.
 	queryDraft := `SELECT ` + layoutColumns + ` FROM catalog_layout_versions WHERE entity_key = $1 AND status = 'draft' FOR UPDATE`
 	rowDraft := tx.QueryRow(ctx, queryDraft, entityKey)
 	draft, err := scanLayout(rowDraft)
@@ -207,7 +209,14 @@ func (r *LayoutRepository) PublishDraft(
 		return nil, err
 	}
 
-	// 3. Compute next version number
+	// 3. Validate and derive compatibility/checksum from the EXACT document
+	// just locked, not from any earlier read the caller may have made.
+	compat, checksum, err := validate(draft.Document)
+	if err != nil {
+		return nil, err
+	}
+
+	// 4. Compute next version number
 	var maxVersion int
 	_ = tx.QueryRow(ctx, "SELECT COALESCE(MAX(version), 0) FROM catalog_layout_versions WHERE entity_key = $1", entityKey).Scan(&maxVersion)
 	nextVersion := maxVersion + 1
@@ -217,12 +226,12 @@ func (r *LayoutRepository) PublishDraft(
 		return nil, err
 	}
 
-	// 4. Deactivate previous active version
+	// 5. Deactivate previous active version
 	if _, err := tx.Exec(ctx, "UPDATE catalog_layout_versions SET is_active = false WHERE entity_key = $1 AND is_active = true", entityKey); err != nil {
 		return nil, err
 	}
 
-	// 5. Update draft to published using RETURNING to return the exact persisted version
+	// 6. Update draft to published using RETURNING to return the exact persisted version
 	updateQuery := `
 		UPDATE catalog_layout_versions
 		SET status = 'published', version = $1, published_at = NOW(), compatibility = $2, checksum = $3, is_active = true

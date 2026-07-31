@@ -31,13 +31,13 @@ import {
   isFieldRequired,
   updateEntity,
   type LayoutDocument,
+  type PageLayout,
   type Placement,
 } from '@/features/catalog/metamodel';
 import { getResolvedDefinition } from '@/features/catalog/api';
 import { DynamicField } from '@/features/catalog/DynamicField';
 import { DynamicLayout } from '@/features/catalog/runtime/DynamicLayout';
 import { filterDocumentByFieldVisibility, resolveLayoutDocument, visibleFieldPlacements } from '@/features/catalog/runtime/layout-normalizer';
-import { resolveTicketPageLayout } from '@/features/catalog/runtime/page-layout-normalizer';
 import { listEntityRelations } from '@/features/catalog/metamodel';
 import { ApiError } from '@/lib/apiClient';
 import { PERMISSIONS } from '@/features/auth/permissions';
@@ -108,9 +108,12 @@ export default function TicketDetail() {
     enabled: Boolean(ticket?.entityId && entityRecord.data?.definitionVersion),
   });
   // Resolved definition: single backend call that returns the correct
-  // versioned layout (active, latest-compatible, or legacy-synthesized).
-  // Replaces the previous publishedDefinition + resolveTicketPageLayout
-  // client-side resolution.
+  // versioned layout — LayoutService.ResolveLayoutForRecord tries the active
+  // published layout ("latest-compatible"), then walks published versions
+  // backward for the first one still compatible with this record's
+  // historical schema ("previous-compatible"), then falls back to a
+  // manifest-synthesized page ("legacy-synthesized"). This is the only
+  // source for the rendered page layout; see `page` below.
   const resolvedDefinition = useQuery({
     queryKey: ['resolved-definition', 'INC', ticket?.entityId ?? 'unlinked'],
     queryFn: () => getResolvedDefinition('INC', ticket!.entityId!),
@@ -212,6 +215,23 @@ export default function TicketDetail() {
       editData,
     );
   }, [definitionManifest.data, editData]);
+
+  // The resolved-definition endpoint is the SOLE authority for which layout
+  // renders — no client-side merging of published/historical specs (that
+  // policy, formerly resolveTicketPageLayout, now lives entirely in
+  // LayoutService.ResolveLayoutForRecord on the backend). `layouts.detail` is
+  // authored either as a bare PageLayout or as `{ default: PageLayout,
+  // variants?: [...] }`; both shapes are accepted here since the Catalog
+  // Builder's JSON draft editor can produce either.
+  const page = useMemo((): PageLayout | null => {
+    const detail = resolvedDefinition.data?.layouts?.detail;
+    if (!detail) return null;
+    if ('default' in detail && detail.default) return detail.default;
+    if ('header' in detail && detail.header && detail.actions && detail.main && detail.sidebar && detail.footer) {
+      return detail;
+    }
+    return null;
+  }, [resolvedDefinition.data]);
 
   function renderEditPlacement(placement: Placement) {
     if (placement.kind !== 'field' || placement.source !== 'catalog' || !placement.fieldKey) {
@@ -360,12 +380,7 @@ export default function TicketDetail() {
   }
 
   const specification = definitionManifest.data?.specification;
-  // The provenance badge origin from resolvedDefinition – does not affect
-  // the page layout structure which comes from the historical manifest.
   const layoutResolution = resolvedDefinition.data?.layoutResolution;
-  const page = specification
-    ? resolveTicketPageLayout(undefined, specification, 'agent')
-    : null;
   const context: TicketPageContext | null = specification
     ? {
         ticket,
@@ -519,10 +534,10 @@ export default function TicketDetail() {
       )}
 
       {/* Values come from the exact INC definition used at creation; the page
-          structure comes from the currently published one. publishedDefinition
-          is part of the loading gate so the layout is never rendered from the
-          historical fallback and then swapped a moment later. */}
-      {entityRecord.isLoading || definitionManifest.isLoading ? (
+          structure comes from the backend-resolved layout. resolvedDefinition
+          is part of the loading gate so the layout is never rendered empty
+          and then swapped in a moment later. */}
+      {entityRecord.isLoading || definitionManifest.isLoading || resolvedDefinition.isLoading ? (
         <div className="rounded-2xl border border-border/40 bg-surface-container-low p-5 text-sm text-on-surface-variant">
           Cargando la vista definida en Catalog Builder…
         </div>
@@ -547,9 +562,15 @@ export default function TicketDetail() {
                 className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium mb-3 bg-gray-100 text-gray-600"
                 title={`Resolución de layout: ${layoutResolution}`}
               >
-                {layoutResolution === 'active' ? 'Layout activo' :
-                 layoutResolution === 'latest-compatible' ? 'Versión compatible' :
-                 'Generado (sin layout)'}
+                {
+                  // These are the exact three strings LayoutService.ResolveLayoutForRecord
+                  // produces (layout_service.go) — never "active", which is not a value
+                  // the backend emits.
+                  layoutResolution === 'latest-compatible' ? 'Layout activo' :
+                  layoutResolution === 'previous-compatible' ? 'Versión anterior compatible' :
+                  layoutResolution === 'legacy-synthesized' ? 'Generado (sin layout)' :
+                  layoutResolution
+                }
               </div>
             )}
             <TicketPageLayout page={page} context={context} onAssignClick={handleAssign} />

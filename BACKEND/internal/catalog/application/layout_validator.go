@@ -64,17 +64,17 @@ func (v *LayoutValidator) DeriveCompatibility(
 			}
 
 			placements = append(placements, domain.CompatibilityPlacement{
-				PlacementID:          pID,
-				Kind:                 kind,
-				Source:               source,
-				FieldID:              fieldID,
-				FieldType:            fieldType,
-				WidgetKey:            widgetKey,
+				PlacementID:           pID,
+				Kind:                  kind,
+				Source:                source,
+				FieldID:               fieldID,
+				FieldType:             fieldType,
+				WidgetKey:             widgetKey,
 				WidgetContractVersion: "1.0",
-				Region:               region,
-				AudienceKey:          audienceKey,
-				RequiredPermissions:  reqPerms,
-				AllowMultiple:        false,
+				Region:                region,
+				AudienceKey:           audienceKey,
+				RequiredPermissions:   reqPerms,
+				AllowMultiple:         false,
 			})
 		}
 	}
@@ -93,7 +93,7 @@ func (v *LayoutValidator) DeriveCompatibility(
 	}
 
 	return &domain.CompatibilityFingerprint{
-		Placements:      placements,
+		Placements:       placements,
 		MandatoryWidgets: []string{"ticketHeader", "ticketActions"},
 	}
 }
@@ -123,16 +123,81 @@ func (v *LayoutValidator) IsCompatible(
 
 func (v *LayoutValidator) SynthesizeFromManifest(manifest domain.ExecutableDefinitionManifest) map[string]any {
 	var fieldPlacements []map[string]any
-	for i, f := range manifest.Specification.Fields {
+	row := 0
+	for _, f := range manifest.Specification.Fields {
+		// "title" is always shown by the mandatory ticketHeader widget above
+		// (see pageWidgetRule for "ticketHeader" and TicketHeaderWidget.tsx),
+		// so it is deliberately excluded here — matching the pre-existing
+		// convention in defaultDetailPlacements (page-layout-normalizer.ts),
+		// which never lists "title" either. Including it would duplicate the
+		// page heading in the body.
+		if f.Key == "title" {
+			continue
+		}
 		fieldPlacements = append(fieldPlacements, map[string]any{
-			"id":         fmt.Sprintf("placement-%d", i+1),
+			"id":         fmt.Sprintf("placement-%d", row+1),
 			"kind":       "field",
 			"source":     "catalog",
 			"fieldId":    f.FieldID(),
 			"fieldKey":   f.Key,
 			"column":     0,
 			"columnSpan": 12,
-			"row":        i,
+			"row":        row,
+		})
+		row++
+	}
+
+	// Mirrors synthesizePageLayoutFromLegacy (page-layout-normalizer.ts): every
+	// entity gets itsmRelations unconditionally, mergedTickets only when the
+	// legacy detailLayout config actually wired up a mergedCount placement,
+	// and sla/attachments/activity respect their show* toggles (nil means the
+	// field was never set, which defaults to shown — same as the TS `?? true`).
+	detailLayout := manifest.Specification.DetailLayout
+	showSLA := detailLayout == nil || detailLayout.ShowSLA == nil || *detailLayout.ShowSLA
+	showAttachments := detailLayout == nil || detailLayout.ShowAttachments == nil || *detailLayout.ShowAttachments
+	showActivity := detailLayout == nil || detailLayout.ShowActivity == nil || *detailLayout.ShowActivity
+	mergedConfigured := false
+	if detailLayout != nil {
+		for _, placement := range detailLayout.Fields {
+			if placement.Source == "ticket" && placement.FieldKey == "mergedCount" {
+				mergedConfigured = true
+				break
+			}
+		}
+	}
+
+	var sidebarPlacements []map[string]any
+	sidebarRow := 0
+	if mergedConfigured {
+		sidebarPlacements = append(sidebarPlacements, map[string]any{
+			"id": "widget-mergedTickets", "kind": "widget", "widgetKey": "mergedTickets",
+			"column": 0, "columnSpan": 12, "row": sidebarRow,
+		})
+		sidebarRow++
+	}
+	sidebarPlacements = append(sidebarPlacements, map[string]any{
+		"id": "widget-itsmRelations", "kind": "widget", "widgetKey": "itsmRelations",
+		"column": 0, "columnSpan": 12, "row": sidebarRow,
+	})
+	sidebarRow++
+	if showSLA {
+		sidebarPlacements = append(sidebarPlacements, map[string]any{
+			"id": "widget-sla", "kind": "widget", "widgetKey": "sla",
+			"column": 0, "columnSpan": 12, "row": sidebarRow,
+		})
+		sidebarRow++
+	}
+	if showAttachments {
+		sidebarPlacements = append(sidebarPlacements, map[string]any{
+			"id": "widget-attachments", "kind": "widget", "widgetKey": "attachments",
+			"column": 0, "columnSpan": 12, "row": sidebarRow,
+		})
+		sidebarRow++
+	}
+	if showActivity {
+		sidebarPlacements = append(sidebarPlacements, map[string]any{
+			"id": "widget-activity", "kind": "widget", "widgetKey": "activity",
+			"column": 0, "columnSpan": 12, "row": sidebarRow,
 		})
 	}
 
@@ -157,10 +222,8 @@ func (v *LayoutValidator) SynthesizeFromManifest(manifest domain.ExecutableDefin
 					"placements": fieldPlacements,
 				},
 				"sidebar": map[string]any{
-					"columns": 12,
-					"placements": []map[string]any{
-						{"id": "sla-1", "kind": "widget", "widgetKey": "sla", "column": 0, "columnSpan": 12, "row": 0},
-					},
+					"columns":    12,
+					"placements": sidebarPlacements,
 				},
 				"footer": map[string]any{
 					"columns":    12,

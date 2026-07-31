@@ -1,5 +1,5 @@
 import { apiRequest } from '@/lib/apiClient';
-import type { FieldDefinition } from './metamodel';
+import type { FieldDefinition, PageLayout } from './metamodel';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -39,6 +39,18 @@ export interface CatalogLayoutVersion {
   publishedAt?: string;
 }
 
+// The exact three strings LayoutService.ResolveLayoutForRecord (layout_service.go)
+// can produce — never "active".
+export type LayoutResolutionMode = 'latest-compatible' | 'previous-compatible' | 'legacy-synthesized';
+
+// `document`/`layouts.detail` is authored as free-form JSON (the Catalog
+// Builder draft editor accepts any object), so at the type level it can only
+// be a bare PageLayout or a `{ default, variants? }` wrapper around one —
+// callers must narrow further before trusting the shape (see TicketDetail.tsx).
+export interface ResolvedLayoutDocument {
+  detail?: PageLayout | { default?: PageLayout; variants?: Array<{ audienceKey: string; page: PageLayout }> };
+}
+
 /** The shape returned by GET /entities/{entityKey}/{entityID}/resolved-definition */
 export interface ResolvedDefinition {
   entityId: string;
@@ -50,10 +62,10 @@ export interface ResolvedDefinition {
   metamodelVersion: string;
   layoutVersionId: string | null;
   layoutVersion: number | null;
-  layoutResolution: string;
+  layoutResolution: LayoutResolutionMode;
   fields: FieldDefinition[];
   lifecycle: Record<string, unknown>;
-  layouts: Record<string, unknown>;
+  layouts: ResolvedLayoutDocument;
 }
 
 // ---------------------------------------------------------------------------

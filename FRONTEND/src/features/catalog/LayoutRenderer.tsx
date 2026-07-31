@@ -6,6 +6,7 @@
  * consuming component (TicketDetail, CatalogForm, Preview).
  */
 import type { ReactNode } from 'react';
+import type { LayoutResolutionMode } from './api';
 import type { LayoutDocument, LayoutSection, Placement } from './metamodel';
 import { DynamicLayout } from './runtime/DynamicLayout';
 
@@ -20,12 +21,15 @@ export interface LayoutRendererProps {
   /** Delegate for rendering individual placements. */
   renderPlacement: (placement: Placement, section: LayoutSection) => ReactNode;
   /**
-   * Layout resolution provenance badge.
-   * - `"active"` → active versioned layout
-   * - `"latest-compatible"` → latest compatible historical layout
-   * - `"legacy-synthesized"` → server-synthesized from manifest
+   * Layout resolution provenance badge — the exact three strings
+   * LayoutService.ResolveLayoutForRecord (layout_service.go) can produce:
+   * - `"latest-compatible"` → the active published layout, still compatible
+   * - `"previous-compatible"` → active layout was incompatible; this is the
+   *   most recent published version that still is
+   * - `"legacy-synthesized"` → no published layout is compatible; synthesized
+   *   from the record's own manifest
    */
-  resolution?: string;
+  resolution?: LayoutResolutionMode;
   /**
    * Whether to show the provenance badge. Defaults to false.
    */
@@ -33,9 +37,9 @@ export interface LayoutRendererProps {
   className?: string;
 }
 
-const PROVENANCE_LABEL: Record<string, { label: string; color: string }> = {
-  active: { label: 'Layout activo', color: 'bg-green-100 text-green-800' },
-  'latest-compatible': { label: 'Versión compatible', color: 'bg-yellow-100 text-yellow-800' },
+const PROVENANCE_LABEL: Record<LayoutResolutionMode, { label: string; color: string }> = {
+  'latest-compatible': { label: 'Layout activo', color: 'bg-green-100 text-green-800' },
+  'previous-compatible': { label: 'Versión anterior compatible', color: 'bg-yellow-100 text-yellow-800' },
   'legacy-synthesized': { label: 'Generado (sin layout)', color: 'bg-gray-100 text-gray-600' },
 };
 

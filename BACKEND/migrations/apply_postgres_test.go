@@ -53,6 +53,24 @@ func renamedFS(t *testing.T, names []string, sourceOf map[string]string) fs.FS {
 	return mapFS
 }
 
+// migrationsBefore returns every migration name strictly before the named
+// one, by locating it in wantMigrations rather than counting back from the
+// end. Several tests need "every migration up to, but not including,
+// 000019's demo cleanup" as their seed state; counting back from
+// len(wantMigrations) silently breaks every time a new migration is appended
+// after 000019 (as 000020 did), because the "last" migration is no longer the
+// one those tests meant to exclude.
+func migrationsBefore(t *testing.T, name string) []string {
+	t.Helper()
+	for i, candidate := range wantMigrations {
+		if candidate == name {
+			return wantMigrations[:i]
+		}
+	}
+	t.Fatalf("migration %q not found in wantMigrations", name)
+	return nil
+}
+
 // assertHistory checks schema_migrations contains exactly `want`, in the
 // order it was applied.
 func assertHistory(t *testing.T, pool *pgxpool.Pool, want []string) {
@@ -413,7 +431,7 @@ func TestDemoCleanupLeavesNoOrphans(t *testing.T) {
 func TestDemoCleanupSQLIsSafeToRunTwice(t *testing.T) {
 	ctx := context.Background()
 	pool := pgtest.NewDatabase(t)
-	if err := applyFS(ctx, pool, subsetFS(t, wantMigrations[:len(wantMigrations)-1])); err != nil {
+	if err := applyFS(ctx, pool, subsetFS(t, migrationsBefore(t, "000019_remove_legacy_demo_data.up.sql"))); err != nil {
 		t.Fatalf("seed up to (not including) the cleanup migration: %v", err)
 	}
 
@@ -452,7 +470,7 @@ func TestDemoCleanupSQLIsSafeToRunTwice(t *testing.T) {
 func TestDemoCleanupDoesNotTouchLookAlikeRealData(t *testing.T) {
 	ctx := context.Background()
 	pool := pgtest.NewDatabase(t)
-	if err := applyFS(ctx, pool, subsetFS(t, wantMigrations[:len(wantMigrations)-1])); err != nil {
+	if err := applyFS(ctx, pool, subsetFS(t, migrationsBefore(t, "000019_remove_legacy_demo_data.up.sql"))); err != nil {
 		t.Fatalf("seed up to (not including) the cleanup migration: %v", err)
 	}
 
@@ -533,7 +551,7 @@ func TestUpgradeWithRealRecordsDoesNotRegressSequence(t *testing.T) {
 	ctx := context.Background()
 	pool := pgtest.NewDatabase(t)
 
-	if err := applyFS(ctx, pool, subsetFS(t, wantMigrations[:len(wantMigrations)-1])); err != nil {
+	if err := applyFS(ctx, pool, subsetFS(t, migrationsBefore(t, "000019_remove_legacy_demo_data.up.sql"))); err != nil {
 		t.Fatalf("seed up to 000018: %v", err)
 	}
 
@@ -620,7 +638,7 @@ func TestUpgradeNeverRegressesSequencePastDeletedIdentifiers(t *testing.T) {
 	pool := pgtest.NewDatabase(t)
 
 	// 1. Apply up to 000018 (upgrade scenario, domain tables created)
-	if err := applyFS(ctx, pool, subsetFS(t, wantMigrations[:len(wantMigrations)-1])); err != nil {
+	if err := applyFS(ctx, pool, subsetFS(t, migrationsBefore(t, "000019_remove_legacy_demo_data.up.sql"))); err != nil {
 		t.Fatalf("seed up to 000018: %v", err)
 	}
 
@@ -666,7 +684,7 @@ func TestUpgradeWithNoRemainingRowsStillPreservesSequence(t *testing.T) {
 	pool := pgtest.NewDatabase(t)
 
 	// 1. Apply up to 000018 (upgrade scenario)
-	if err := applyFS(ctx, pool, subsetFS(t, wantMigrations[:len(wantMigrations)-1])); err != nil {
+	if err := applyFS(ctx, pool, subsetFS(t, migrationsBefore(t, "000019_remove_legacy_demo_data.up.sql"))); err != nil {
 		t.Fatalf("seed up to 000018: %v", err)
 	}
 
@@ -721,5 +739,3 @@ func TestSequenceUsesOnlyTrailingNumericSuffix(t *testing.T) {
 		t.Fatalf("expected trailing numeric suffix 5 for RFC2-000005, got %d", extracted)
 	}
 }
-
-

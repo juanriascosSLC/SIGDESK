@@ -77,8 +77,7 @@ func (r *LayoutRepository) UpdateDraft(ctx context.Context, entityKey string, do
 func (r *LayoutRepository) PublishDraft(
 	ctx context.Context,
 	entityKey string,
-	compat *domain.CompatibilityFingerprint,
-	checksum string,
+	validate ports.Validate,
 ) (*domain.CatalogLayoutVersion, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -93,11 +92,23 @@ func (r *LayoutRepository) PublishDraft(
 		if l.Version > maxVer {
 			maxVer = l.Version
 		}
-		list[i].IsActive = false
 	}
 
 	if draftIdx < 0 {
 		return nil, domain.ErrDraftNotFound
+	}
+
+	// Validate against the document as it stands right now, under the same
+	// lock that will publish it — mirrors the postgres adapter's FOR UPDATE
+	// read, so a concurrent UpdateDraft can never race a stale validation
+	// result into the published row.
+	compat, checksum, err := validate(list[draftIdx].Document)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range list {
+		list[i].IsActive = false
 	}
 
 	now := time.Now()

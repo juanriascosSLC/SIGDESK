@@ -85,6 +85,47 @@ func TestDefinitionRejectsUnknownViewField(t *testing.T) {
 	}
 }
 
+// TestDefinitionValidateRejectsDuplicateFieldID proves a definition cannot
+// declare two fields sharing the same stable fieldId, even when their `key`s
+// differ — this is the guard that stops a fieldId ever being reassigned to a
+// second, different field within one definition version, which would let a
+// layout binding silently jump to the wrong field.
+func TestDefinitionValidateRejectsDuplicateFieldID(t *testing.T) {
+	definition := validDefinition()
+	definition.Specification.Fields = []FieldDefinition{
+		{ID: "f1", Key: "title", Label: "Título", Type: "text"},
+		{ID: "f1", Key: "headline", Label: "Titular", Type: "text"},
+	}
+	err := definition.Validate()
+	if !errors.Is(err, ErrInvalidDefinition) {
+		t.Fatalf("Validate() error = %v, want ErrInvalidDefinition", err)
+	}
+	if !strings.Contains(err.Error(), "duplicate fieldId") {
+		t.Fatalf("Validate() error = %v, want it to mention the duplicate fieldId", err)
+	}
+}
+
+// TestFieldIDSurvivesKeyRename proves FieldID() — the identifier layout
+// bindings are meant to use — stays stable when a field's `key` is renamed,
+// as long as the explicit `id` is carried over. Renaming `key` alone (without
+// ever assigning an explicit `id`) is the pre-existing, unstable case: the
+// fallback identity IS the key, so it changes too. The whole point of `id` is
+// to opt out of that.
+func TestFieldIDSurvivesKeyRename(t *testing.T) {
+	before := FieldDefinition{ID: "f1", Key: "title", Label: "Título", Type: "text"}
+	after := FieldDefinition{ID: "f1", Key: "headline", Label: "Titular", Type: "text"}
+
+	if before.FieldID() != after.FieldID() {
+		t.Fatalf("FieldID() changed across a key rename: %q -> %q", before.FieldID(), after.FieldID())
+	}
+
+	withoutExplicitID := FieldDefinition{Key: "title", Label: "Título", Type: "text"}
+	renamedWithoutExplicitID := FieldDefinition{Key: "headline", Label: "Titular", Type: "text"}
+	if withoutExplicitID.FieldID() == renamedWithoutExplicitID.FieldID() {
+		t.Fatalf("expected FieldID() to change when key is renamed and no explicit id was ever assigned")
+	}
+}
+
 func TestConditionalFieldsAreVisibleAndRequiredFromMetadata(t *testing.T) {
 	definition := validDefinition()
 	definition.MetamodelVersion = CurrentMetamodelVersion
