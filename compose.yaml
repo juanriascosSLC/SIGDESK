@@ -1,7 +1,6 @@
 services:
   postgres:
     image: postgres:17-alpine
-    container_name: sigdesk-postgres
     environment:
       POSTGRES_DB: sigdesk
       POSTGRES_USER: sigdesk
@@ -20,7 +19,6 @@ services:
     build:
       context: ./BACKEND
       dockerfile: Dockerfile
-    container_name: sigdesk-api
     environment:
       APP_ENV: ${APP_ENV:-development}
       PORT: ${PORT:-8080}
@@ -41,7 +39,6 @@ services:
     build:
       context: ./FRONTEND
       dockerfile: Dockerfile
-    container_name: sigdesk-web
     ports:
       - "3003:80"
     depends_on:
