@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertCircle,
+  Archive,
   Clock,
   CheckCircle2,
   CircleDashed,
@@ -93,7 +94,7 @@ function getSlaChip(
     };
   }
 
-  if (assessment.resolvedAt || ticket.status === 'Resolved') {
+  if (assessment.resolvedAt || ticket.status === 'Resolved' || ticket.status === 'Closed') {
     if (assessment.resolutionBreached) {
       return {
         label: 'Breached',
@@ -337,6 +338,7 @@ export default function TicketsList() {
       case 'In Progress': return <CircleDashed className="w-4 h-4 text-cyan-400" />;
       case 'Pending Review': return <Clock className="w-4 h-4 text-amber-400" />;
       case 'Resolved': return <CheckCircle2 className="w-4 h-4 text-emerald-400" />;
+      case 'Closed': return <Archive className="w-4 h-4 text-slate-400" />;
       default: return <CircleDot className="w-4 h-4 text-on-surface-variant" />;
     }
   };
@@ -476,7 +478,7 @@ export default function TicketsList() {
             <tbody className="divide-y divide-border/20">
               {visibleTickets.map(ticket => {
                 const isCritical = ticket.priority === 'Critical';
-                const isResolved = ticket.status === 'Resolved';
+                const isResolved = ticket.status === 'Resolved' || ticket.status === 'Closed';
                 const isSelected = selected.has(ticket.id);
                 const sla = slaByTicketID.get(ticket.id) ?? getSlaChip(
                   ticket,

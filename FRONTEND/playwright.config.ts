@@ -25,7 +25,10 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        channel: 'chrome',
+        // Real, auto-updating Chrome locally; CI runners don't have it
+        // installed, so CI uses Playwright's own bundled Chromium instead
+        // (version pinned by package-lock.json via `playwright install`).
+        ...(process.env.CI ? {} : { channel: 'chrome' }),
       },
     },
   ],

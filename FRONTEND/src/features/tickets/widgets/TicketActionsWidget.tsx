@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronDown, Eye, EyeOff, GitBranch, Merge, Pencil, UserPlus } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Eye, EyeOff, GitBranch, Merge, Pencil, RotateCcw, UserPlus } from 'lucide-react';
 import type { TicketPageContext } from './context';
 
 export function TicketActionsWidget({ context }: { context: TicketPageContext }) {
@@ -24,9 +24,10 @@ export function TicketActionsWidget({ context }: { context: TicketPageContext })
       </button>
       <div className="relative">
         <select
+          data-testid="ticket-status-select"
           value={ticket.status}
           onChange={(event) => actions.onStatusChange(event.target.value)}
-          disabled={actions.updateStatusPending}
+          disabled={actions.updateStatusPending || !actions.canChangeStatus}
           className="appearance-none flex items-center gap-2 pl-4 pr-8 py-2 rounded-xl bg-surface-container border border-border/50 text-on-surface text-xs font-bold hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-50"
           style={{ colorScheme: 'dark' }}
         >
@@ -72,6 +73,17 @@ export function TicketActionsWidget({ context }: { context: TicketPageContext })
         {actions.isWatching ? `Watching (${actions.watchersCount})` : 'Watch'}
       </button>
       <div className="flex-1" />
+      {actions.canReopen && (
+        <button
+          data-testid="ticket-reopen-button"
+          onClick={actions.onReopen}
+          disabled={actions.updateStatusPending}
+          className="flex items-center gap-2 px-5 py-2 rounded-xl bg-surface-container border border-border/50 text-on-surface text-xs font-black uppercase tracking-wider hover:bg-surface-container-high transition-all disabled:opacity-50"
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+          Reabrir
+        </button>
+      )}
       <button
         onClick={actions.onResolve}
         disabled={ticket.status === 'Resolved' || actions.updateStatusPending}

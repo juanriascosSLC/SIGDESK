@@ -67,6 +67,11 @@ export interface TicketPageContext {
     onAssign: () => void;
     onStatusChange: (status: TicketStatus) => void;
     statusOptions: TicketStatus[];
+    // False while the ticket's own historical lifecycle is still loading or
+    // failed to load, or while there is none to consult — the status
+    // selector must not offer transitions from KNOWN_TICKET_STATUSES that
+    // the ticket's real (historical) definition version might reject.
+    canChangeStatus: boolean;
     updateStatusPending: boolean;
     updateStatusError?: string;
     onMerge: () => void;
@@ -77,5 +82,9 @@ export interface TicketPageContext {
     watchersCount: number;
     onToggleWatch: () => void;
     onResolve: () => void;
+    // Only true when the ticket's historical lifecycle actually declares a
+    // transition from its current state to "open".
+    canReopen: boolean;
+    onReopen: () => void;
   };
 }

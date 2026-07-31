@@ -50,8 +50,21 @@ export function useTicket(id?: string) {
 function useInvalidateTicket() {
   const queryClient = useQueryClient();
   return (ticket: { id: string }) => {
+    // The mutation's own response is always the freshest value for this
+    // ticket's detail — write it directly instead of also invalidating it.
+    // Invalidating this exact key used to trigger a background refetch that
+    // can race a RAPID subsequent mutation: if that refetch (fetched before
+    // the second mutation ran) resolves after the second mutation's own
+    // setQueryData call, it silently overwrites fresh data with stale data.
+    // Everything else under 'tickets' (lists, activity, comments, ...) isn't
+    // written here, so it still needs a real invalidate+refetch — just
+    // scoped away from this exact key so it can never race with it.
     queryClient.setQueryData(ticketKeys.detail(ticket.id), ticket);
-    void queryClient.invalidateQueries({ queryKey: ticketKeys.all });
+    void queryClient.invalidateQueries({
+      predicate: (query) =>
+        query.queryKey[0] === 'tickets' &&
+        !(query.queryKey.length === 2 && query.queryKey[1] === ticket.id),
+    });
   };
 }
 

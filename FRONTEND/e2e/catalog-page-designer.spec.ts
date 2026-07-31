@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { expect, test, type APIRequestContext, type APIResponse, type Locator, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type APIResponse, type Locator, type Page, type Response } from '@playwright/test';
 import { mockAuthenticatedAdmin } from './support';
 import { definitionData, type Definition } from './catalog-support';
 
@@ -13,7 +13,7 @@ type Entity = {
   data: Record<string, unknown>;
 };
 
-async function jsonOrFailure<T>(response: APIResponse, operation: string): Promise<T> {
+async function jsonOrFailure<T>(response: APIResponse | Response, operation: string): Promise<T> {
   expect(response.ok(), `${operation} failed (${response.status()}): ${await response.text()}`).toBeTruthy();
   return response.json() as Promise<T>;
 }
