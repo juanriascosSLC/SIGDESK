@@ -1,0 +1,74 @@
+version: '3'
+
+vars:
+  BACKEND_DIR: '{{.TASKFILE_DIR}}/BACKEND'
+  FRONTEND_DIR: '{{.TASKFILE_DIR}}/FRONTEND'
+
+tasks:
+  check-tools:
+    internal: true
+    cmds:
+      - cmd: go version >/dev/null 2>&1 || (echo "Error: Go toolchain is required" && exit 1)
+      - cmd: node -v >/dev/null 2>&1 || (echo "Error: Node.js runtime is required" && exit 1)
+      - cmd: npm -v >/dev/null 2>&1 || (echo "Error: npm package manager is required" && exit 1)
+      - cmd: docker info >/dev/null 2>&1 || (echo "Error: Docker engine must be installed and running" && exit 1)
+
+  dev:
+    desc: Start PostgreSQL in Docker, then run local backend and frontend with hot reload
+    deps: [check-tools]
+    cmds:
+      - docker compose up -d postgres
+      - echo "PostgreSQL started in Docker on port 5432."
+      - echo "To run local backend API (port 8080): cd BACKEND && go run ./cmd/api"
+      - echo "To run local frontend Vite (port 3003): cd FRONTEND && npm run dev"
+
+  test:
+    desc: Run unit and integration tests for backend and frontend
+    deps: [check-tools]
+    cmds:
+      - cmd: cd "{{.BACKEND_DIR}}" && go test -v ./...
+      - cmd: cd "{{.FRONTEND_DIR}}" && npx tsc -b
+
+  lint:
+    desc: Run linters for backend and frontend
+    deps: [check-tools]
+    cmds:
+      - cmd: cd "{{.BACKEND_DIR}}" && go vet ./...
+      - cmd: cd "{{.FRONTEND_DIR}}" && npm run lint
+
+  build:
+    desc: Build production binaries for backend and bundle for frontend
+    deps: [check-tools]
+    cmds:
+      - cmd: cd "{{.BACKEND_DIR}}" && go build -o bin/sig-desk-api ./cmd/api
+      - cmd: cd "{{.BACKEND_DIR}}" && go build -o bin/sig-desk-migrate ./cmd/migrate
+      - cmd: cd "{{.FRONTEND_DIR}}" && npm run build
+
+  migrate:
+    desc: Apply database migrations without destroying existing data
+    deps: [check-tools]
+    cmds:
+      - docker compose up -d postgres
+      - cmd: cd "{{.BACKEND_DIR}}" && go run ./cmd/migrate
+
+  reset:
+    desc: DESTRUCTIVE - Reset database volume and local containers after confirmation
+    deps: [check-tools]
+    prompt: "WARNING: This will destroy all database volumes and stop containers. Continue?"
+    cmds:
+      - docker compose down -v
+      - echo "Database volume destroyed."
+
+  e2e:
+    desc: Run Playwright end-to-end tests
+    deps: [check-tools]
+    cmds:
+      - cmd: cd "{{.FRONTEND_DIR}}" && npx playwright test
+
+  ci:
+    desc: Reproduce local CI pipeline steps (version, backend, frontend)
+    deps: [check-tools]
+    cmds:
+      - cmd: cd "{{.BACKEND_DIR}}" && go build ./... && go vet ./... && go test ./...
+      - cmd: cd "{{.FRONTEND_DIR}}" && npm ci && npx tsc -b && npm run lint && npm run build
+      - echo "Local CI checks passed successfully."
