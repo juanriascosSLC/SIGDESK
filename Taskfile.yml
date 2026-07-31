@@ -18,9 +18,23 @@ tasks:
     deps: [check-tools]
     cmds:
       - 'docker compose up -d postgres'
-      - 'echo "PostgreSQL started in Docker on port 5432."'
-      - 'echo "To run local backend API (port 8080): cd BACKEND && go run ./cmd/api"'
-      - 'echo "To run local frontend Vite (port 3003): cd FRONTEND && npm run dev"'
+      - task: dev-servers
+
+  dev-backend:
+    internal: true
+    cmds:
+      - 'cd "{{.BACKEND_DIR}}" && DATABASE_URL="${DATABASE_URL:-postgres://sigdesk:sigdesk@localhost:5432/sigdesk?sslmode=disable}" go run ./cmd/api'
+
+  dev-frontend:
+    internal: true
+    cmds:
+      - 'cd "{{.FRONTEND_DIR}}" && npm run dev'
+
+  dev-servers:
+    internal: true
+    deps:
+      - dev-backend
+      - dev-frontend
 
   test:
     desc: Run unit and integration tests for backend and frontend
