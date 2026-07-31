@@ -38,6 +38,59 @@ docker compose up --build
 
 La API queda en `http://localhost:8080` y PostgreSQL en el puerto `5432`.
 
+## Migraciones y datos demo
+
+Las migraciones (`migrations/`) se aplican automáticamente al arrancar la API
+cuando `DATABASE_URL` no está vacío — no hay un paso manual.
+
+**Las bases de datos nuevas ya NO reciben datos demo automáticamente.** Antes,
+las migraciones `000002_seed_demo` y `000005_ticket_core_features` insertaban
+siete tickets de ejemplo (`INC-000001..4` y tres tickets fusionados) en
+**cualquier** base migrada, incluida producción. La migración
+`000019_remove_legacy_demo_data` elimina esos registros exactos (identificados
+por id, nunca por contenido) como parte del mismo `Apply()`, así que una base
+recién migrada queda limpia.
+
+Si quieres esos datos de ejemplo (por ejemplo, para una demo o para probar la
+UI con tickets ya poblados), pídelos explícitamente:
+
+```powershell
+go run ./cmd/seeddemo
+```
+
+`cmd/seeddemo` es idempotente (no hace nada si el dato ya existe) y se niega a
+ejecutarse con `APP_ENV=production`. Nunca se invoca automáticamente desde
+migraciones ni desde el arranque de la API.
+
+### Pruebas de migraciones contra PostgreSQL real
+
+`go test ./...` es verde sin ninguna base de datos — usa repositorios en
+memoria. Las pruebas específicas de migraciones
+(`migrations/apply_postgres_test.go`) necesitan PostgreSQL real y se **omiten**
+(`t.Skip`) si la variable `SIGDESK_TEST_DATABASE_URL` no está definida:
+
+```powershell
+docker compose up -d --wait postgres
+$env:SIGDESK_TEST_DATABASE_URL = "postgres://sigdesk:sigdesk@localhost:5432/postgres?sslmode=disable"
+go test -count=1 -v ./migrations/...
+```
+
+Apunta a la base de **mantenimiento** (`postgres`), no a una base con datos
+reales: estas pruebas crean y destruyen (`DROP DATABASE ... WITH (FORCE)`) una
+base desechable por prueba, y nunca tocan la base nombrada en la URL.
+
+### Antes de desplegar un renombrado de migración en una base compartida
+
+`schema_migrations` identifica cada migración por **nombre de archivo**, no por
+número — renombrar un archivo ya aplicado hace que se vuelva a ejecutar bajo el
+nuevo nombre (inocuo solo si el SQL es idempotente). Antes de desplegar un
+cambio así en una base compartida:
+
+1. Revisa qué ya se aplicó: `SELECT name, applied_at FROM schema_migrations ORDER BY applied_at;`
+2. Haz un backup de la base.
+3. Confirma que el archivo renombrado usa `IF NOT EXISTS`/`ON CONFLICT DO NOTHING`
+   en todo su contenido, para que una segunda ejecución sea un no-op real.
+
 ## Endpoints
 
 - `GET /health/live`

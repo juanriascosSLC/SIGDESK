@@ -1,0 +1,5 @@
+-- Deleted data cannot be safely reconstructed here: this migration removes
+-- rows, not schema, and down.sql files are not executed by anything in this
+-- codebase (see migrations/embed.go — Apply/applyFS only ever reads
+-- *.up.sql). If the demo dataset is needed again, run the explicit
+-- cmd/seeddemo command instead of trying to reverse this migration.

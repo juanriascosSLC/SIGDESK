@@ -14,10 +14,19 @@ import (
 //go:embed *.up.sql
 var files embed.FS
 
-// Apply executes each pending migration exactly once. This also upgrades
-// persistent Docker volumes; docker-entrypoint-initdb.d only handles empty
-// databases and cannot do that on its own.
+// Apply executes each pending migration exactly once against the embedded
+// set. This also upgrades persistent Docker volumes; docker-entrypoint-initdb.d
+// only handles empty databases and cannot do that on its own.
 func Apply(ctx context.Context, pool *pgxpool.Pool) error {
+	return applyFS(ctx, pool, files)
+}
+
+// applyFS is Apply against an arbitrary source instead of the embedded set,
+// so tests can drive it with a synthetic filesystem: a prefix of the real
+// migrations (simulating an older deployment mid-upgrade) or a reconstruction
+// of a historical filename layout (simulating a rename). Production only ever
+// calls this through Apply, with the real embedded files.
+func applyFS(ctx context.Context, pool *pgxpool.Pool, source fs.FS) error {
 	if _, err := pool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			name TEXT PRIMARY KEY,
@@ -26,7 +35,7 @@ func Apply(ctx context.Context, pool *pgxpool.Pool) error {
 	`); err != nil {
 		return fmt.Errorf("create migration history: %w", err)
 	}
-	entries, err := fs.ReadDir(files, ".")
+	entries, err := fs.ReadDir(source, ".")
 	if err != nil {
 		return fmt.Errorf("read embedded migrations: %w", err)
 	}
@@ -47,7 +56,7 @@ func Apply(ctx context.Context, pool *pgxpool.Pool) error {
 		if applied {
 			continue
 		}
-		script, err := files.ReadFile(name)
+		script, err := fs.ReadFile(source, name)
 		if err != nil {
 			return fmt.Errorf("read migration %s: %w", name, err)
 		}
