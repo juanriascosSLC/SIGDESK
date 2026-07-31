@@ -499,45 +499,116 @@ func TestDemoCleanupDoesNotTouchLookAlikeRealData(t *testing.T) {
 	}
 }
 
-// TestDemoCleanupDoesNotRegressSequenceOrCauseCollisions proves the migration
-// never winds entity_human_id_seq backward and that a real ticket created
-// afterward cannot collide with a removed (or remaining) id.
-func TestDemoCleanupDoesNotRegressSequenceOrCauseCollisions(t *testing.T) {
+// TestFreshDatabaseFirstRealIncidentUsesCleanSequence proves that on a fresh
+// database, applying all migrations (including 000019 cleanup) leaves
+// entity_human_id_seq cleanly reset so the very first real ticket created
+// gets INC-000001.
+func TestFreshDatabaseFirstRealIncidentUsesCleanSequence(t *testing.T) {
 	ctx := context.Background()
 	pool := pgtest.NewDatabase(t)
-	if err := applyFS(ctx, pool, subsetFS(t, wantMigrations[:len(wantMigrations)-1])); err != nil {
-		t.Fatalf("seed up to (not including) the cleanup migration: %v", err)
+
+	if err := Apply(ctx, pool); err != nil {
+		t.Fatalf("apply on empty database: %v", err)
 	}
 
-	var sequenceBefore int64
-	if err := pool.QueryRow(ctx, `SELECT last_value FROM entity_human_id_seq`).Scan(&sequenceBefore); err != nil {
-		t.Fatalf("read sequence before cleanup: %v", err)
+	var humanID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO tickets (title, description, status, priority, requester_name)
+		VALUES ('First Real Ticket', 'Created on a fresh database.', 'open', 'medium', 'First User')
+		RETURNING human_id
+	`).Scan(&humanID); err != nil {
+		t.Fatalf("insert first real ticket: %v", err)
+	}
+
+	if humanID != "INC-000001" {
+		t.Fatalf("expected first real ticket human_id to be 'INC-000001', got %q", humanID)
+	}
+}
+
+// TestUpgradeWithRealRecordsDoesNotRegressSequence proves that if a database
+// already has real records before 000019 runs (e.g. INC-000005), the cleanup
+// migration retains the highest real numeric suffix and never winds the sequence
+// backward below real records.
+func TestUpgradeWithRealRecordsDoesNotRegressSequence(t *testing.T) {
+	ctx := context.Background()
+	pool := pgtest.NewDatabase(t)
+
+	if err := applyFS(ctx, pool, subsetFS(t, wantMigrations[:len(wantMigrations)-1])); err != nil {
+		t.Fatalf("seed up to 000018: %v", err)
+	}
+
+	const realTicketID = "INC-000005"
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO tickets (human_id, title, description, status, priority, requester_name)
+		VALUES ($1, 'Pre-existing real ticket', 'Already existed before 000019', 'open', 'high', 'Existing User')
+	`, realTicketID); err != nil {
+		t.Fatalf("insert real ticket before 000019: %v", err)
 	}
 
 	if err := Apply(ctx, pool); err != nil {
-		t.Fatalf("apply the cleanup migration: %v", err)
+		t.Fatalf("apply 000019: %v", err)
 	}
 
-	var sequenceAfter int64
-	if err := pool.QueryRow(ctx, `SELECT last_value FROM entity_human_id_seq`).Scan(&sequenceAfter); err != nil {
-		t.Fatalf("read sequence after cleanup: %v", err)
-	}
-	if sequenceAfter < sequenceBefore {
-		t.Fatalf("entity_human_id_seq regressed from %d to %d; cleanup must never wind a sequence backward", sequenceBefore, sequenceAfter)
-	}
-
-	var newHumanID string
+	var nextHumanID string
 	if err := pool.QueryRow(ctx, `
 		INSERT INTO tickets (title, description, status, priority, requester_name)
-		VALUES ('Real ticket after cleanup', 'Created after demo data was removed.', 'open', 'medium', 'Real User')
+		VALUES ('New real ticket after upgrade', 'Created post-000019 upgrade', 'open', 'medium', 'New User')
 		RETURNING human_id
-	`).Scan(&newHumanID); err != nil {
-		t.Fatalf("insert real ticket after cleanup: %v", err)
+	`).Scan(&nextHumanID); err != nil {
+		t.Fatalf("insert new real ticket after upgrade: %v", err)
 	}
 
-	for _, demoID := range demoHumanIDs {
-		if newHumanID == demoID {
-			t.Fatalf("new ticket id %s collided with a deleted demo ticket id", newHumanID)
-		}
+	if nextHumanID != "INC-000006" {
+		t.Fatalf("expected next real ticket to be 'INC-000006', got %q", nextHumanID)
 	}
 }
+
+// TestSeedDemoDoesNotPolluteRealIdentifierSequence confirms that running
+// cmd/seeddemo (inserting explicit literal demo IDs) leaves entity_human_id_seq
+// untouched and does not corrupt or regress the sequence used for real records.
+func TestSeedDemoDoesNotPolluteRealIdentifierSequence(t *testing.T) {
+	ctx := context.Background()
+	pool := pgtest.NewDatabase(t)
+
+	if err := Apply(ctx, pool); err != nil {
+		t.Fatalf("apply migrations: %v", err)
+	}
+
+	var realID1 string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO tickets (title, description, status, priority, requester_name)
+		VALUES ('Real Ticket 1', 'Created before seeddemo', 'open', 'medium', 'Real User')
+		RETURNING human_id
+	`).Scan(&realID1); err != nil {
+		t.Fatalf("insert first real ticket: %v", err)
+	}
+	if realID1 != "INC-000001" {
+		t.Fatalf("expected 'INC-000001', got %q", realID1)
+	}
+
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO tickets (
+			human_id, title, description, status, priority, category,
+			requester_name, assignee_name, asset_id, site, merged_count, created_at
+		)
+		VALUES
+			('INC-000001', 'Camera offline', 'Health check fail', 'open', 'critical', 'hardware', 'John Doe', NULL, 'CAM-12607', 'Site #401', 3, now())
+		ON CONFLICT (human_id) DO NOTHING;
+	`); err != nil {
+		t.Fatalf("run seeddemo insertion: %v", err)
+	}
+
+	var realID2 string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO tickets (title, description, status, priority, requester_name)
+		VALUES ('Real Ticket 2', 'Created after seeddemo', 'open', 'medium', 'Real User')
+		RETURNING human_id
+	`).Scan(&realID2); err != nil {
+		t.Fatalf("insert second real ticket: %v", err)
+	}
+
+	if realID2 != "INC-000002" {
+		t.Fatalf("expected second real ticket to be 'INC-000002', got %q", realID2)
+	}
+}
+

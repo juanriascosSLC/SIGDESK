@@ -1,48 +1,22 @@
--- Removes the disposable demo tickets that 000002_seed_demo.up.sql and
--- 000005_ticket_core_features.up.sql insert directly into `tickets`. Because
--- migrations run in full on first deploy, EVERY environment that has ever
--- been migrated — including production — got INC-000001..4 (and the three
--- merged tickets 000005 adds on top of INC-000001) automatically. This
--- migration removes exactly those rows and nothing else; 000002's historical
--- content is left untouched, as instructed, so the record of what a fresh
--- deploy used to insert stays intact.
+-- DESTRUCTIVE AND IRREVERSIBLE MIGRATION: Removes historical disposable demo
+-- tickets inserted by 000002_seed_demo.up.sql and 000005_ticket_core_features.up.sql.
+-- Deleted rows cannot be automatically reconstructed via down.sql. If sample data
+-- is needed in a non-production environment, use `cmd/seeddemo` explicitly.
 --
 -- Identification criterion: a FIXED, EXPLICIT list of the human_id values
 -- those two migrations insert — not a LIKE/pattern match against mutable
--- fields like title or description. This is safe because human_id is
--- unique and minted by a monotonic sequence: 000010_align_ticket_ids_and_
--- lifecycle.up.sql already advanced entity_human_id_seq past the highest
--- numeric suffix among these rows, so no ticket created through the real
--- application (past or future) can ever collide with one of these ids. A
--- real ticket that merely resembles the demo data (similar title, same
--- priority) is untouched, because matching is by id, never by content.
+-- fields like title or description. A real ticket that merely resembles the
+-- demo data is untouched, because matching is by id, never by content.
 --
--- Dependency graph, traced from the actual schema rather than assumed:
---   tickets.human_id is referenced (ON DELETE CASCADE) by ticket_comments,
---   ticket_attachments, ticket_watchers and ticket_activity
---   (000005_ticket_core_features.up.sql), and by tickets.merged_into_id
---   itself (self-referencing: INC-202611/12/13 -> INC-000001).
---
---   Tickets created directly via INSERT (as these demo rows are) have
---   entity_id IS NULL — see 000008_ticket_catalog_event_projection.up.sql's
---   own comment: "Tickets created directly via POST /tickets have no
---   entity_id." They were never projected through the catalog/entity
---   pipeline, so they have no corresponding entity_records row and,
---   transitively, no catalog_entity_relations, catalog_event_outbox,
---   catalog_projected_events, catalog_idempotency_keys, sla_assessments or
---   sla_processed_events rows either. The block below still computes and
---   deletes through that path explicitly (rather than assuming it's always
---   empty) so this migration stays correct if that ever changes — e.g. a
---   future seed that goes through the real catalog pipeline instead of a
---   raw INSERT.
---
--- Sequences are NOT reset. entity_human_id_seq is forward-only by design;
--- winding it back to reclaim the numbers these rows freed would only invite
--- a future collision with anything that already captured one of these ids
--- (an event payload, an audit log, a support ticket reference) and buys
--- nothing in return. Deleting rows never requires adjusting a sequence for
--- correctness — the next real ticket simply gets the next available number,
--- with a gap where the demo data used to be, which is ordinary and safe.
+-- Sequence Re-adjustment:
+-- After cleaning legacy demo rows, entity_human_id_seq is re-evaluated:
+--   - If NO real tickets or entity_records remain (fresh installation), sequence
+--     is reset using setval('entity_human_id_seq', 1, false) so the first real
+--     incident minted by the system receives INC-000001.
+--   - If existing real records remain, sequence is set to max(numeric_suffix)
+--     (is_called = true) so subsequent real tickets continue without sequence regression
+--     or key collision.
+
 DO $$
 DECLARE
     demo_human_ids CONSTANT VARCHAR(16)[] := ARRAY[
@@ -50,6 +24,7 @@ DECLARE
         'INC-202611', 'INC-202612', 'INC-202613'
     ];
     demo_entity_ids TEXT[];
+    max_remaining_suffix BIGINT;
 BEGIN
     SELECT COALESCE(array_agg(entity_id), ARRAY[]::text[])
     INTO demo_entity_ids
@@ -63,8 +38,7 @@ BEGIN
     -- 000018_catalog_idempotency_keys.up.sql), so they need no explicit
     -- statement here. catalog_event_outbox, catalog_projected_events,
     -- sla_assessments and sla_processed_events have NO foreign key back to
-    -- entity_records (checked directly against their CREATE TABLE
-    -- statements), so each needs its own explicit delete.
+    -- entity_records, so each needs its own explicit delete.
     DELETE FROM sla_processed_events
     WHERE event_id IN (
         SELECT event_id FROM catalog_event_outbox WHERE aggregate_id = ANY(demo_entity_ids)
@@ -74,17 +48,31 @@ BEGIN
     DELETE FROM catalog_event_outbox WHERE aggregate_id = ANY(demo_entity_ids);
     DELETE FROM entity_records WHERE id::text = ANY(demo_entity_ids);
 
-    -- Ticket-pipeline dependents. Explicit rather than relying solely on
-    -- their ON DELETE CASCADE, so the rows removed are verifiable one table
-    -- at a time.
+    -- Ticket-pipeline dependents.
     DELETE FROM ticket_activity WHERE ticket_id = ANY(demo_human_ids);
     DELETE FROM ticket_comments WHERE ticket_id = ANY(demo_human_ids);
     DELETE FROM ticket_attachments WHERE ticket_id = ANY(demo_human_ids);
     DELETE FROM ticket_watchers WHERE ticket_id = ANY(demo_human_ids);
 
     -- The demo tickets themselves, all in one statement so the
-    -- self-referencing merged_into_id foreign key (INC-202611..13 point at
-    -- INC-000001, all within this same set) never has a dangling reference
-    -- mid-statement.
+    -- self-referencing merged_into_id foreign key never has a dangling reference.
     DELETE FROM tickets WHERE human_id = ANY(demo_human_ids);
+
+    -- Conditional sequence adjustment:
+    -- Find maximum numeric suffix among remaining real tickets and entity_records.
+    SELECT COALESCE(
+        GREATEST(
+            (SELECT MAX(NULLIF(regexp_replace(human_id, '\D', '', 'g'), '')::bigint) FROM tickets),
+            (SELECT MAX(NULLIF(regexp_replace(human_id, '\D', '', 'g'), '')::bigint) FROM entity_records)
+        ),
+        0
+    ) INTO max_remaining_suffix;
+
+    IF max_remaining_suffix = 0 THEN
+        -- Fresh database with no real records: reset sequence so first real incident gets INC-000001
+        PERFORM setval('entity_human_id_seq', 1, false);
+    ELSE
+        -- Existing database with real records: set sequence to max real suffix so nextval continues safely
+        PERFORM setval('entity_human_id_seq', max_remaining_suffix, true);
+    END IF;
 END $$;
