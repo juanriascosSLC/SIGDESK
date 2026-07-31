@@ -29,6 +29,7 @@ type Dependencies struct {
 	Logger         *slog.Logger
 	TicketService  *application.Service
 	CatalogService *catalogApplication.Service
+	LayoutService  *catalogApplication.LayoutService
 	SLAService     *slaApplication.Service
 	ChangeService  *changeApplication.Service
 	// Authenticator validates callers against SIGTools. Required: main builds
@@ -159,16 +160,8 @@ func New(dependencies Dependencies) http.Handler {
 		mux.HandleFunc("POST /api/v1/catalog/definitions/{entityKey}/versions/{version}/validate", guard(identityDomain.PermCatalogPublish, catalogHandler.ValidatePublication))
 		mux.HandleFunc("POST /api/v1/catalog/definitions/{entityKey}/versions/{version}/publish", guard(identityDomain.PermCatalogPublish, catalogHandler.Publish))
 		mux.HandleFunc("GET /api/v1/catalog/definitions/{entityKey}/versions/{version}/manifest", guard(identityDomain.PermCatalogView, catalogHandler.GetManifest))
-		// Compatibility alias: submissions now enter the generic metadata
-		// runtime. Tickets receives INC records asynchronously from the outbox.
-		// Submitting an intake form is creating a ticket, hence the tickets
-		// permission rather than a catalog-authoring one.
 		mux.HandleFunc("POST /api/v1/catalog/definitions/{entityKey}/submit", runtimeGuard("create", catalogHandler.CreateEntity))
 		mux.HandleFunc("GET /api/v1/entities/{entityKey}", runtimeGuard("view", catalogHandler.ListEntities))
-		// Presentation-only alias for operational screens. Records remain
-		// pinned to their original executable manifest, while module-owned
-		// projections (for example merged tickets) may use the current
-		// published layout without granting Catalog authoring access.
 		mux.HandleFunc(
 			"GET /api/v1/entities/{entityKey}/presentation",
 			runtimeGuard("view", catalogHandler.GetPublishedDefinition),
@@ -193,6 +186,18 @@ func New(dependencies Dependencies) http.Handler {
 			"DELETE /api/v1/entities/{entityKey}/{entityID}/relations/{relationID}",
 			runtimeGuard("relation", catalogHandler.DeleteEntityRelation),
 		)
+	}
+
+	if dependencies.LayoutService != nil {
+		layoutHandler := catalogHTTP.NewLayoutHandler(dependencies.LayoutService)
+		mux.HandleFunc("GET /api/v1/catalog/layouts/{entityKey}/draft", guard(identityDomain.PermCatalogAuthor, layoutHandler.GetDraft))
+		mux.HandleFunc("POST /api/v1/catalog/layouts/{entityKey}/draft", guard(identityDomain.PermCatalogAuthor, layoutHandler.CreateDraft))
+		mux.HandleFunc("PUT /api/v1/catalog/layouts/{entityKey}/draft", guard(identityDomain.PermCatalogAuthor, layoutHandler.UpdateDraft))
+		mux.HandleFunc("POST /api/v1/catalog/layouts/{entityKey}/publish", guard(identityDomain.PermCatalogPublish, layoutHandler.PublishDraft))
+		mux.HandleFunc("GET /api/v1/catalog/layouts/{entityKey}/versions", guard(identityDomain.PermCatalogView, layoutHandler.ListVersions))
+		mux.HandleFunc("GET /api/v1/catalog/layouts/{entityKey}/active", guard(identityDomain.PermCatalogView, layoutHandler.GetActiveVersion))
+		mux.HandleFunc("POST /api/v1/catalog/layouts/{entityKey}/versions/{version}/activate", guard(identityDomain.PermCatalogPublish, layoutHandler.ActivateVersion))
+		mux.HandleFunc("GET /api/v1/entities/{entityKey}/{entityID}/resolved-definition", authenticator.RequireAuth(layoutHandler.ResolveLayoutForRecord))
 	}
 	if dependencies.SLAService != nil {
 		slaHandler := slaHTTP.NewHandler(dependencies.SLAService)

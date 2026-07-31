@@ -56,15 +56,17 @@ func main() {
 	defer cancelApplication()
 	var repository ports.Repository
 	var catalogRepository catalogPorts.Repository
+	var layoutRepository catalogPorts.LayoutRepository
 	var slaRepository slaPorts.Repository
 	var rbacRepository rbacPorts.Repository
-	var closeDatabase func()
-	var readyCheck func(context.Context) error
+	var closeDatabase = func() {}
+	var readyCheck = func(context.Context) error { return nil }
 
 	if cfg.DatabaseURL == "" {
 		logger.Warn("DATABASE_URL is empty; using the in-memory development repository")
 		repository = memory.NewRepository(memory.DemoTickets())
 		catalogRepository = catalogMemory.NewRepository(catalogMemory.DemoDefinitions()...)
+		layoutRepository = catalogMemory.NewLayoutRepository()
 		slaRepository = slaMemory.NewRepository(slaApplication.DefaultPolicy())
 		rbacRepository = rbacMemory.NewRepository()
 		closeDatabase = func() {}
@@ -82,6 +84,7 @@ func main() {
 		}
 		repository = postgres.NewRepository(pool)
 		catalogRepository = catalogPostgres.NewRepository(pool)
+		layoutRepository = catalogPostgres.NewLayoutRepository(pool)
 		slaRepository = slaPostgres.NewRepository(pool)
 		rbacRepository = rbacPostgres.NewRepository(pool)
 		closeDatabase = pool.Close
@@ -239,11 +242,19 @@ func main() {
 		logger.Warn("SIGTOOLS_API_URL is not set: authentication and permission checks are DISABLED (local development only)")
 	}
 
+	layoutService := catalogApplication.NewLayoutService(
+		layoutRepository,
+		catalogRepository,
+		catalogApplication.NewDefaultRecordAuthorizer(),
+		catalogApplication.NewLayoutValidator(),
+	)
+
 	handler := httpserver.New(httpserver.Dependencies{
 		Config:         cfg,
 		Logger:         logger,
 		TicketService:  ticketService,
 		CatalogService: catalogService,
+		LayoutService:  layoutService,
 		SLAService:     slaService,
 		ChangeService:  changeService,
 		Authenticator:  authenticator,

@@ -1,41 +1,49 @@
 # SIG-DESK Frontend
 
-Cliente React de SIG-DESK.
+Cliente React de SIG-DESK (Vite + TypeScript + TailwindCSS).
 
-## Integración actual
+## Integración y Puerto
 
-El flujo de tickets ya consume el backend:
+- **Puerto principal de desarrollo local**: `http://localhost:3003`
+- Configuración en `vite.config.ts` y `package.json`.
 
-- listado y Kanban;
-- detalle;
-- creación desde el catálogo;
-- cambio de estado a resuelto;
-- cache e invalidación con TanStack Query;
-- estados de carga, error y vacío.
+---
 
-El resto de las pantallas continúa siendo una maqueta y se conectará por
-módulos.
+## Ejecución Local
 
-## Configuración
-
-```powershell
-Copy-Item .env.example .env.local
+```bash
 npm install
 npm run dev
 ```
 
-La API predeterminada es `http://localhost:8080/api/v1`. Se puede cambiar con:
+La aplicación abre en `http://localhost:3003` conectándose por defecto a `http://localhost:8080/api/v1`.
 
+### Modificar URL de la API
+
+Crea `.env.local`:
 ```text
 VITE_API_URL=http://localhost:8080/api/v1
 ```
 
+---
+
 ## Validación
 
-```powershell
-npm run build
+```bash
+# Comprobación de tipos TypeScript
+npx tsc -b
+
+# Linter
 npm run lint
+
+# Build de producción
+npm run build
 ```
 
-El build es obligatorio. El lint todavía reporta deuda previa de la maqueta,
-principalmente en el constructor de workflows y la pantalla mock de API keys.
+---
+
+## Contenedor Nginx (Producción / Docker Compose)
+
+El archivo `Dockerfile` compila el bundle estático en un build multi-etapa y lo sirve mediante Nginx en el puerto `80` (mapeado al `3003` del host en `compose.yaml`).
+
+`nginx.conf` incluye la directiva `try_files $uri $uri/ /index.html;` para soportar las rutas cliente de React Router sin errores 404 al recargar.

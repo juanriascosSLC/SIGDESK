@@ -338,6 +338,90 @@ paths:
                   items:
                     type: array
                     items: { $ref: "#/components/schemas/ActivityEntry" }
+  /catalog/layouts/{entityKey}/draft:
+    parameters:
+      - $ref: "#/components/parameters/EntityKey"
+    get:
+      operationId: getCatalogLayoutDraft
+      responses:
+        "200":
+          description: Active layout draft
+        "404":
+          description: Draft not found
+    post:
+      operationId: createCatalogLayoutDraft
+      responses:
+        "201":
+          description: Draft created
+        "409":
+          description: Draft already exists
+    put:
+      operationId: updateCatalogLayoutDraft
+      responses:
+        "200":
+          description: Draft updated
+        "404":
+          description: Draft not found
+  /catalog/layouts/{entityKey}/publish:
+    parameters:
+      - $ref: "#/components/parameters/EntityKey"
+    post:
+      operationId: publishCatalogLayoutDraft
+      responses:
+        "200":
+          description: Layout published
+        "422":
+          description: Incompatible layout document
+  /catalog/layouts/{entityKey}/versions:
+    parameters:
+      - $ref: "#/components/parameters/EntityKey"
+    get:
+      operationId: listCatalogLayoutVersions
+      responses:
+        "200":
+          description: Layout version history
+  /catalog/layouts/{entityKey}/active:
+    parameters:
+      - $ref: "#/components/parameters/EntityKey"
+    get:
+      operationId: getActiveCatalogLayoutVersion
+      responses:
+        "200":
+          description: Active published layout version
+        "404":
+          description: Active layout version not found
+  /catalog/layouts/{entityKey}/versions/{version}/activate:
+    parameters:
+      - $ref: "#/components/parameters/EntityKey"
+      - name: version
+        in: path
+        required: true
+        schema: { type: integer }
+    post:
+      operationId: activateCatalogLayoutVersion
+      responses:
+        "200":
+          description: Version activated
+        "422":
+          description: Target version is not published
+  /entities/{entityKey}/{entityID}/resolved-definition:
+    parameters:
+      - $ref: "#/components/parameters/EntityKey"
+      - name: entityID
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getResolvedDefinitionForRecord
+      responses:
+        "200":
+          description: Resolved definition and layout for target record
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Record not found
   /catalog/definitions:
     get:
       operationId: listCatalogDefinitions

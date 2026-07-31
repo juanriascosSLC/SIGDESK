@@ -1,0 +1,6 @@
+-- DESTRUCTIVE AND IRREVERSIBLE MIGRATION: Deleted demo rows cannot be safely
+-- reconstructed here because this migration removes rows, not schema structures.
+-- Down.sql files are not executed by the migration runner (see migrations/embed.go:
+-- Apply/applyFS only reads *.up.sql).
+-- If the demo dataset is needed in a development environment after this migration
+-- runs, execute the explicit `cmd/seeddemo` command instead.
