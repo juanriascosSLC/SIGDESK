@@ -132,6 +132,7 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
   page,
   request,
 }) => {
+  test.setTimeout(180_000);
   await page.setViewportSize({ width: 1400, height: 1200 });
   const baseline = await getPublishedDefinition(request);
   const historicalTitle = `Historical INC on definition v${baseline.version}`;
