@@ -203,15 +203,26 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
   await expect(page.getByTestId('catalog-save-draft')).toBeVisible();
   await expect(page.getByTestId('catalog-save-draft')).toBeEnabled();
 
-  const [saveResponse] = await Promise.all([
-    page.waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname === '/api/v1/catalog/definitions' &&
-        response.request().method() === 'POST' &&
-        response.ok(),
-    ),
-    page.getByTestId('catalog-save-draft').click(),
-  ]);
+  // Click save and wait briefly for any synchronous validation error to surface
+  await page.getByTestId('catalog-save-draft').click();
+  await page.waitForTimeout(500);
+
+  // Surface any validation error immediately so CI logs expose the root cause
+  const editorError = page.getByTestId('catalog-editor-error');
+  const editorErrorVisible = await editorError.isVisible();
+  if (editorErrorVisible) {
+    const errorText = await editorError.textContent();
+    throw new Error(`catalog-save-draft validation error: ${errorText}`);
+  }
+
+  // Now wait for the API response that should be in-flight
+  const saveResponse = await page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/v1/catalog/definitions' &&
+      response.request().method() === 'POST' &&
+      response.ok(),
+    { timeout: 30_000 },
+  );
   const savedDraft = await jsonOrFailure<Definition>(
     saveResponse,
     'save Catalog draft from UI',
