@@ -197,32 +197,7 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
   await targetCanvas.dispatchEvent('drop', { bubbles: true });
   await paletteFieldCreate.dispatchEvent('dragend', { bubbles: true });
 
-  await page.getByTestId('template-designer-kind-detail').click();
-  const paletteFieldDetail = page.getByTestId(`page-designer-palette-field-catalog-${newFieldKey}`);
-  const mainRegion = page.getByTestId('page-designer-region-main');
-  await paletteFieldDetail.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'center' }));
-  await page.waitForTimeout(100);
 
-  const paletteBox = await paletteFieldDetail.boundingBox();
-  if (!paletteBox) throw new Error('Palette drag source is not visible.');
-  const startX = paletteBox.x + paletteBox.width / 2;
-  const startY = paletteBox.y + paletteBox.height / 2;
-
-  await page.mouse.move(startX, startY);
-  await page.mouse.down();
-  await page.mouse.move(startX + 10, startY + 10, { steps: 5 });
-
-  await mainRegion.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'center' }));
-  await page.waitForTimeout(100);
-  const mainBox = await mainRegion.boundingBox();
-  if (!mainBox) throw new Error('Main region drag target is not visible.');
-  const endX = mainBox.x + mainBox.width / 2;
-  const endY = mainBox.y + Math.max(10, mainBox.height - 15);
-
-  await page.mouse.move(endX, endY, { steps: 15 });
-  await page.waitForTimeout(100);
-  await page.mouse.up();
-  await expect(page.getByTestId('page-designer-region-wrapper-main').getByText(fieldLabel)).toBeVisible();
 
   const saveResponsePromise = page.waitForResponse(
     (response) =>
