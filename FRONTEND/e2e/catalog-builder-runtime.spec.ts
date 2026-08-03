@@ -201,7 +201,6 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
   const paletteFieldDetail = page.getByTestId(`page-designer-palette-field-catalog-${newFieldKey}`);
   const mainRegion = page.getByTestId('page-designer-region-main');
   await paletteFieldDetail.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'center' }));
-  await mainRegion.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'center' }));
   await page.waitForTimeout(100);
 
   const paletteBox = await paletteFieldDetail.boundingBox();
@@ -213,6 +212,8 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
   await page.mouse.down();
   await page.mouse.move(startX + 10, startY + 10, { steps: 5 });
 
+  await mainRegion.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'center' }));
+  await page.waitForTimeout(100);
   const mainBox = await mainRegion.boundingBox();
   if (!mainBox) throw new Error('Main region drag target is not visible.');
   const endX = mainBox.x + mainBox.width / 2;
