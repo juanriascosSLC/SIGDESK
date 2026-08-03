@@ -186,26 +186,39 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
   await expect(page.getByTestId('catalog-save-draft')).toBeVisible();
   await expect(page.getByTestId('catalog-save-draft')).toBeEnabled();
 
-  // Click save and wait briefly for any synchronous validation error to surface
-  await page.getByTestId('catalog-save-draft').click();
-  await page.waitForTimeout(500);
-
-  // Surface any validation error immediately so CI logs expose the root cause
+  // The response listener MUST be registered before the click — the same
+  // click-then-wait ordering that the publish step below already avoids via
+  // Promise.all. Registering it after the click (as this used to do, with a
+  // waitForTimeout(500) in between) is a real race: if the response actually
+  // arrives faster than 500ms, waitForResponse starts listening only after
+  // the event already fired and is never told about it, timing out even
+  // though the save succeeded. This raced on every CI run regardless of how
+  // long the timeout was extended, because the listener was never present
+  // for the event in the first place.
   const editorError = page.getByTestId('catalog-editor-error');
-  const editorErrorVisible = await editorError.isVisible();
-  if (editorErrorVisible) {
-    const errorText = await editorError.textContent();
-    throw new Error(`catalog-save-draft validation error: ${errorText}`);
-  }
-
-  // Now wait for the API response that should be in-flight
-  const saveResponse = await page.waitForResponse(
+  const saveResponsePromise = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === '/api/v1/catalog/definitions' &&
       response.request().method() === 'POST' &&
       response.ok(),
     { timeout: 30_000 },
   );
+  await page.getByTestId('catalog-save-draft').click();
+
+  let saveResponse: Awaited<typeof saveResponsePromise>;
+  try {
+    saveResponse = await saveResponsePromise;
+  } catch (timeoutError) {
+    // If the save never reached the network at all (client-side validation
+    // blocked it), surface that instead of a bare timeout.
+    if (await editorError.isVisible()) {
+      throw new Error(
+        `catalog-save-draft validation error: ${await editorError.textContent()}`,
+        { cause: timeoutError },
+      );
+    }
+    throw timeoutError;
+  }
   const savedDraft = await jsonOrFailure<Definition>(
     saveResponse,
     'save Catalog draft from UI',
