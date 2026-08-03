@@ -222,8 +222,8 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
   const [saveResponse] = await Promise.all([
     page.waitForResponse(
       (response) =>
-        new URL(response.url()).pathname === '/api/v1/catalog/definitions' &&
-        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname.includes('/catalog/') &&
+        (response.request().method() === 'POST' || response.request().method() === 'PUT') &&
         response.ok(),
     ),
     page.getByTestId('catalog-save-draft').click(),
