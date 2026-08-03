@@ -199,66 +199,41 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
   await page.getByTestId('template-designer-kind-detail').click();
   const paletteFieldDetail = page.getByTestId(`page-designer-palette-field-catalog-${newFieldKey}`);
   const mainRegion = page.getByTestId('page-designer-region-main');
-  await paletteFieldDetail.scrollIntoViewIfNeeded();
-  const paletteBox = await paletteFieldDetail.boundingBox();
-  if (paletteBox) {
-    const startX = paletteBox.x + paletteBox.width / 2;
-    const startY = paletteBox.y + paletteBox.height / 2;
-    await page.mouse.move(startX, startY);
-    await page.mouse.down();
-    await page.mouse.move(startX + 10, startY + 10, { steps: 5 });
-    await mainRegion.scrollIntoViewIfNeeded();
-    const mainBox = await mainRegion.boundingBox();
-    if (mainBox) {
-      const endX = mainBox.x + mainBox.width / 2;
-      const endY = mainBox.y + mainBox.height / 2;
-      await page.mouse.move(endX, endY, { steps: 15 });
-      await page.waitForTimeout(100);
-      await page.mouse.up();
-    }
-  }
+  await paletteFieldDetail.dispatchEvent('dragstart', { bubbles: true });
+  await mainRegion.dispatchEvent('dragover', { bubbles: true });
+  await mainRegion.dispatchEvent('drop', { bubbles: true });
+  await paletteFieldDetail.dispatchEvent('dragend', { bubbles: true });
   await expect(page.getByTestId('page-designer-region-wrapper-main').getByText(fieldLabel)).toBeVisible();
 
-  const savePromise = page
-    .waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname.includes('/catalog/') &&
-        (response.request().method() === 'POST' || response.request().method() === 'PUT') &&
-        response.ok(),
-      { timeout: 10000 },
-    )
-    .catch(() => null);
-
+  const saveResponsePromise = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/v1/catalog/definitions' &&
+      response.request().method() === 'POST' &&
+      response.ok(),
+  );
   await page.getByTestId('catalog-save-draft').click();
-  const saveResponse = await savePromise;
-  if (saveResponse) {
-    const savedDraft = await jsonOrFailure<Definition>(
-      saveResponse,
-      'save Catalog draft from UI',
-    );
-    expect(savedDraft.version).toBeGreaterThan(0);
-  }
+  const savedDraft = await jsonOrFailure<Definition>(
+    await saveResponsePromise,
+    'save Catalog draft from UI',
+  );
+  expect(savedDraft.version).toBeGreaterThan(0);
+  await expect(page.getByTestId('catalog-notice')).toContainText(
+    'Borrador guardado',
+  );
 
-  await expect(page.getByTestId('catalog-publish')).toBeEnabled();
-
-  const publishPromise = page
-    .waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname.includes('/publish') &&
-        response.request().method() === 'POST' &&
-        response.ok(),
-      { timeout: 15000 },
-    )
-    .catch(() => null);
-
+  const publishResponsePromise = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.endsWith(
+        `/catalog/definitions/INC/versions/${savedDraft.version}/publish`,
+      ) &&
+      response.request().method() === 'POST' &&
+      response.ok(),
+  );
   await page.getByTestId('catalog-publish').click();
-  const publishResponse = await publishPromise;
-  const published = publishResponse
-    ? await jsonOrFailure<Definition>(
-        publishResponse,
-        'publish Catalog definition from UI',
-      )
-    : await getPublishedDefinition(request);
+  const published = await jsonOrFailure<Definition>(
+    await publishResponsePromise,
+    'publish Catalog definition from UI',
+  );
   expect(published.version).toBeGreaterThan(baseline.version);
   await expect(page.getByTestId('catalog-notice')).toContainText(
     'INC ya tiene los cambios publicados',
