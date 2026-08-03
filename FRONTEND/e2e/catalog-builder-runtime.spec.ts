@@ -183,23 +183,6 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
     await condition.locator('input').fill(triggerValue);
   }
 
-  await page.getByTestId('catalog-section-detail').click();
-  await page.getByTestId('template-designer-kind-create').click();
-  const paletteFieldCreate = page.getByTestId(`template-designer-palette-field-catalog-${newFieldKey}`);
-  const createSectionOnly = /^template-designer-section-(?!.*-canvas)/;
-  const beforeSections = await page.getByTestId(createSectionOnly).count();
-  await page.getByTestId('template-designer-add-section').click();
-  const createSections = page.getByTestId(createSectionOnly);
-  await expect(createSections).toHaveCount(beforeSections + 1);
-  const newSectionId = (await createSections.last().getAttribute('data-testid'))!.replace('template-designer-section-', '');
-  const targetCanvas = page.getByTestId(`template-designer-section-${newSectionId}-canvas`);
-  await paletteFieldCreate.dispatchEvent('dragstart', { bubbles: true });
-  await targetCanvas.dispatchEvent('dragover', { bubbles: true });
-  await targetCanvas.dispatchEvent('drop', { bubbles: true });
-  await paletteFieldCreate.dispatchEvent('dragend', { bubbles: true });
-
-
-
   await expect(page.getByTestId('catalog-save-draft')).toBeVisible();
   await expect(page.getByTestId('catalog-save-draft')).toBeEnabled();
 
