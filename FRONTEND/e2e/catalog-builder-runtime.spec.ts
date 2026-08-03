@@ -199,15 +199,17 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
 
 
 
-  const saveResponsePromise = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === '/api/v1/catalog/definitions' &&
-      response.request().method() === 'POST' &&
-      response.ok(),
-  );
-  await page.getByTestId('catalog-save-draft').click();
+  const [saveResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === '/api/v1/catalog/definitions' &&
+        response.request().method() === 'POST' &&
+        response.ok(),
+    ),
+    page.getByTestId('catalog-save-draft').click(),
+  ]);
   const savedDraft = await jsonOrFailure<Definition>(
-    await saveResponsePromise,
+    saveResponse,
     'save Catalog draft from UI',
   );
   expect(savedDraft.version).toBeGreaterThan(0);
@@ -215,17 +217,21 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
     'Borrador guardado',
   );
 
-  const publishResponsePromise = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname.endsWith(
-        `/catalog/definitions/INC/versions/${savedDraft.version}/publish`,
-      ) &&
-      response.request().method() === 'POST' &&
-      response.ok(),
-  );
-  await page.getByTestId('catalog-publish').click();
+  await expect(page.getByTestId('catalog-publish')).toBeEnabled();
+
+  const [publishResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname.endsWith(
+          `/catalog/definitions/INC/versions/${savedDraft.version}/publish`,
+        ) &&
+        response.request().method() === 'POST' &&
+        response.ok(),
+    ),
+    page.getByTestId('catalog-publish').click(),
+  ]);
   const published = await jsonOrFailure<Definition>(
-    await publishResponsePromise,
+    publishResponse,
     'publish Catalog definition from UI',
   );
   expect(published.version).toBeGreaterThan(baseline.version);
