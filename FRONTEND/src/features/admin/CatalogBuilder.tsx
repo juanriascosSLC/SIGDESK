@@ -21,6 +21,7 @@ import {
   type CatalogSpecification,
 } from '@/features/catalog/metamodel';
 import { createLayoutDraft, publishLayoutDraft, updateLayoutDraft } from '@/features/catalog/api';
+import { ApiError } from '@/lib/apiClient';
 import {
   guidedSteps,
   sectionItems,
@@ -87,12 +88,36 @@ export default function CatalogBuilder() {
   }, [definitionsQuery.isSuccess, grouped, selected.id, isCreatingNew]);
 
   const saveMutation = useMutation({
+    // The Page Designer (admin UI) still authors visually into
+    // specification.detailPage — the pre-PR4 embedded-layout mechanism —
+    // rather than against the new catalog_layout_versions resource
+    // directly (see PageDesigner.tsx). This mirrors that content into the
+    // new system in the shape TicketDetail.tsx actually reads
+    // (layouts.detail.default, a PageLayoutDefinition), and only when there
+    // is real detailPage content to mirror.
+    //
+    // detailPage is already a PageLayoutDefinition (`{ default: PageLayout,
+    // variants? }` — see metamodel.ts), so it goes under `detail` as-is.
+    // Wrapping it in another `{ default: ... }` double-nests it: TicketDetail
+    // would then unwrap once and get `{ default, variants }` back instead of
+    // the actual PageLayout, and crash trying to render regions that don't
+    // exist on it.
+    //
+    // This used to unconditionally publish definition.specification itself
+    // (fields/lifecycle/bindings, no detail/region structure at all) as the
+    // layout document on every save, regardless of which tab was being
+    // edited. TicketDetail.tsx's page resolution found nothing to render
+    // there, so every INC ticket showed a blank page — and because
+    // published layout versions are immutable (PR 4's triggers), the only
+    // way out was publishing a real layout on top; the bad one could never
+    // be fixed or removed.
     mutationFn: async (definition: CatalogDefinition) => {
       const created = await createDefinitionDraft(definition);
-      if (definition.specification) {
-        const doc = definition.specification as unknown as Record<string, unknown>;
-        void createLayoutDraft(definition.entityKey, doc).catch(() =>
-          updateLayoutDraft(definition.entityKey, doc).catch(() => {}),
+      const detailPage = definition.specification.detailPage;
+      if (detailPage) {
+        const doc = { detail: detailPage } as unknown as Record<string, unknown>;
+        await createLayoutDraft(definition.entityKey, doc).catch(() =>
+          updateLayoutDraft(definition.entityKey, doc),
         );
       }
       return created;
@@ -116,7 +141,14 @@ export default function CatalogBuilder() {
         );
       }
       const published = await publishDefinition(entityKey, version);
-      void publishLayoutDraft(entityKey).catch(() => {});
+      // Publishes whatever layout draft the mirroring above created. When
+      // there was no detailPage to mirror in the first place (nothing for
+      // the Page Designer to publish), there is no draft and this 404s —
+      // that case, and only that case, is a no-op.
+      await publishLayoutDraft(entityKey).catch((error) => {
+        if (error instanceof ApiError && error.status === 404) return;
+        throw error;
+      });
       return published;
     },
     onSuccess: async (published) => {

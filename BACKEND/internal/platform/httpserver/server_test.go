@@ -374,4 +374,3 @@ func TestVersionEndpointUnauthenticated(t *testing.T) {
 		t.Fatalf("version payload incomplete: %+v", payload)
 	}
 }
-
