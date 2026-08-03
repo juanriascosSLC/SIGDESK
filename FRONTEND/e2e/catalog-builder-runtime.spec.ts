@@ -199,6 +199,9 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
 
 
 
+  await expect(page.getByTestId('catalog-save-draft')).toBeVisible();
+  await expect(page.getByTestId('catalog-save-draft')).toBeEnabled();
+
   const [saveResponse] = await Promise.all([
     page.waitForResponse(
       (response) =>
@@ -217,6 +220,7 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
     'Borrador guardado',
   );
 
+  await expect(page.getByTestId('catalog-publish')).toBeVisible();
   await expect(page.getByTestId('catalog-publish')).toBeEnabled();
 
   const [publishResponse] = await Promise.all([
