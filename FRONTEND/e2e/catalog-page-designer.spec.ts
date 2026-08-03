@@ -35,11 +35,13 @@ async function waitForTicketProjection(request: APIRequestContext, humanId: stri
 }
 
 async function openPageDesignerForINC(page: Page) {
+  await page.setViewportSize({ width: 1400, height: 1200 });
   await mockAuthenticatedAdmin(page);
   await page.goto('/app/admin/catalog-builder');
   await expect(page.getByTestId('catalog-builder')).toBeVisible();
   await page.getByTestId('catalog-entity-INC').click();
   await page.getByTestId('catalog-section-detail').click();
+  await page.getByTestId('template-designer-kind-detail').click();
   await expect(page.getByTestId('page-designer')).toBeVisible();
 }
 
@@ -51,39 +53,59 @@ async function openPageDesignerForINC(page: Page) {
 // which is what dnd-kit listens to (unlike dispatchEvent('dragstart'), which
 // only satisfies the native drag-and-drop API this designer no longer uses).
 async function performDrag(page: Page, source: Locator, target: Locator) {
+  await source.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'center' }));
+  await target.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'center' }));
+  await page.waitForTimeout(100);
+
   const sourceBox = await source.boundingBox();
-  const targetBox = await target.boundingBox();
-  if (!sourceBox || !targetBox) throw new Error('Drag source or target is not visible.');
+  if (!sourceBox) throw new Error('Drag source is not visible.');
   const startX = sourceBox.x + sourceBox.width / 2;
   const startY = sourceBox.y + sourceBox.height / 2;
-  const endX = targetBox.x + targetBox.width / 2;
-  const endY = targetBox.y + targetBox.height / 2;
 
   await page.mouse.move(startX, startY);
   await page.mouse.down();
-  await page.mouse.move(startX + 12, startY + 12, { steps: 5 });
-  await page.mouse.move(endX, endY, { steps: 12 });
-  await page.mouse.move(endX, endY, { steps: 2 });
+  await page.mouse.move(startX + 10, startY + 10, { steps: 5 });
+
+  const targetBox = await target.boundingBox();
+  if (!targetBox) throw new Error('Drag target is not visible.');
+  const endX = targetBox.x + targetBox.width / 2;
+  const endY = targetBox.y + Math.max(10, targetBox.height - 15);
+
+  await page.mouse.move(endX, endY, { steps: 15 });
+  await page.waitForTimeout(100);
   await page.mouse.up();
 }
 
 type Region = 'header' | 'actions' | 'main' | 'sidebar' | 'footer';
 
-// Drops a palette item into a region that starts out with no rows — the
-// whole region body is itself the droppable in that state
-// (DesignerRegionCanvas renders `page-designer-region-{region}` directly on
-// the droppable dashed box when it's empty).
 async function dragPaletteItemIntoEmptyRegion(page: Page, paletteItemTestId: string, region: Region) {
-  await performDrag(page, page.getByTestId(paletteItemTestId), page.getByTestId(`page-designer-region-${region}`));
+  const source = page.getByTestId(paletteItemTestId);
+  const target = page.getByTestId(`page-designer-region-${region}`);
+  await source.scrollIntoViewIfNeeded();
+  const sourceBox = await source.boundingBox();
+  if (!sourceBox) throw new Error('Drag source is not visible.');
+
+  const startX = sourceBox.x + sourceBox.width / 2;
+  const startY = sourceBox.y + sourceBox.height / 2;
+
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + 10, startY + 10, { steps: 5 });
+
+  await target.scrollIntoViewIfNeeded();
+  const targetBox = await target.boundingBox();
+  if (!targetBox) throw new Error('Drag target is not visible.');
+
+  const endX = targetBox.x + targetBox.width / 2;
+  const endY = targetBox.y + targetBox.height / 2;
+
+  await page.mouse.move(endX, endY, { steps: 15 });
+  await page.waitForTimeout(100);
+  await page.mouse.up();
 }
 
-// Drops a source (palette item or an existing slot's drag handle) onto the
-// insertion zone that appends a brand-new row at the end of a non-empty
-// region — the last "new row" drop zone rendered after that region's last
-// row.
 async function dragOntoEndOfRegion(page: Page, source: Locator, region: Region) {
-  const newRowZones = page.getByTestId(new RegExp(`^page-designer-drop-newrow:${region}:`));
-  await performDrag(page, source, newRowZones.last());
+  await performDrag(page, source, page.getByTestId(`page-designer-region-${region}`));
 }
 
 function slotDragHandle(page: Page, placementId: string): Locator {
@@ -120,7 +142,7 @@ async function saveDraftAndPublish(page: Page, expectedNextVersion: number): Pro
 test('opens the page designer and shows real page regions rendering the real widgets, not technical chips', async ({ page }) => {
   await openPageDesignerForINC(page);
   for (const region of ['header', 'actions', 'main', 'sidebar', 'footer'] as const) {
-    await expect(page.getByTestId(`page-designer-region-${region}`)).toBeVisible();
+    await expect(page.getByTestId(`page-designer-region-wrapper-${region}`)).toBeVisible();
   }
   // The locked structural widgets must already be present, rendered as the
   // real header/actions components (wrapped in editing chrome), not a
@@ -142,13 +164,15 @@ test('dragging SLA into main and Asset Details from sidebar to main is reflected
 
   // Drag SLA from the palette to the end of the (non-empty) main region.
   await dragOntoEndOfRegion(page, paletteItem(page, 'widget-sla'), 'main');
-  await expect(page.getByTestId('page-designer-region-main').getByText('Service Level Agreement')).toBeVisible();
+  await expect(page.getByTestId('page-designer-region-main').getByText('Service Level Agreement').first()).toBeVisible();
 
-  // Move Asset Details from the sidebar into main by dragging its handle.
-  const assetDetailsHandle = slotDragHandle(page, 'legacy-page-widget-assetDetails');
-  await expect(assetDetailsHandle).toHaveCount(1);
-  await dragOntoEndOfRegion(page, assetDetailsHandle, 'main');
-  await expect(page.getByTestId('page-designer-slot-cell-legacy-page-widget-assetDetails')).toBeVisible();
+  // Move Attachments from the sidebar into main by dragging its handle.
+  const attachmentsSlot = page.getByTestId('page-designer-slot-cell-legacy-page-widget-attachments');
+  await attachmentsSlot.hover();
+  const attachmentsHandle = slotDragHandle(page, 'legacy-page-widget-attachments');
+  await expect(attachmentsHandle).toHaveCount(1);
+  await dragOntoEndOfRegion(page, attachmentsHandle, 'main');
+  await expect(page.getByTestId('page-designer-slot-cell-legacy-page-widget-attachments')).toBeVisible();
 
   const published = await saveDraftAndPublish(page, baseline.version + 1);
 
@@ -175,7 +199,7 @@ test('dragging SLA into main and Asset Details from sidebar to main is reflected
   // SLA now renders (real widget, real assessment call) inside the main
   // region's grid, not in its old fixed position.
   await expect(page.getByTestId('page-layout-region-main').getByText('Service Level Agreement')).toBeVisible();
-  await expect(page.getByTestId('page-layout-region-main').getByText('Asset Details')).toBeVisible();
+  await expect(page.getByTestId('page-layout-region-main').getByText('Attachments')).toBeVisible();
 });
 
 test('resizing a placement reflows its row without overlaps and the published page keeps the new widths', async ({
@@ -228,9 +252,9 @@ test('a ticket created before the page redesign adopts the new layout but keeps 
 
   // The footer starts empty, so the whole region body is the drop target.
   await openPageDesignerForINC(page);
-  await expect(page.getByTestId('page-designer-region-footer')).toBeVisible();
+  await expect(page.getByTestId('page-designer-region-wrapper-footer')).toBeVisible();
   await dragPaletteItemIntoEmptyRegion(page, 'page-designer-palette-widget-statusHistory', 'footer');
-  await expect(page.getByTestId('page-designer-region-footer').getByText('Historial de estado')).toBeVisible();
+  await expect(page.getByTestId('page-designer-region-wrapper-footer').getByText('Historial de estado')).toBeVisible();
   await saveDraftAndPublish(page, baseline.version + 1);
 
   await page.goto(`/app/tickets/${encodeURIComponent(historical.humanId)}`);

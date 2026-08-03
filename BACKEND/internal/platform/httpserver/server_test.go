@@ -346,3 +346,32 @@ func TestMetadataRuntimeFlow(t *testing.T) {
 		t.Fatalf("transitioned state = %q, want in_progress", transitioned.State)
 	}
 }
+
+func TestVersionEndpointUnauthenticated(t *testing.T) {
+	handler := New(Dependencies{
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		ReadyCheck: func(context.Context) error { return nil },
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/version", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/version status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Version   string `json:"version"`
+		Commit    string `json:"commit"`
+		BuildTime string `json:"buildTime"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("failed to decode version payload: %v", err)
+	}
+
+	if payload.Version == "" || payload.Commit == "" || payload.BuildTime == "" {
+		t.Fatalf("version payload incomplete: %+v", payload)
+	}
+}
+

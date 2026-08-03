@@ -37,8 +37,11 @@ func (h *LayoutHandler) CreateDraft(w http.ResponseWriter, r *http.Request) {
 	entityKey := r.PathValue("entityKey")
 
 	var req map[string]any
-	if r.ContentLength > 0 {
+	if r.Body != nil {
 		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+	if req == nil {
+		req = make(map[string]any)
 	}
 
 	draft, err := h.layoutService.CreateDraft(r.Context(), actor, entityKey, req)

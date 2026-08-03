@@ -256,11 +256,13 @@ export default function TicketDetail() {
   // variants?: [...] }`; both shapes are accepted here since the Catalog
   // Builder's JSON draft editor can produce either.
   const page = useMemo((): PageLayout | null => {
-    const detail = resolvedDefinition.data?.layouts?.detail;
+    const raw = resolvedDefinition.data?.layouts as Record<string, unknown> | undefined;
+    if (!raw) return null;
+    const detail = (raw.detailPage ?? raw.detail ?? raw) as Record<string, unknown> | null;
     if (!detail) return null;
-    if ('default' in detail && detail.default) return detail.default;
+    if ('default' in detail && detail.default) return detail.default as unknown as PageLayout;
     if ('header' in detail && detail.header && detail.actions && detail.main && detail.sidebar && detail.footer) {
-      return detail;
+      return detail as unknown as PageLayout;
     }
     return null;
   }, [resolvedDefinition.data]);

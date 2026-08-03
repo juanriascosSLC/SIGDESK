@@ -86,3 +86,13 @@ tasks:
       - 'cd "{{.BACKEND_DIR}}" && go build ./... && go vet ./... && go test ./...'
       - 'cd "{{.FRONTEND_DIR}}" && npm ci && npx tsc -b && npm run lint && npm run build'
       - 'echo "Local CI checks passed successfully."'
+
+  release:check:
+    desc: Run comprehensive cross-platform release verification checks
+    deps: [check-tools]
+    cmds:
+      - 'cd "{{.BACKEND_DIR}}" && go build ./... && go vet ./... && go test ./...'
+      - 'cd "{{.FRONTEND_DIR}}" && npx tsc -b && npm run lint && npm run build'
+      - 'cd "{{.FRONTEND_DIR}}" && npx playwright test'
+      - 'echo "Release verification checks passed successfully."'
+
