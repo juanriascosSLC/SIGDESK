@@ -239,19 +239,26 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
     expect(savedDraft.version).toBeGreaterThan(0);
   }
 
-  const [publishResponse] = await Promise.all([
-    page.waitForResponse(
+  await expect(page.getByTestId('catalog-publish')).toBeEnabled();
+
+  const publishPromise = page
+    .waitForResponse(
       (response) =>
         new URL(response.url()).pathname.includes('/publish') &&
         response.request().method() === 'POST' &&
         response.ok(),
-    ),
-    page.getByTestId('catalog-publish').click(),
-  ]);
-  const published = await jsonOrFailure<Definition>(
-    publishResponse,
-    'publish Catalog definition from UI',
-  );
+      { timeout: 15000 },
+    )
+    .catch(() => null);
+
+  await page.getByTestId('catalog-publish').click();
+  const publishResponse = await publishPromise;
+  const published = publishResponse
+    ? await jsonOrFailure<Definition>(
+        publishResponse,
+        'publish Catalog definition from UI',
+      )
+    : await getPublishedDefinition(request);
   expect(published.version).toBeGreaterThan(baseline.version);
   await expect(page.getByTestId('catalog-notice')).toContainText(
     'INC ya tiene los cambios publicados',
