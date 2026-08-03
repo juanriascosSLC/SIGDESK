@@ -85,18 +85,18 @@ jobs:
     needs: [validate-version]
     services:
       postgres:
-        image: postgres:15
+        image: postgres:17-alpine
         env:
+          POSTGRES_DB: postgres
           POSTGRES_USER: sigdesk
           POSTGRES_PASSWORD: sigdesk
-          POSTGRES_DB: sigdesk
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-cmd "pg_isready -U sigdesk -d postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -121,27 +121,33 @@ jobs:
 
       - name: Start API Server & Run Playwright Tests
         env:
-          DATABASE_URL: 'postgres://sigdesk:sigdesk@localhost:5432/sigdesk?sslmode=disable'
+          DATABASE_URL: 'postgres://sigdesk:sigdesk@localhost:5432/postgres?sslmode=disable'
           PORT: '8080'
           APP_ENV: 'development'
           SIGTOOLS_API_URL: ''
         run: |
           cd BACKEND
           go run ./cmd/migrate
-          go run ./cmd/api &
+          go build -o /tmp/sigdesk-api ./cmd/api
+          nohup /tmp/sigdesk-api > /tmp/sigdesk-api.log 2>&1 &
           API_PID=$!
-          
+
           echo "Waiting for API server readiness..."
-          for i in {1..30}; do
-            if curl -s http://127.0.0.1:8080/api/v1/version >/dev/null; then
-              echo "API server is ready."
+          for attempt in $(seq 1 30); do
+            if ! kill -0 "$API_PID" 2>/dev/null; then
+              echo "::error::sigdesk-api (pid $API_PID) exited before becoming ready"
+              cat /tmp/sigdesk-api.log
+              exit 1
+            fi
+            if curl -sf http://127.0.0.1:8080/health/ready >/dev/null; then
+              echo "API server became ready."
               break
             fi
-            sleep 1
+            sleep 2
           done
 
           cd ../FRONTEND
-          npx playwright test
+          npx playwright test --workers=1
 
           kill $API_PID || true
 
