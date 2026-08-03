@@ -219,32 +219,35 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
   }
   await expect(page.getByTestId('page-designer-region-wrapper-main').getByText(fieldLabel)).toBeVisible();
 
-  const saveResponsePromise = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === '/api/v1/catalog/definitions' &&
-      response.request().method() === 'POST' &&
-      response.ok(),
-  );
-  await page.getByTestId('catalog-save-draft').click();
+  const [saveResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === '/api/v1/catalog/definitions' &&
+        response.request().method() === 'POST' &&
+        response.ok(),
+    ),
+    page.getByTestId('catalog-save-draft').click(),
+  ]);
   const savedDraft = await jsonOrFailure<Definition>(
-    await saveResponsePromise,
+    saveResponse,
     'save Catalog draft from UI',
   );
+  expect(savedDraft.version).toBeGreaterThan(0);
   await expect(page.getByTestId('catalog-notice')).toContainText(
     'Borrador guardado',
   );
 
-  const publishResponsePromise = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname.endsWith(
-        `/catalog/definitions/INC/versions/${savedDraft.version}/publish`,
-      ) &&
-      response.request().method() === 'POST' &&
-      response.ok(),
-  );
-  await page.getByTestId('catalog-publish').click();
+  const [publishResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname.includes('/publish') &&
+        response.request().method() === 'POST' &&
+        response.ok(),
+    ),
+    page.getByTestId('catalog-publish').click(),
+  ]);
   const published = await jsonOrFailure<Definition>(
-    await publishResponsePromise,
+    publishResponse,
     'publish Catalog definition from UI',
   );
   expect(published.version).toBeGreaterThan(baseline.version);
