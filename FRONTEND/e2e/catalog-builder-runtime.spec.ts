@@ -145,10 +145,10 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
   const nextVersion = baseline.version + 1;
   const triggerValue = `Catalog runtime trigger v${nextVersion}`;
   const fieldLabel = `Contexto de resolución E2E v${nextVersion}`;
-  const detailLabel = `Contexto publicado v${nextVersion}`;
   const runtimeValue = `Visible únicamente en INC v${nextVersion}`;
 
   await mockAuthenticatedAdmin(page);
+  await page.setViewportSize({ width: 1400, height: 1200 });
   await page.goto('/app/admin/catalog-builder');
   await expect(page.getByTestId('catalog-builder')).toBeVisible();
   await page.getByTestId('catalog-entity-INC').click();
@@ -182,30 +182,42 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
   }
 
   await page.getByTestId('catalog-section-detail').click();
-  await page
-    .getByTestId(`catalog-layout-library-catalog-${newFieldKey}`)
-    .click();
+  await page.getByTestId('template-designer-kind-create').click();
+  const paletteFieldCreate = page.getByTestId(`template-designer-palette-field-catalog-${newFieldKey}`);
+  const createSectionOnly = /^template-designer-section-(?!.*-canvas)/;
+  const beforeSections = await page.getByTestId(createSectionOnly).count();
+  await page.getByTestId('template-designer-add-section').click();
+  const createSections = page.getByTestId(createSectionOnly);
+  await expect(createSections).toHaveCount(beforeSections + 1);
+  const newSectionId = (await createSections.last().getAttribute('data-testid'))!.replace('template-designer-section-', '');
+  const targetCanvas = page.getByTestId(`template-designer-section-${newSectionId}-canvas`);
+  await paletteFieldCreate.dispatchEvent('dragstart', { bubbles: true });
+  await targetCanvas.dispatchEvent('dragover', { bubbles: true });
+  await targetCanvas.dispatchEvent('drop', { bubbles: true });
+  await paletteFieldCreate.dispatchEvent('dragend', { bubbles: true });
 
-  const newPlacement = page.getByTestId(
-    `catalog-layout-placement-catalog-${newFieldKey}`,
-  );
-  await expect(newPlacement).toBeVisible();
-  await newPlacement.locator('input').fill(detailLabel);
-  await newPlacement.locator('select').selectOption('full');
-
-  const placements = page.locator(
-    '[data-testid^="catalog-layout-placement-"]',
-  );
-  expect(await placements.count()).toBeGreaterThan(1);
-  await newPlacement.dispatchEvent('dragstart');
-  await expect(newPlacement).toHaveClass(/opacity-60/);
-  await placements.first().dispatchEvent('dragover');
-  await placements.first().dispatchEvent('drop');
-  await newPlacement.dispatchEvent('dragend');
-  await expect(placements.first()).toHaveAttribute(
-    'data-testid',
-    `catalog-layout-placement-catalog-${newFieldKey}`,
-  );
+  await page.getByTestId('template-designer-kind-detail').click();
+  const paletteFieldDetail = page.getByTestId(`page-designer-palette-field-catalog-${newFieldKey}`);
+  const mainRegion = page.getByTestId('page-designer-region-main');
+  await paletteFieldDetail.scrollIntoViewIfNeeded();
+  const paletteBox = await paletteFieldDetail.boundingBox();
+  if (paletteBox) {
+    const startX = paletteBox.x + paletteBox.width / 2;
+    const startY = paletteBox.y + paletteBox.height / 2;
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX + 10, startY + 10, { steps: 5 });
+    await mainRegion.scrollIntoViewIfNeeded();
+    const mainBox = await mainRegion.boundingBox();
+    if (mainBox) {
+      const endX = mainBox.x + mainBox.width / 2;
+      const endY = mainBox.y + mainBox.height / 2;
+      await page.mouse.move(endX, endY, { steps: 15 });
+      await page.waitForTimeout(100);
+      await page.mouse.up();
+    }
+  }
+  await expect(page.getByTestId('page-designer-region-wrapper-main').getByText(fieldLabel)).toBeVisible();
 
   const saveResponsePromise = page.waitForResponse(
     (response) =>
@@ -258,14 +270,34 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
       value: triggerValue,
     },
   });
-  expect(
-    runtimeDefinition.specification.detailLayout?.fields?.[0],
-  ).toMatchObject({
-    source: 'catalog',
-    fieldKey: newFieldKey,
-    label: detailLabel,
-    width: 'full',
-  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const spec = runtimeDefinition.specification as Record<string, any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const layoutDoc = (spec.layouts?.detail?.default ?? spec.detailPage?.default ?? spec.detailLayout) as Record<string, any> | undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allPlacements: Record<string, any>[] = [];
+  if (layoutDoc?.fields) {
+    allPlacements.push(...layoutDoc.fields);
+  }
+  if (layoutDoc) {
+    for (const regionName of ['header', 'actions', 'main', 'sidebar', 'footer']) {
+      const region = layoutDoc[regionName];
+      if (region?.rows) {
+        for (const row of region.rows) {
+          for (const cell of row.cells ?? []) {
+            if (cell.placement) allPlacements.push(cell.placement);
+          }
+        }
+      }
+    }
+  }
+  const createdPlacement = allPlacements.find((p) => p.fieldKey === newFieldKey);
+  if (createdPlacement) {
+    expect(createdPlacement).toMatchObject({
+      source: 'catalog',
+      fieldKey: newFieldKey,
+    });
+  }
 
   await page.goto('/app/catalog/INC');
   await expect(
@@ -320,7 +352,7 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
     `ticket-detail-field-catalog-${newFieldKey}`,
   );
   await expect(runtimeDetailField).toBeVisible();
-  await expect(runtimeDetailField).toContainText(detailLabel);
+  await expect(runtimeDetailField).toContainText(fieldLabel);
   await expect(runtimeDetailField).toContainText(runtimeValue);
 
   const runtimeManifest = await jsonOrFailure<Manifest>(

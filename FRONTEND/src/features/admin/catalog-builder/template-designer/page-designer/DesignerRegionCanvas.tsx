@@ -64,7 +64,7 @@ export function DesignerRegionCanvas({
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: buildEmptyRegionId(regionName),
-    disabled: region.rows.length > 0 || !isDragActive || !dragAccepted,
+    disabled: !isDragActive || !dragAccepted,
   });
 
   if (region.rows.length === 0) {
@@ -82,7 +82,7 @@ export function DesignerRegionCanvas({
   }
 
   return (
-    <div data-testid={`page-designer-region-${regionName}`} className="space-y-0">
+    <div ref={setNodeRef} data-testid={`page-designer-region-${regionName}`} className="space-y-0">
       <NewRowDropZone id={buildNewRowId(regionName, 0)} active={isDragActive} accepted={dragAccepted} />
       {region.rows.map((row, rowIndex) => (
         <div key={row.id}>

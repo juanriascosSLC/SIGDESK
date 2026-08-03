@@ -15,6 +15,7 @@ import (
 	"sig-desk/backend/internal/identity/adapters/httpmw"
 	identityDomain "sig-desk/backend/internal/identity/domain"
 	identityPorts "sig-desk/backend/internal/identity/ports"
+	"sig-desk/backend/internal/platform/buildinfo"
 	"sig-desk/backend/internal/platform/config"
 	rbacHTTP "sig-desk/backend/internal/rbac/adapters/httpapi"
 	rbacApplication "sig-desk/backend/internal/rbac/application"
@@ -115,6 +116,9 @@ func New(dependencies Dependencies) http.Handler {
 			return
 		}
 		writeJSON(writer, http.StatusOK, map[string]string{"status": "ready"})
+	})
+	mux.HandleFunc("GET /api/v1/version", func(writer http.ResponseWriter, _ *http.Request) {
+		writeJSON(writer, http.StatusOK, buildinfo.Get())
 	})
 
 	// Who the caller is, as SIG-DESK sees them: the identity verified against

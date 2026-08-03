@@ -118,7 +118,7 @@ export function isWidgetAllowedInRegion(placement: PagePlacement, region: Region
 function applyDrop(regions: RegionsState, target: DropTarget, cell: DesignerCell): RegionsState | null {
   if (!isWidgetAllowedInRegion(cell.placement, target.region)) return null;
   if (target.kind === 'empty') {
-    return { ...regions, [target.region]: insertNewRow(regions[target.region], 0, cell) };
+    return { ...regions, [target.region]: insertNewRow(regions[target.region], regions[target.region].rows.length, cell) };
   }
   if (target.kind === 'newRow') {
     return { ...regions, [target.region]: insertNewRow(regions[target.region], target.rowIndex, cell) };
@@ -180,9 +180,29 @@ export function paletteItemToPlacement(item: PageLibraryItem): PagePlacement {
 // doesn't allow this item — callers can use reference equality to detect a
 // rejected/no-op drop.
 export function addPaletteCell(regions: RegionsState, item: PageLibraryItem, target: DropTarget): RegionsState {
+  let cleanedRegions = regions;
+  if (item.kind === 'widget') {
+    const widget = TICKET_WIDGETS[item.widgetKey];
+    if (widget && !widget.allowMultiple) {
+      for (const reg of REGION_NAMES) {
+        const layout = cleanedRegions[reg];
+        const nextRows = layout.rows
+          .map((row) => ({
+            ...row,
+            cells: row.cells.filter(
+              (cell) => !(cell.placement.kind === 'widget' && cell.placement.widgetKey === item.widgetKey),
+            ),
+          }))
+          .filter((row) => row.cells.length > 0);
+        if (nextRows.length !== layout.rows.length) {
+          cleanedRegions = { ...cleanedRegions, [reg]: { ...layout, rows: nextRows } };
+        }
+      }
+    }
+  }
   const placement = paletteItemToPlacement(item);
   const cell: DesignerCell = { id: cellIdForPlacement(placement.id), span: snapSpan(placement.columnSpan), placement };
-  return applyDrop(regions, target, cell) ?? regions;
+  return applyDrop(cleanedRegions, target, cell) ?? regions;
 }
 
 // Human label for a placement, shared by the DragOverlay placeholder and

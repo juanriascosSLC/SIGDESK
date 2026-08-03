@@ -417,7 +417,7 @@ export function PageDesigner({
           <DragOverlay>
             {activeDrag && (
               <div
-                className="rounded-2xl border-2 border-primary bg-primary/10 px-3 py-2 text-xs font-bold text-primary shadow-lg"
+                className="pointer-events-none rounded-2xl border-2 border-primary bg-primary/10 px-3 py-2 text-xs font-bold text-primary shadow-lg"
                 style={{ width: Math.max(96, activeDrag.span * 56) }}
               >
                 {activeDrag.label}

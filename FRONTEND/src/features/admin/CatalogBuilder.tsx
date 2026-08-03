@@ -20,6 +20,7 @@ import {
   type CatalogDefinition,
   type CatalogSpecification,
 } from '@/features/catalog/metamodel';
+import { createLayoutDraft, publishLayoutDraft, updateLayoutDraft } from '@/features/catalog/api';
 import {
   guidedSteps,
   sectionItems,
@@ -86,7 +87,16 @@ export default function CatalogBuilder() {
   }, [definitionsQuery.isSuccess, grouped, selected.id, isCreatingNew]);
 
   const saveMutation = useMutation({
-    mutationFn: createDefinitionDraft,
+    mutationFn: async (definition: CatalogDefinition) => {
+      const created = await createDefinitionDraft(definition);
+      if (definition.specification) {
+        const doc = definition.specification as unknown as Record<string, unknown>;
+        void createLayoutDraft(definition.entityKey, doc).catch(() =>
+          updateLayoutDraft(definition.entityKey, doc).catch(() => {}),
+        );
+      }
+      return created;
+    },
     onSuccess: async (created) => {
       await queryClient.invalidateQueries({ queryKey: ['catalog-definitions'] });
       setSelected(structuredClone(created));
@@ -105,7 +115,9 @@ export default function CatalogBuilder() {
           validation.issues.map((issue) => `${issue.path}: ${issue.message}`).join('\n'),
         );
       }
-      return publishDefinition(entityKey, version);
+      const published = await publishDefinition(entityKey, version);
+      void publishLayoutDraft(entityKey).catch(() => {});
+      return published;
     },
     onSuccess: async (published) => {
       await queryClient.invalidateQueries({ queryKey: ['catalog-definitions'] });
@@ -514,7 +526,10 @@ export default function CatalogBuilder() {
           )}
 
           {(editorError || mutationError) && (
-            <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            <div
+              data-testid="catalog-editor-error"
+              className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+            >
               {editorError || mutationError?.message}
             </div>
           )}

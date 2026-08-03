@@ -79,16 +79,69 @@ func (v *LayoutValidator) DeriveCompatibility(
 		}
 	}
 
-	// Parse detail layout / page layout / sections if present
+	var inspectPageLayout func(pageMap map[string]any, audienceKey string)
+	inspectPageLayout = func(pageMap map[string]any, audienceKey string) {
+		regSource := pageMap
+		if regions, ok := pageMap["regions"].(map[string]any); ok {
+			regSource = regions
+		}
+		for _, regName := range []string{"header", "actions", "main", "sidebar", "footer"} {
+			if regVal, ok := regSource[regName].(map[string]any); ok {
+				if rawP, ok := regVal["placements"].([]any); ok {
+					extractFromPlacements(rawP, regName, audienceKey)
+				}
+			}
+		}
+	}
+
+	var inspectSections func(sections []any, audienceKey string)
+	inspectSections = func(sections []any, audienceKey string) {
+		for _, s := range sections {
+			sMap, ok := s.(map[string]any)
+			if !ok {
+				continue
+			}
+			if rawP, ok := sMap["placements"].([]any); ok {
+				extractFromPlacements(rawP, "main", audienceKey)
+			}
+		}
+	}
+
 	if detail, ok := doc["detail"].(map[string]any); ok {
-		if regions, ok := detail["regions"].(map[string]any); ok {
-			for regName, regVal := range regions {
-				if rMap, ok := regVal.(map[string]any); ok {
-					if rawP, ok := rMap["placements"].([]any); ok {
-						extractFromPlacements(rawP, regName, "default")
+		if defPage, ok := detail["default"].(map[string]any); ok {
+			inspectPageLayout(defPage, "default")
+			if variants, ok := detail["variants"].([]any); ok {
+				for _, v := range variants {
+					if vMap, ok := v.(map[string]any); ok {
+						audKey, _ := vMap["audienceKey"].(string)
+						if pMap, ok := vMap["page"].(map[string]any); ok {
+							inspectPageLayout(pMap, audKey)
+						}
 					}
 				}
 			}
+		} else if sections, ok := detail["sections"].([]any); ok {
+			inspectSections(sections, "default")
+			if variants, ok := detail["variants"].([]any); ok {
+				for _, v := range variants {
+					if vMap, ok := v.(map[string]any); ok {
+						audKey, _ := vMap["audienceKey"].(string)
+						if docMap, ok := vMap["document"].(map[string]any); ok {
+							if vSections, ok := docMap["sections"].([]any); ok {
+								inspectSections(vSections, audKey)
+							}
+						}
+					}
+				}
+			}
+		} else {
+			inspectPageLayout(detail, "default")
+		}
+	} else if detailPage, ok := doc["detailPage"].(map[string]any); ok {
+		if defPage, ok := detailPage["default"].(map[string]any); ok {
+			inspectPageLayout(defPage, "default")
+		} else {
+			inspectPageLayout(detailPage, "default")
 		}
 	}
 
