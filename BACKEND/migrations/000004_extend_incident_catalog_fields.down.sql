@@ -1,1 +1,0 @@
--- No-op: see 000004_extend_incident_catalog_fields.up.sql.

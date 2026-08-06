@@ -1,4 +1,6 @@
-# SIG-DESK — Requerimientos completos para el backend en Rust
+# SIG-DESK — Requerimientos históricos para backend
+
+> **Documento histórico, no contractual.** Fue escrito antes de la integración y contiene supuestos de stack y estados de pantalla que ya no representan completamente el frontend actual. La fuente de verdad para el equipo que implementará el backend nuevo es [`FRONTEND-HANDOFF.md`](FRONTEND-HANDOFF.md), junto con los tipos TypeScript y los E2E del repositorio. Este archivo se conserva únicamente como inventario amplio de capacidades empresariales deseadas.
 
 > Documento de requerimientos para convertir la maqueta SIG-DESK (React 19 + TS + Vite) en una aplicación totalmente funcional con backend en Rust. Cada requerimiento está numerado (RF = funcional, RNF = no funcional) para poder rastrearlo en issues/PRs.
 

@@ -4,7 +4,7 @@
  *
  * Two reasons SIG-DESK needs it rather than relying on the cookie alone:
  *   1. The sig_token cookie is HttpOnly and scoped to the auth service's own
- *      domain, so it cannot travel to SIG-DESK's Go API on another origin.
+ *      domain, so it cannot travel to SIG-DESK's API on another origin.
  *   2. SameSite=Lax keeps it off cross-site fetches anyway.
  * The backends accept the cookie first and this header as a fallback, so
  * attaching it is always safe.

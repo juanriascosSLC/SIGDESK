@@ -22,7 +22,7 @@ export interface LayoutRendererProps {
   renderPlacement: (placement: Placement, section: LayoutSection) => ReactNode;
   /**
    * Layout resolution provenance badge — the exact three strings
-   * LayoutService.ResolveLayoutForRecord (layout_service.go) can produce:
+   * the resolved-definition contract can produce:
    * - `"latest-compatible"` → the active published layout, still compatible
    * - `"previous-compatible"` → active layout was incompatible; this is the
    *   most recent published version that still is

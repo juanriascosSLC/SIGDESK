@@ -1,4 +1,4 @@
-name: CI
+name: Frontend CI
 
 on:
   push:
@@ -9,100 +9,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: frontend-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # The Go module root is BACKEND/ while .git lives one level up at the repo
-  # root. With the default -buildvcs=auto the toolchain tries to stamp VCS
-  # metadata, needs git on PATH and a matching safe.directory, and fails the
-  # build for information nothing here uses. Locally this is masked by a
-  # machine-local `go env -w` that is NOT in the repo, so CI is the first
-  # place it bites.
-  GOFLAGS: -buildvcs=false
-
 jobs:
-  version:
-    name: version consistency
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: VERSION, package.json and openapi.yaml agree
-        run: |
-          set -euo pipefail
-          version="$(tr -d ' \t\r\n' < VERSION)"
-          pkg="$(node -p "require('./FRONTEND/package.json').version")"
-          api="$(awk '
-            /^info:/            { in_info = 1; next }
-            in_info && /^[^ \t]/{ in_info = 0 }
-            in_info && $1 == "version:" { gsub(/"|\r/, "", $2); print $2; exit }
-          ' BACKEND/openapi.yaml)"
-          echo "VERSION=$version  package.json=$pkg  openapi=$api"
-          test -n "$version"
-          [ "$version" = "$pkg" ] || { echo "::error::FRONTEND/package.json version ($pkg) != VERSION ($version)"; exit 1; }
-          [ "$version" = "$api" ] || { echo "::error::BACKEND/openapi.yaml info.version ($api) != VERSION ($version)"; exit 1; }
-
-  backend:
-    name: backend
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: BACKEND
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          # The maintenance database: migration tests CREATE and DROP a
-          # throwaway database per test, which cannot be done from inside the
-          # database being created.
-          POSTGRES_DB: postgres
-          POSTGRES_USER: sigdesk
-          POSTGRES_PASSWORD: sigdesk
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U sigdesk -d postgres"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 20
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          # Pins CI to the exact `go` directive in go.mod, which is also what
-          # golang:1.25-alpine in the Dockerfile ships. Local dev may run a
-          # newer patch toolchain; this removes that drift from the signal.
-          go-version-file: BACKEND/go.mod
-          cache-dependency-path: BACKEND/go.sum
-
-      - name: gofmt
-        run: |
-          unformatted="$(gofmt -l .)"
-          if [ -n "$unformatted" ]; then
-            echo "::error::gofmt found unformatted files:"
-            echo "$unformatted"
-            exit 1
-          fi
-      - run: go build ./...
-      - run: go vet ./...
-
-      - name: Unit tests (must stay green with NO database)
-        # No SIGDESK_TEST_DATABASE_URL here on purpose: the whole unit suite
-        # today runs on a laptop with nothing installed, using in-memory
-        # adapters. If this step ever needs Postgres, that is a regression.
-        run: go test -count=1 ./...
-
-      - name: Migration tests (against the Postgres service container)
-        env:
-          SIGDESK_TEST_DATABASE_URL: postgres://sigdesk:sigdesk@localhost:5432/postgres?sslmode=disable
-        run: go test -count=1 -v ./migrations/...
-
   frontend:
-    name: frontend
+    name: typecheck, lint and build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -125,6 +37,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: frontend-dist
+          name: sig-desk-frontend-dist
           path: FRONTEND/dist
           retention-days: 7

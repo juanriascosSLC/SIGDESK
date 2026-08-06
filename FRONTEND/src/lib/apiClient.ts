@@ -6,7 +6,7 @@ export const API_BASE_URL = (
 ).replace(/\/$/, '');
 
 /**
- * Session credential for SIG-DESK's own Go API.
+ * Session credential for SIG-DESK's own API.
  *
  * The API validates this against SIGTools, so the token is the same session
  * the user established at login. It has to travel as a bearer header rather

@@ -1,6 +1,5 @@
 /**
- * SIG-DESK's permission keys, mirroring internal/identity/domain/permissions.go
- * on the backend. Both sides must agree: the frontend uses them to decide what
+ * SIG-DESK's permission keys. Both sides must agree: the frontend uses them to decide what
  * to render, the backend to decide what to allow. The UI never gets to be the
  * only check.
  *

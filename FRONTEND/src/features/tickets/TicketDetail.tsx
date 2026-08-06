@@ -107,8 +107,8 @@ export default function TicketDetail() {
     queryFn: () => getEntityManifest('INC', ticket!.entityId!),
     enabled: Boolean(ticket?.entityId && entityRecord.data?.definitionVersion),
   });
-  // Resolved definition: single backend call that returns the correct
-  // versioned layout — LayoutService.ResolveLayoutForRecord tries the active
+  // Resolved definition: single API call that returns the correct versioned
+  // layout — the server tries the active
   // published layout ("latest-compatible"), then walks published versions
   // backward for the first one still compatible with this record's
   // historical schema ("previous-compatible"), then falls back to a
@@ -250,8 +250,8 @@ export default function TicketDetail() {
 
   // The resolved-definition endpoint is the SOLE authority for which layout
   // renders — no client-side merging of published/historical specs (that
-  // policy, formerly resolveTicketPageLayout, now lives entirely in
-  // LayoutService.ResolveLayoutForRecord on the backend). `layouts.detail` is
+  // policy, formerly resolveTicketPageLayout, now lives entirely in the
+  // server-side resolved-definition operation). `layouts.detail` is
   // authored either as a bare PageLayout or as `{ default: PageLayout,
   // variants?: [...] }`; both shapes are accepted here since the Catalog
   // Builder's JSON draft editor can produce either.
@@ -600,9 +600,8 @@ export default function TicketDetail() {
                 title={`Resolución de layout: ${layoutResolution}`}
               >
                 {
-                  // These are the exact three strings LayoutService.ResolveLayoutForRecord
-                  // produces (layout_service.go) — never "active", which is not a value
-                  // the backend emits.
+                  // These are the exact three strings the resolved-definition
+                  // contract produces — never "active".
                   layoutResolution === 'latest-compatible' ? 'Layout activo' :
                   layoutResolution === 'previous-compatible' ? 'Versión anterior compatible' :
                   layoutResolution === 'legacy-synthesized' ? 'Generado (sin layout)' :

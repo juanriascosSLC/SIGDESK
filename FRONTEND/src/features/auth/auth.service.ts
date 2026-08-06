@@ -27,7 +27,7 @@ export interface SigtoolsUser {
 export interface LoginResponse {
   user: SigtoolsUser;
   access_level: number;
-  /** Present on newer deployments; required for SIG-DESK because its Go API
+  /** Present on newer deployments; required for SIG-DESK because its API
    *  lives on a different origin than the auth service, so the cookie alone
    *  cannot authenticate those calls. */
   access_token?: string;

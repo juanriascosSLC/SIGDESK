@@ -4,19 +4,13 @@
 !.env.example
 .env*.local
 
-# Go & Backend
-BACKEND/.cache/
-BACKEND/.gocache/
-BACKEND/bin/
-BACKEND/data/
-BACKEND/tmp/
-BACKEND/coverage.out
-
 # Frontend
 node_modules/
 dist/
 FRONTEND/node_modules/
 FRONTEND/dist/
+FRONTEND/playwright-report/
+FRONTEND/test-results/
 
 # Local analysis & IDE artifacts
 graphify-out/

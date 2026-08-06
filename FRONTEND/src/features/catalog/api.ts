@@ -39,8 +39,8 @@ export interface CatalogLayoutVersion {
   publishedAt?: string;
 }
 
-// The exact three strings LayoutService.ResolveLayoutForRecord (layout_service.go)
-// can produce — never "active".
+// The exact three layout-resolution strings accepted by this frontend
+// contract — never "active".
 export type LayoutResolutionMode = 'latest-compatible' | 'previous-compatible' | 'legacy-synthesized';
 
 // `document`/`layouts.detail` is authored as free-form JSON (the Catalog
@@ -51,9 +51,8 @@ export interface ResolvedLayoutDocument {
   detail?: PageLayout | { default?: PageLayout; variants?: Array<{ audienceKey: string; page: PageLayout }> };
 }
 
-// Mirrors domain.StateDefinition / domain.TransitionDefinition
-// (BACKEND/internal/catalog/domain/definition.go) exactly — this is the
-// entity's OWN historical lifecycle (pinned to its definitionVersionId), not
+// This is the entity's OWN historical lifecycle (pinned to its
+// definitionVersionId), not
 // whatever is currently published, so it is the only source of truth for
 // which status transitions a given ticket may actually perform.
 export interface LifecycleStateDefinition {
