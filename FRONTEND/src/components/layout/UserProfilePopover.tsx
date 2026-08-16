@@ -8,7 +8,7 @@ export default function UserProfilePopover() {
   const [isOpen, setIsOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  const { user, roles, isAdmin, displayName, logout } = useAuth();
+  const { user, roleId, canManageUsersAndRoles, displayName, logout } = useAuth();
   const { theme, setTheme } = useThemeStore();
   const navigate = useNavigate();
 
@@ -47,17 +47,15 @@ export default function UserProfilePopover() {
           <div className="px-5 py-4 border-b border-border/40 bg-surface-container-low/50">
             <p className="text-sm font-bold text-on-surface truncate">{displayName}</p>
             <p className="text-xs text-on-surface-variant truncate mt-0.5">{user.email}</p>
-            {/* Roles come from the shared SIGTools registry, so a user may hold
-                several. Rendering them all avoids implying a single role. */}
+            {/* SIG-DESK's own role is singular (TODO-088) and GET /me only
+                reports its id, not a display name — resolving that name
+                needs a separate call this popover doesn't make, so this
+                shows the real, known fact instead: whether a role is
+                assigned at all, and whether it grants admin capability. */}
             <div className="mt-2 flex flex-wrap gap-1">
-              {(roles.length > 0 ? roles : [isAdmin ? 'admin' : 'sin rol']).map((role) => (
-                <span
-                  key={role}
-                  className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
-                >
-                  {role}
-                </span>
-              ))}
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                {roleId ? (canManageUsersAndRoles ? 'Administrador' : 'Rol asignado') : 'Sin rol asignado'}
+              </span>
             </div>
           </div>
 

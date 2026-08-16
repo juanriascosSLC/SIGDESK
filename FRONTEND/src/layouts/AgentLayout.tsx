@@ -94,7 +94,7 @@ function SectionHeader({ title, isAmber }: { title: string; isAmber?: boolean })
 function Sidebar() {
   const location = useLocation();
   const currentPath = location.pathname;
-  const { logout, isAdmin, can } = useAuth();
+  const { logout, canManageUsersAndRoles, can } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -188,7 +188,7 @@ function Sidebar() {
             />
           </div>
 
-          {isAdmin && (
+          {canManageUsersAndRoles && (
             <div className="mb-2">
               <SectionHeader title="Administration" />
               <NavButton

@@ -6,36 +6,51 @@ import {
   type ReactNode,
 } from 'react';
 import { authService } from './auth.service';
+import { sessionService } from './session.service';
 import { AuthContext, type AuthState } from './authContext';
-import { setAccessToken } from '@/lib/authToken';
+import { setAccessToken, setSigDeskToken } from '@/lib/authToken';
 import { AUTH_FAILURE_EVENT } from '@/lib/sigtoolsClient';
-import { apiRequest } from '@/lib/apiClient';
 
 const ACCESS_LEVEL_KEY = 'access_level';
+
+/**
+ * organization_service entities that gate the Users & Roles admin screen
+ * (Docs/howto/bootstrap-primer-admin.md inserts permissions over exactly
+ * these two tables for the first admin). Fixed by schema, not a role name —
+ * ADR-0017 rejects any role that bypasses checks, so access here has to be
+ * a real granted permission.
+ */
+const ADMIN_SURFACE_ENTITIES = ['roles', 'usuarios'];
 
 const CLEARED_STATE: AuthState = {
   user: null,
   accessLevel: null,
-  roles: [],
+  roleId: null,
   permissions: [],
   isLoading: false,
   isAuthenticated: false,
 };
 
-async function getAuthorization(): Promise<{
-  roles: string[];
+/** Exchanges the SIGTools-confirmed email for SIG-DESK's own session
+ *  (`POST /v1/session`, ADR-0017 decisión 3) and stores its JWT for
+ *  subsequent calls to organization_service. A failure here (404 — identity
+ *  known to SIGTools but not yet provisioned as a `Usuario`, or any other
+ *  error) degrades to "known identity, no role, no permissions" instead of
+ *  throwing — the corporate SIGTools session may still be perfectly valid,
+ *  and `Docs/howto/bootstrap-primer-admin.md` is the documented way to
+ *  close that gap, not an error this screen should surface as a login
+ *  failure. */
+async function getAuthorization(email: string): Promise<{
+  roleId: string | null;
   permissions: string[];
 }> {
   try {
-    const response = await apiRequest<{
-      identity: { roles: string[] | null; permissions: string[] | null };
-    }>('/me', { suppressAuthFailure: true });
-    return {
-      roles: response.identity.roles ?? [],
-      permissions: response.identity.permissions ?? [],
-    };
+    const sesion = await sessionService.emitir(email);
+    setSigDeskToken(sesion.access_token);
+    return { roleId: sesion.role_id || null, permissions: sesion.permissions ?? [] };
   } catch {
-    return { roles: [], permissions: [] };
+    setSigDeskToken(null);
+    return { roleId: null, permissions: [] };
   }
 }
 
@@ -48,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearAuthState = useCallback(() => {
     localStorage.removeItem(ACCESS_LEVEL_KEY);
     setAccessToken(null);
+    setSigDeskToken(null);
     setState(CLEARED_STATE);
   }, []);
 
@@ -64,11 +80,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setState(CLEARED_STATE);
       return;
     }
-    const authorization = await getAuthorization();
+    const authorization = await getAuthorization(user.email);
     setState({
       user,
       accessLevel: savedLevel ? parseInt(savedLevel, 10) : null,
-      roles: authorization.roles,
+      roleId: authorization.roleId,
       permissions: authorization.permissions,
       isLoading: false,
       isAuthenticated: true,
@@ -103,17 +119,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await authService.logoutAll();
   }, [clearAuthState]);
 
-  const isAdmin =
-    state.roles.some((role) =>
-      ['admin', 'administrator'].includes(role.toLowerCase()),
-    ) ||
-    state.permissions.includes('*') ||
-    state.permissions.includes('admin.*');
+  // Real capability, not a role name: true only if the JWT actually granted
+  // a permission over an entity this screen manages. Roles are not fixed or
+  // predefined (glossary.md "Rol") — there is no "admin" string to match.
+  const canManageUsersAndRoles = state.permissions.some((permission) =>
+    ADMIN_SURFACE_ENTITIES.includes(permission.split(':')[0]),
+  );
 
   const value = useMemo(() => {
+    // FRONTEND-HANDOFF.md §6: a bare "*" or a "<module>.*" wildcard is a
+    // recognized grant. There is no role-based bypass — every capability,
+    // including a blanket one, has to be an explicit permission string.
     function can(permissionKey: string): boolean {
       if (!state.isAuthenticated) return false;
-      if (isAdmin) return true;
+      if (state.permissions.includes('*')) return true;
       if (state.permissions.includes(permissionKey)) return true;
       const [module] = permissionKey.split('.');
       return module ? state.permissions.includes(`${module}.*`) : false;
@@ -131,10 +150,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logoutAll,
       refresh,
       can,
-      isAdmin,
+      canManageUsersAndRoles,
       displayName,
     };
-  }, [isAdmin, login, logout, logoutAll, refresh, state]);
+  }, [canManageUsersAndRoles, login, logout, logoutAll, refresh, state]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

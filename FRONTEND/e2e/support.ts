@@ -1,59 +1,125 @@
 import type { Page } from '@playwright/test';
 
+/**
+ * Real organization_service shapes (Docs/plans/conexion-backend-frontend-identidad-rol-plan.md
+ * Milestone 2) — GET /me is flat, `role_id` singular, `permissions` are
+ * "entity:action:scope" strings, never a role name. `'*'` is the documented
+ * global wildcard (FRONTEND-HANDOFF.md §6); the `roles:`/`usuarios:` entries
+ * are what actually grants `canManageUsersAndRoles` (AuthProvider.tsx) so
+ * specs that need /app/admin/users can rely on this fixture too.
+ */
 const adminIdentity = {
   username: 'playwright',
   displayName: 'Playwright Admin',
-  roles: ['admin'],
+  roleId: 'e2e-admin-role',
+  permissions: [
+    '*',
+    'roles:read:global',
+    'roles:update:global',
+    'usuarios:read:global',
+    'usuarios:update:global',
+  ],
+};
+
+/**
+ * Milestone 3 (Docs/plans/conexion-backend-frontend-identidad-rol-plan.md)
+ * — "a second user sees exactly what their role permits", the negative
+ * case for /app/admin/users. `'*'` alone satisfies the OUTER /app/* gate
+ * (App.tsx `ProtectedRoute`'s `can()` special-cases a bare `'*'`), but
+ * `AuthProvider.tsx`'s `canManageUsersAndRoles` is computed independently
+ * — from the `roles`/`usuarios` entity prefix, never from `'*'` — so this
+ * identity reaches `/app` but must still bounce off the INNER
+ * `/app/admin/users` guard (`requireCondition={canManageUsersAndRoles}
+ * fallbackTo="/app"`). A narrower identity with no permissions at all
+ * would fail the OUTER gate instead and never reach `/app` to begin with
+ * — that's a real but different assertion (see
+ * users-roles-milestone3.spec.ts for both).
+ */
+const agentWithoutAdminAccessIdentity = {
+  username: 'playwright-agent',
+  displayName: 'Playwright Agent',
+  roleId: 'e2e-agent-role',
   permissions: ['*'],
 };
 
-export async function mockAuthenticatedAdmin(page: Page) {
-  const runtimeApiBase = (
-    process.env.PLAYWRIGHT_API_URL ??
-    'http://127.0.0.1:8080/api/v1'
-  ).replace(/\/$/, '');
+/** SIG-DESK's own API, behind Kong — bare paths, no /api/v1 (see
+ *  apiClient.ts). Override via PLAYWRIGHT_API_URL if the dev server under
+ *  test was started with a different VITE_API_URL than this fixture. */
+const SIG_DESK_API_BASE = (process.env.PLAYWRIGHT_API_URL ?? 'http://127.0.0.1:8000').replace(
+  /\/$/,
+  '',
+);
+const SIG_DESK_API_PORT = new URL(SIG_DESK_API_BASE).port;
 
-  // One handler also redirects SPA calls when Playwright reuses an existing
-  // Vite process compiled with a different VITE_API_URL.
-  await page.route('**/api/v1/**', async (route) => {
-    const requestURL = new URL(route.request().url());
-    if (/\/api\/v1\/web-auth\/me\/?$/.test(requestURL.pathname)) {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          id: 1,
-          name: adminIdentity.displayName,
-          email: 'playwright@sig.systems',
-          username: adminIdentity.username,
-          roles: adminIdentity.roles,
-          permissions: adminIdentity.permissions,
-        }),
-      });
-      return;
-    }
-    if (/\/api\/v1\/me\/?$/.test(requestURL.pathname)) {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          identity: adminIdentity,
-          isAdmin: true,
-          permissionCatalog: [],
-        }),
-      });
-      return;
-    }
+type MockIdentity = {
+  username: string;
+  displayName: string;
+  roleId: string;
+  permissions: string[];
+};
 
-    const marker = '/api/v1';
-    const markerIndex = requestURL.pathname.indexOf(marker);
-    const suffix =
-      markerIndex >= 0
-        ? requestURL.pathname.slice(markerIndex + marker.length)
-        : requestURL.pathname;
-    const response = await route.fetch({
-      url: `${runtimeApiBase}${suffix}${requestURL.search}`,
+/**
+ * Shared implementation behind mockAuthenticatedAdmin/mockAuthenticatedAgent
+ * — same two stubs (SIGTools `/me/`, SIG-DESK `GET /me`), parameterized by
+ * identity so a spec can assert what a DIFFERENT role sees, not just the
+ * admin fixture every other spec already relies on.
+ */
+async function mockAuthenticatedIdentity(page: Page, identity: MockIdentity) {
+  // SIGTools always lives under /api/v1/web-auth on its own origin
+  // (sigtoolsClient.ts hardcodes that regardless of VITE_API_URL) —
+  // independent of the Gateway change above, so this pattern is unaffected.
+  await page.route('**/api/v1/web-auth/me/', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 1,
+        name: identity.displayName,
+        email: `${identity.username}@sig.systems`,
+        username: identity.username,
+      }),
     });
-    await route.fulfill({ response });
   });
+
+  // SIG-DESK's own API. GET /me is stubbed with the real, flat claims shape;
+  // everything else on this origin is forwarded to a live backend (e2e
+  // specs beyond auth need real tickets/catalog data), rewriting only the
+  // origin — no path prefix to strip on either side anymore.
+  // Matched by port rather than hostname: the dev server may be reached as
+  // localhost or 127.0.0.1 depending on how it was started, but the Kong
+  // dev proxy port is stable.
+  await page.route(
+    (url) => url.port === SIG_DESK_API_PORT,
+    async (route) => {
+      const requestURL = new URL(route.request().url());
+      if (requestURL.pathname === '/me') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            sub: identity.username,
+            email: `${identity.username}@sig.systems`,
+            company_id: 'e2e-company',
+            role_id: identity.roleId,
+            permissions: identity.permissions,
+          }),
+        });
+        return;
+      }
+
+      const response = await route.fetch({
+        url: `${SIG_DESK_API_BASE}${requestURL.pathname}${requestURL.search}`,
+      });
+      await route.fulfill({ response });
+    },
+  );
+}
+
+export async function mockAuthenticatedAdmin(page: Page) {
+  await mockAuthenticatedIdentity(page, adminIdentity);
+}
+
+/** Milestone 3's "second user" fixture — see agentWithoutAdminAccessIdentity. */
+export async function mockAuthenticatedAgentWithoutAdminAccess(page: Page) {
+  await mockAuthenticatedIdentity(page, agentWithoutAdminAccessIdentity);
 }
