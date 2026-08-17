@@ -4,6 +4,15 @@ import type { TicketPageContext } from './context';
 // Projection from SIGInventory — Tickets only positions/renders it; the real
 // technical data (when the SIGInventory connector exists) will come from
 // there, not from Catalog Builder.
+//
+// TODO-103: this is a DIFFERENT concept from a FieldDefinition.bindsTo ===
+// 'recursoId' field (real reference to resource_service, via BindingPicker
+// in CatalogForm.tsx). `assetId` here is the legacy free-text projection from
+// SIGInventory — no relation between the two today. A ticket's detail page
+// can legitimately show both blocks side by side (this widget + the
+// resourceId field's own placement); do not assume they describe the same
+// asset, and do not merge them without a deliberate product decision — see
+// the plan at C:\Users\hcruz.SIG\.claude\plans\todo-103-recurso-agente-catalog-builder.md.
 export function AssetDetailsWidget({ context }: { context: TicketPageContext }) {
   const assetId = (context.entityData.assetId as string | undefined) || context.ticket.assetId;
   return (

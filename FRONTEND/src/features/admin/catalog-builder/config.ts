@@ -12,6 +12,7 @@ import type {
   ConditionOperator,
   FieldDefinition,
   FieldType,
+  ResourceTypeFilter,
 } from '@/features/catalog/metamodel';
 
 export type Section = 'general' | 'fields' | 'detail' | 'workflow' | 'relations' | 'resources' | 'review' | 'advanced';
@@ -24,6 +25,36 @@ export const fieldTypes: Array<{ value: FieldType; label: string; description: s
   { value: 'number', label: 'Número', description: 'Cantidades y valores numéricos' },
   { value: 'date', label: 'Fecha', description: 'Una fecha seleccionable' },
   { value: 'datetime', label: 'Fecha y hora', description: 'Una ventana con fecha y hora' },
+];
+
+// TODO-103 — control separado de "vincular a" (bindsTo), no un FieldType
+// nuevo (ver metamodel.ts para el porqué). Label deliberadamente "Activo /
+// Recurso IT", NUNCA "Recurso" a secas — colisiona con "Recursos conectados"
+// de ResourcesEditor.tsx (pestaña "Recursos" de este mismo editor, concepto
+// completamente distinto: bindings de SLA/automatización/notificaciones).
+export const bindsToOptions: Array<{
+  value: FieldDefinition['bindsTo'] | '';
+  label: string;
+  description: string;
+}> = [
+  { value: '', label: 'Ninguno', description: 'Un campo normal de la definición' },
+  {
+    value: 'recursoId',
+    label: 'Activo / Recurso IT',
+    description: 'Referencia real a un recurso registrado en resource_service',
+  },
+  {
+    value: 'agenteItId',
+    label: 'Agente IT',
+    description: 'Referencia real a un agente de soporte registrado en organization_service',
+  },
+];
+
+export const resourceTypeOptions: Array<{ value: ResourceTypeFilter | ''; label: string }> = [
+  { value: '', label: 'Cualquier tipo' },
+  { value: 'hardware', label: 'Hardware' },
+  { value: 'software_licencia', label: 'Licencia de software' },
+  { value: 'infraestructura_red', label: 'Infraestructura de red' },
 ];
 
 export const conditionOperators: Array<{ value: ConditionOperator; label: string }> = [

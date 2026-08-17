@@ -7,10 +7,14 @@ import {
   createEntity,
   isFieldRequired,
   getPublishedDefinition,
+  listAgentesIT,
+  listRecursos,
   transitionEntity,
+  type BindingValue,
   type FieldDefinition,
   type Placement,
 } from './metamodel';
+import { BindingPicker } from './BindingPicker';
 import { DynamicField } from './DynamicField';
 import { DynamicLayout } from './runtime/DynamicLayout';
 import {
@@ -21,6 +25,10 @@ import {
 } from './runtime/layout-normalizer';
 
 function initialValue(field: FieldDefinition): unknown {
+  // TODO-103 — un campo bindsTo guarda un BindingValue (objeto) o nada, nunca
+  // un string vacío: `''` pasaría el chequeo de "valor presente" de
+  // isFieldRequired/evaluateCondition de forma incorrecta para este shape.
+  if (field.bindsTo) return null;
   if (field.defaultValue !== undefined) return field.defaultValue;
   if (field.type === 'boolean') return false;
   return '';
@@ -55,10 +63,12 @@ export default function CatalogForm() {
     mutationFn: ({
       entityData,
       idempotencyKey,
+      binding,
     }: {
       entityData: Record<string, unknown>;
       idempotencyKey: string;
-    }) => createEntity(categoryId, entityData, idempotencyKey),
+      binding?: { recursoId?: string; agenteItId?: string };
+    }) => createEntity(categoryId, entityData, idempotencyKey, binding),
   });
   const transitionMutation = useMutation({
     mutationFn: ({
@@ -78,6 +88,29 @@ export default function CatalogForm() {
         effectiveData,
       )
     : null;
+
+  // TODO-103 — campos bindsTo requieren un fetch real de recurso/agente IT.
+  // Restricción de audiencia (review de Diseño de esta sesión): la búsqueda
+  // libre de catálogo completo NUNCA se habilita para `requester` (portal
+  // self-service) — resource_service/organization_service no filtran por
+  // responsable todavía (TODO-24), así que mostrarles el inventario completo
+  // sería una fuga de alcance real. El backend YA exige el permiso real
+  // (recursos:read:global/agentes_it:read:global) — esto es solo UX, no la
+  // mitigación de seguridad (esa ya vive en el backend, Fase A).
+  const bindingFields = definition?.specification.fields.filter((field) => field.bindsTo) ?? [];
+  const needsRecursoPicker = bindingFields.some((field) => field.bindsTo === 'recursoId');
+  const needsAgentePicker = bindingFields.some((field) => field.bindsTo === 'agenteItId');
+  const restrictedForRequester = audienceKey === 'requester';
+  const recursosQuery = useQuery({
+    queryKey: ['bindings', 'recursos'],
+    queryFn: listRecursos,
+    enabled: needsRecursoPicker && !restrictedForRequester,
+  });
+  const agentesQuery = useQuery({
+    queryKey: ['bindings', 'agentes-it'],
+    queryFn: listAgentesIT,
+    enabled: needsAgentePicker && !restrictedForRequester,
+  });
   const createdEntity = transitionMutation.data ?? createMutation.data;
   const ticketProjectionQuery = useQuery({
     queryKey: ['tickets', 'projection', createdEntity?.humanId ?? ''],
@@ -104,9 +137,24 @@ export default function CatalogForm() {
           .filter((placement) => placement.source === 'catalog')
           .map((placement) => placement.fieldKey)
       : [];
+    // TODO-103 — el gap central que cierra ErrRecursoIDVacio: los campos con
+    // bindsTo guardan un BindingValue en effectiveData[key] (nunca se envían
+    // dentro de `data` — el backend no los espera ahí, crearEntidadRequest
+    // los lee como recursoId/agenteItId top-level). Se extraen acá y se
+    // excluyen del payload `data` genérico.
+    const bindingKeys = new Set(bindingFields.map((field) => field.key));
+    const dataKeys = activeKeys.filter((key) => !bindingKeys.has(key));
+    const binding: { recursoId?: string; agenteItId?: string } = {};
+    for (const field of bindingFields) {
+      const bound = effectiveData[field.key] as BindingValue | null;
+      if (!bound) continue;
+      if (field.bindsTo === 'recursoId') binding.recursoId = bound.id;
+      if (field.bindsTo === 'agenteItId') binding.agenteItId = bound.id;
+    }
     createMutation.mutate({
-      entityData: Object.fromEntries(activeKeys.map((key) => [key, effectiveData[key]])),
+      entityData: Object.fromEntries(dataKeys.map((key) => [key, effectiveData[key]])),
       idempotencyKey: crypto.randomUUID(),
+      binding,
     });
   }
 
@@ -258,6 +306,33 @@ export default function CatalogForm() {
                 (candidate) => candidate.key === placement.fieldKey,
               );
               if (!field) return null;
+              if (field.bindsTo) {
+                const kind = field.bindsTo === 'recursoId' ? 'recurso' : 'agenteIt';
+                const query = kind === 'recurso' ? recursosQuery : agentesQuery;
+                const items = kind === 'recurso'
+                  ? (query.data ?? []).filter(
+                      (item) => !field.resourceType || item.tipo === field.resourceType,
+                    )
+                  : query.data ?? [];
+                return (
+                  <BindingPicker
+                    label={field.label}
+                    kind={kind}
+                    items={items}
+                    loading={query.isLoading}
+                    isError={query.isError}
+                    onRetry={() => query.refetch()}
+                    value={(effectiveData[field.key] as BindingValue | null) ?? null}
+                    onSelect={(value) => updateField(field.key, value)}
+                    required={isFieldRequired(field, effectiveData)}
+                    restrictedMessage={
+                      restrictedForRequester
+                        ? 'No encontramos tu equipo asignado todavía — contacta a IT para crear esta solicitud.'
+                        : undefined
+                    }
+                  />
+                );
+              }
               return (
                 <DynamicField
                   field={field}
