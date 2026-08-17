@@ -112,6 +112,15 @@ export default function CatalogForm() {
     enabled: needsAgentePicker && !restrictedForRequester,
   });
   const createdEntity = transitionMutation.data ?? createMutation.data;
+  // KNOWN BROKEN, left as-is on purpose (pool plan, T3): getTicket now reads
+  // `GET /entities/INC/{id}`, and that path — like the legacy `/tickets/{id}`
+  // it replaced — parses the id as an int64, so passing a humanId
+  // ("INC-000123") is a 400 and this projection never resolves (which is why
+  // the "view ticket" button below never appears). The fix is to pass
+  // `createdEntity.id`, since the entity record IS the ticket in this backend —
+  // but that makes a route into TicketDetail live, whose comments/attachments/
+  // watchers/activity endpoints still do not exist, so it belongs with that
+  // work rather than here.
   const ticketProjectionQuery = useQuery({
     queryKey: ['tickets', 'projection', createdEntity?.humanId ?? ''],
     queryFn: () => getTicket(createdEntity!.humanId),

@@ -117,10 +117,16 @@ function ProtectedRoute({
  * they may work tickets, otherwise the self-service portal.
  */
 function LandingRedirect() {
-  const { isAuthenticated, isLoading, can } = useAuth();
+  const { isAuthenticated, isLoading, can, canManageUsersAndRoles, canViewTickets } =
+    useAuth();
   if (isLoading) return <FullScreenLoader />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (can(PERMISSIONS.ticketsView)) return <Navigate to="/app" replace />;
+  // An admin keeps landing on the workspace shell, where the Administration
+  // nav lives. Someone whose real grant is only over tickets lands straight
+  // on their pool instead of /app: the Dashboard there is not their working
+  // surface, "Tickets & Issues" is.
+  if (canManageUsersAndRoles) return <Navigate to="/app" replace />;
+  if (canViewTickets) return <Navigate to="/app/tickets" replace />;
   if (can(PERMISSIONS.changesView)) return <Navigate to="/app/changes" replace />;
   return <Navigate to="/portal" replace />;
 }
@@ -131,7 +137,7 @@ function LandingRedirect() {
  * than a role string.
  */
 function AppRoutes() {
-  const { canManageUsersAndRoles } = useAuth();
+  const { canManageUsersAndRoles, canViewTickets } = useAuth();
 
   return (
     <Routes>
@@ -157,10 +163,15 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
 
-      {/* Agent/Admin App Routes — needs permission to work on tickets, OR to
-          be a SIG-DESK admin heading straight for /app/admin/users: without
-          this OR, an admin with no ticket/change/problem permission could
-          never reach the Users & Roles screen at all. */}
+      {/* Agent/Admin App Routes — needs a real grant over tickets
+          (canViewTickets), OR to be a SIG-DESK admin heading straight for
+          /app/admin/users: without that OR, an admin with no
+          ticket/change/problem permission could never reach the Users & Roles
+          screen at all. The dotted requiredAnyPermissions below are kept for
+          the SIGTools-registry vocabulary, but organization_service never
+          emits them — an agent whose only grant is `tickets:read:*` used to
+          fail this gate and get bounced to /portal, unable to enter the
+          workspace at all. */}
       <Route path="/app/*" element={
         <ProtectedRoute
           requiredAnyPermissions={[
@@ -168,7 +179,7 @@ function AppRoutes() {
             PERMISSIONS.changesView,
             PERMISSIONS.problemsView,
           ]}
-          orCondition={canManageUsersAndRoles}
+          orCondition={canManageUsersAndRoles || canViewTickets}
           fallbackTo="/portal"
         >
           <AgentLayout>
@@ -176,18 +187,24 @@ function AppRoutes() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/catalog" element={<ServiceCatalog />} />
               <Route path="/catalog/:categoryId" element={<CatalogForm />} />
+              {/* Gated by the real `tickets` grant from the JWT, not by
+                  PERMISSIONS.ticketsView: that dotted SIGTools-registry key
+                  is never emitted by organization_service (emitir_sesion.go
+                  always serializes entity:action:scope), so no real role —
+                  not even one holding tickets:read:global — could satisfy
+                  it. Same pattern as /admin/users below. */}
               <Route path="/tickets" element={
-                <ProtectedRoute requiredPermission={PERMISSIONS.ticketsView}>
+                <ProtectedRoute requireCondition={canViewTickets}>
                   <TicketsKanban />
                 </ProtectedRoute>
               } />
               <Route path="/tickets/list" element={
-                <ProtectedRoute requiredPermission={PERMISSIONS.ticketsView}>
+                <ProtectedRoute requireCondition={canViewTickets}>
                   <TicketsList />
                 </ProtectedRoute>
               } />
               <Route path="/tickets/:id" element={
-                <ProtectedRoute requiredPermission={PERMISSIONS.ticketsView}>
+                <ProtectedRoute requireCondition={canViewTickets}>
                   <TicketDetail />
                 </ProtectedRoute>
               } />

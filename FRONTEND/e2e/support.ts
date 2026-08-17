@@ -7,6 +7,12 @@ import type { Page } from '@playwright/test';
  * global wildcard (FRONTEND-HANDOFF.md §6); the `roles:`/`usuarios:` entries
  * are what actually grants `canManageUsersAndRoles` (AuthProvider.tsx) so
  * specs that need /app/admin/users can rely on this fixture too.
+ *
+ * `tickets:read:global` is listed explicitly even though `'*'` already covers
+ * it: the ticket surfaces are gated by `canViewTickets` (AuthProvider.tsx),
+ * an entity-prefix capability, and every spec that visits /app/tickets should
+ * say so in its identity rather than lean silently on the wildcard — that
+ * wildcard is precisely what hid the broken dotted gate from this suite.
  */
 const adminIdentity = {
   username: 'playwright',
@@ -18,6 +24,7 @@ const adminIdentity = {
     'roles:update:global',
     'usuarios:read:global',
     'usuarios:update:global',
+    'tickets:read:global',
   ],
 };
 
@@ -25,7 +32,7 @@ const adminIdentity = {
  * Milestone 3 (Docs/plans/conexion-backend-frontend-identidad-rol-plan.md)
  * — "a second user sees exactly what their role permits", the negative
  * case for /app/admin/users. `'*'` alone satisfies the OUTER /app/* gate
- * (App.tsx `ProtectedRoute`'s `can()` special-cases a bare `'*'`), but
+ * (both `can()` and `canViewTickets` special-case a bare `'*'`), but
  * `AuthProvider.tsx`'s `canManageUsersAndRoles` is computed independently
  * — from the `roles`/`usuarios` entity prefix, never from `'*'` — so this
  * identity reaches `/app` but must still bounce off the INNER

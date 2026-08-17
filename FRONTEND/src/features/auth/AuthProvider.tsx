@@ -22,6 +22,22 @@ const ACCESS_LEVEL_KEY = 'access_level';
  */
 const ADMIN_SURFACE_ENTITIES = ['roles', 'usuarios'];
 
+/**
+ * organization_service entity behind every ticket surface. Its real grants
+ * arrive as `tickets:read:global`, `tickets:update:propio`, … —
+ * `EmitirSesionUseCase` always serializes `entidad:accion:alcance`
+ * (emitir_sesion.go), so it never emits the dotted SIGTools-registry key
+ * `PERMISSIONS.ticketsView` ('sigdesk.tickets.view') that `can()` checks.
+ * Gating the ticket routes on that key made them unreachable for every real
+ * role, admins included; this entity is what a role can actually be granted.
+ */
+const TICKETS_SURFACE_ENTITY = 'tickets';
+
+/** The blanket grant `can()` honors (FRONTEND-HANDOFF.md §6). Recognized by
+ *  capabilities derived from the raw "entity:action:scope" strings too, so a
+ *  wildcard identity behaves the same on both vocabularies. */
+const WILDCARD_GRANT = '*';
+
 const CLEARED_STATE: AuthState = {
   user: null,
   accessLevel: null,
@@ -126,6 +142,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ADMIN_SURFACE_ENTITIES.includes(permission.split(':')[0]),
   );
 
+  // Same shape as canManageUsersAndRoles, for the ticket surfaces: a real
+  // grant over the `tickets` entity, read straight off the JWT's flat
+  // "entity:action:scope" strings. Unlike the capability above it also honors
+  // the bare '*' wildcard, because `can()` already treats that as a blanket
+  // grant and the ticket routes used to be reachable that way. 'tickets:*'
+  // needs no special case — its entity prefix already matches.
+  const canViewTickets =
+    state.permissions.includes(WILDCARD_GRANT) ||
+    state.permissions.some(
+      (permission) => permission.split(':')[0] === TICKETS_SURFACE_ENTITY,
+    );
+
   const value = useMemo(() => {
     // FRONTEND-HANDOFF.md §6: a bare "*" or a "<module>.*" wildcard is a
     // recognized grant. There is no role-based bypass — every capability,
@@ -151,9 +179,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refresh,
       can,
       canManageUsersAndRoles,
+      canViewTickets,
       displayName,
     };
-  }, [canManageUsersAndRoles, login, logout, logoutAll, refresh, state]);
+  }, [
+    canManageUsersAndRoles,
+    canViewTickets,
+    login,
+    logout,
+    logoutAll,
+    refresh,
+    state,
+  ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

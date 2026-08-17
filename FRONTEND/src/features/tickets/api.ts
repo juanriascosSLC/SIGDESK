@@ -11,6 +11,18 @@ import type {
   TicketWatcher,
 } from './types';
 
+/**
+ * The camelCase/English ticket shape this module was originally written
+ * against. No route in tickets_service returns it: the only ticket DTOs the
+ * backend actually serves are `ticketDTO` (snake_case Spanish, `GET /tickets`)
+ * and `entityRecordDTO` (`GET /entities/INC`, see TicketEntityRecord below).
+ *
+ * It survives here ONLY as the declared response type of the mutation helpers
+ * further down (status/assign/merge/unmerge), whose endpoints do not exist in
+ * tickets_service either — they are pending work in the pool plan (T3/T21),
+ * not a contract in use. Reads (`listTickets`/`getTicket`) no longer go
+ * through it; they use the real `/entities/INC` contract instead.
+ */
 interface ApiTicket {
   id: string;
   entityId?: string;
@@ -26,6 +38,44 @@ interface ApiTicket {
   site: string | null;
   mergedCount: number;
   mergedIntoId: string | null;
+}
+
+/**
+ * INC is the only entityKey with a real backend domain behind it today —
+ * `/entities/PRB` and `/entities/RFC` answer 501 on purpose
+ * (`entityKeySoportado` in tickets_service/adapters/in/entidades_controller.go).
+ */
+const TICKET_ENTITY_KEY = 'INC';
+
+/**
+ * `entityRecordDTO` as served by `GET /entities/INC` and
+ * `GET /entities/INC/{id}` — the real, authenticated contract the ticket pool
+ * is built on (plan decision #5: build the pool on /entities/INC rather than
+ * keeping the legacy `GET /tickets` shape alive).
+ *
+ * `data` holds the dynamic catalog fields (`campos_dinamicos`), so which keys
+ * exist depends on the published Definition, never on this file. The last four
+ * fields are the ticket-specific projection the same DTO adds for this pool;
+ * every one of them is a RAW ID, not a resolved display name.
+ */
+interface TicketEntityRecord {
+  id: string;
+  humanId: string;
+  entityKey: string;
+  state: string;
+  data: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt?: string;
+  recursoId?: string;
+  creadorId?: string;
+  agenteItId?: string;
+  prioridad?: string;
+}
+
+interface TicketEntityListResponse {
+  items: TicketEntityRecord[] | null;
+  nextCursor?: string;
+  hasMore?: boolean;
 }
 
 // The catalog Definition owns which states and priorities exist, so these
@@ -71,40 +121,167 @@ function toTicket(ticket: ApiTicket): Ticket {
   };
 }
 
-function buildQuery(filters: TicketFilters = {}): string {
-  const params = new URLSearchParams();
-  if (filters.status) params.set('status', statusToApi(filters.status));
-  if (filters.priority) params.set('priority', priorityToApi(filters.priority));
-  if (filters.category) params.set('category', filters.category);
-  if (filters.site) params.set('site', filters.site);
-  if (filters.assignee) params.set('assignee', filters.assignee);
-  if (filters.unassigned) params.set('unassigned', 'true');
-  if (filters.q) params.set('q', filters.q);
-  if (filters.cursor) params.set('cursor', filters.cursor);
-  if (filters.limit) params.set('limit', String(filters.limit));
-  if (filters.mergedInto) params.set('mergedInto', filters.mergedInto);
-  const query = params.toString();
-  return query ? `?${query}` : '';
+/**
+ * Reads a string out of the dynamic `data` bag. Which key holds the title is
+ * decided by whoever published the Definition, so there is no key this code
+ * can rely on — it tries the keys this repo's own definitions and fixtures
+ * actually use (English from the e2e catalog fixtures, Spanish from
+ * tickets_service's own integration test) and gives up rather than guessing
+ * further.
+ */
+function dataString(
+  data: Record<string, unknown> | null | undefined,
+  keys: string[],
+): string | undefined {
+  if (!data) return undefined;
+  for (const key of keys) {
+    const value = data[key];
+    if (typeof value === 'string' && value.trim() !== '') return value;
+  }
+  return undefined;
+}
+
+/**
+ * Maps `entityRecordDTO` onto the `Ticket` shape the pool screens already
+ * consume. Field by field, including what has no source at all — the point is
+ * that a reader can tell real data from a placeholder without diffing this
+ * against the Go DTO:
+ *
+ * - `id` <- `id` (the BIGINT primary key as a string). NOT `humanId`: the URL
+ *   `/app/tickets/:id` feeds this straight back into `getTicket`, and both
+ *   `GET /entities/INC/{id}` and `GET /tickets/{id}` parse the path as an
+ *   int64, so a human id there is a 400. `humanId` is carried alongside for
+ *   display only.
+ * - `entityId` <- `id`: in this backend a ticket IS the catalog entity (one
+ *   row, one aggregate), which is what makes the live SLA chip resolve.
+ * - `status` <- `state`, `priority` <- `prioridad`: both mechanical case
+ *   conversions, so any state/priority an admin defines round-trips.
+ * - `category` <- `entityKey`. The DTO has no `categoriaId`, and for anything
+ *   created through the Catalog Builder the backend itself defaults
+ *   categoriaID to the entityKey (see crearEntidadRequest), so this is that
+ *   same value rather than an invention.
+ * - `requester` <- `creadorId`: a RAW user id, not a display name. Resolving
+ *   it needs a lookup against organization_service that tickets_service does
+ *   not have; showing the id is the honest interim, and the pool plan tracks
+ *   the resolution as separate work.
+ * - `assignee` <- `agenteItId`: also a raw id, and specifically the IT agent
+ *   from the *asignación de IT* (escalation). It is NOT the *asignación de
+ *   ticket* first responsible (`Asignacion.PrimerResponsableID`), which the
+ *   DTO does not expose — glossary.md keeps those two processes distinct, so
+ *   an unescalated ticket reads as "Sin asignar" even if it has a first
+ *   responsible.
+ * - `assetId` <- `recursoId`: the Recurso IS the asset (camera/device) in
+ *   ADR-0001 terms, so this column shows real data.
+ * - `title`/`description` <- the dynamic `data` bag, with a fallback: they are
+ *   catalog fields, so a Definition without them is legitimate. `title` never
+ *   becomes undefined, since search and the table title both index it.
+ * - NO SOURCE AT ALL — deliberately left undefined/null rather than faked:
+ *   `site` (no site/location concept anywhere in domain.Ticket) and
+ *   `mergedCount`/`mergedIntoId` (no merge in the backend domain; the merge
+ *   endpoints this file calls do not exist yet). The pool JSX already renders
+ *   these as "-", so they degrade to an empty cell instead of breaking.
+ */
+function toTicketFromEntityRecord(record: TicketEntityRecord): Ticket {
+  const data = record.data ?? {};
+  return {
+    id: record.id,
+    humanId: record.humanId,
+    entityId: record.id,
+    title: dataString(data, ['title', 'titulo', 'asunto']) ?? '(sin título)',
+    description: dataString(data, ['description', 'descripcion']) ?? '',
+    // Both conversions are guarded: a single throw inside this mapper would
+    // take down the whole list with "Could not load tickets", so a missing
+    // value degrades to an empty cell instead.
+    status: record.state ? statusFromApi(record.state) : '',
+    priority: record.prioridad ? priorityFromApi(record.prioridad) : '',
+    category: record.entityKey,
+    requester: record.creadorId ?? '',
+    assignee: record.agenteItId || null,
+    createdAt: record.createdAt,
+    assetId: record.recursoId || undefined,
+    site: undefined,
+    mergedCount: undefined,
+    mergedIntoId: null,
+  };
+}
+
+/**
+ * `GET /entities/{entityKey}` accepts only `cursor` and `limit` — status,
+ * priority, site, assignee, unassigned, q and mergedInto have no server-side
+ * support (the backend deliberately does not accept params it would ignore).
+ * They are applied here instead, over the page that came back.
+ *
+ * Stated rather than hidden: this filters a PAGE, not the whole set, the same
+ * limitation the quick-view counts in TicketsList already carry. Two of these
+ * are load-bearing rather than cosmetic:
+ *  - `q` is the only one a user can actually type, so dropping it would make
+ *    the search box look broken.
+ *  - `mergedInto` MUST filter: TicketDetail asks for "tickets merged into this
+ *    one", and passing that through unfiltered would claim the whole page was
+ *    merged into it. With no merge data in the backend, the honest answer is
+ *    an empty list, which is what this produces.
+ */
+function applyClientFilters(items: Ticket[], filters: TicketFilters): Ticket[] {
+  const q = filters.q?.trim().toLowerCase();
+  return items.filter((ticket) => {
+    if (filters.status && ticket.status !== filters.status) return false;
+    if (filters.priority && ticket.priority !== filters.priority) return false;
+    if (filters.category && ticket.category !== filters.category) return false;
+    if (filters.site && ticket.site !== filters.site) return false;
+    if (filters.assignee && ticket.assignee !== filters.assignee) return false;
+    if (filters.unassigned && ticket.assignee) return false;
+    if (filters.mergedInto && ticket.mergedIntoId !== filters.mergedInto) return false;
+    if (q) {
+      const haystack = [ticket.humanId, ticket.id, ticket.title, ticket.description]
+        .filter((value): value is string => Boolean(value))
+        .join(' ')
+        .toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  });
 }
 
 export async function listTickets(filters: TicketFilters = {}): Promise<TicketPage> {
-  const response = await apiRequest<{ items: ApiTicket[]; nextCursor: string; hasMore: boolean }>(
-    `/tickets${buildQuery(filters)}`,
+  const params = new URLSearchParams();
+  if (filters.cursor) params.set('cursor', filters.cursor);
+  if (filters.limit) params.set('limit', String(filters.limit));
+  const query = params.toString();
+
+  const response = await apiRequest<TicketEntityListResponse>(
+    `/entities/${TICKET_ENTITY_KEY}${query ? `?${query}` : ''}`,
   );
+  const items = (response.items ?? []).map(toTicketFromEntityRecord);
   return {
-    items: response.items.map(toTicket),
-    nextCursor: response.nextCursor,
-    hasMore: response.hasMore,
+    items: applyClientFilters(items, filters),
+    // nextCursor/hasMore describe the backend's RAW page, before its in-memory
+    // entityKey filter (and before the client filters above) — so a page can
+    // legitimately come back short, or empty, with hasMore still true.
+    nextCursor: response.nextCursor ?? '',
+    hasMore: Boolean(response.hasMore),
   };
 }
 
 export async function getTicket(id: string): Promise<Ticket> {
-  return toTicket(await apiRequest<ApiTicket>(`/tickets/${id}`));
+  return toTicketFromEntityRecord(
+    await apiRequest<TicketEntityRecord>(
+      `/entities/${TICKET_ENTITY_KEY}/${encodeURIComponent(id)}`,
+    ),
+  );
 }
 
 /**
  * @deprecated New intake screens must use Catalog Builder's createEntity.
  * This client remains only for external/legacy callers during convergence.
+ *
+ * KNOWN INCONSISTENCY (pool plan, T3/T21): reads were moved to
+ * `/entities/INC` while this still posts to the legacy `POST /tickets`, whose
+ * `crearTicketRequest` expects recurso_id/creador_id/categoria_id/agente_it_id
+ * — none of which this payload sends. It is left untouched on purpose: real
+ * ticket creation already works through the Catalog Builder path
+ * (`createEntity` in features/catalog/metamodel.ts), so converging this one is
+ * a separate decision (that legacy route also has no `ConAutenticacion`, which
+ * is exactly what T18 is about) rather than a silent edit here.
  */
 export async function createTicket(
   input: CreateTicketInput,

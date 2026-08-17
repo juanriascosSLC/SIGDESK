@@ -1,4 +1,5 @@
 import {
+  keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
@@ -36,6 +37,13 @@ export function useTickets(filters: TicketFilters = {}) {
   return useQuery({
     queryKey: ticketKeys.list(filters),
     queryFn: () => listTickets(filters),
+    // Only `cursor`/`limit` reach the server now — every other filter is
+    // applied to the page inside listTickets (see its comments), so a filter
+    // change still needs a new query key even though the request URL is
+    // identical. keepPreviousData is what stops that from blanking the table
+    // into a full-page skeleton on each keystroke of the search box, and it
+    // does the same for cursor paging.
+    placeholderData: keepPreviousData,
   });
 }
 

@@ -18,7 +18,17 @@ export const KNOWN_TICKET_STATUSES = [
 export const KNOWN_TICKET_PRIORITIES = ['Low', 'Medium', 'High', 'Critical'] as const;
 
 export interface Ticket {
+  /**
+   * Internal id (tickets.id BIGINT, serialized as a string). This is what
+   * `/app/tickets/:id` and every per-ticket endpoint take.
+   */
   id: string;
+  /**
+   * Human-facing number ("INC-000123"). Display only — never a path segment,
+   * since the backend parses ticket ids as int64. Optional because the legacy
+   * `GET /tickets` shape has no equivalent field.
+   */
+  humanId?: string;
   entityId?: string;
   title: string;
   description: string;

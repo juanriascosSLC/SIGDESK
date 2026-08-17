@@ -36,6 +36,14 @@ export interface AuthContextValue extends AuthState {
    * Roles admin screen. Deliberately not a hardcoded role name/string.
    */
   canManageUsersAndRoles: boolean;
+  /**
+   * Real capability derived from a granted permission over the `tickets`
+   * entity (see AuthProvider) — gates the ticket surfaces. Not the same as
+   * `can(PERMISSIONS.ticketsView)`: that dotted key belongs to the shared
+   * SIGTools registry and organization_service never emits it, so it can
+   * never be true for a real role.
+   */
+  canViewTickets: boolean;
   displayName: string;
 }
 

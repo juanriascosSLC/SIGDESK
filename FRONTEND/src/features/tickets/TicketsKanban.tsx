@@ -105,7 +105,9 @@ function KanbanColumn({
           >
             <div className="flex justify-between items-start mb-2.5">
               <span className="text-xs font-mono font-bold text-on-surface-variant group-hover:text-primary transition-colors flex items-center gap-2">
-                {ticket.id}
+                {/* Display the human number; ticket.id remains the routing and
+                    drag-and-drop key (see api.ts's mapping notes). */}
+                {ticket.humanId || ticket.id}
                 {ticket.mergedCount && ticket.mergedCount > 0 && (
                    <span className="flex items-center gap-1 text-[10px] text-primary bg-primary/15 border border-primary/30 px-1.5 py-0.5 rounded-md font-bold">
                      <Link2 className="w-3 h-3" /> {ticket.mergedCount}
@@ -120,11 +122,17 @@ function KanbanColumn({
             </div>
             <h4 className="text-sm font-bold text-on-surface mb-3 leading-snug line-clamp-2">{ticket.title}</h4>
             
+            {/* Sitio is rendered only when there is a value, matching the
+                Activo row right below it. `site` has no backend source today
+                (see api.ts), and a card row reading "Sitio: -" on every single
+                card reads as a bug, unlike an empty table cell. */}
             <div className="flex flex-col gap-1.5 mb-3 text-[11px] text-on-surface-variant">
-              <div className="flex justify-between items-center">
-                <span className="text-on-surface-variant/70">Sitio:</span>
-                <span className="font-semibold text-on-surface">{ticket.site || '-'}</span>
-              </div>
+              {ticket.site && (
+                <div className="flex justify-between items-center">
+                  <span className="text-on-surface-variant/70">Sitio:</span>
+                  <span className="font-semibold text-on-surface">{ticket.site}</span>
+                </div>
+              )}
               {ticket.assetId && (
                 <div className="flex justify-between items-center">
                   <span className="text-on-surface-variant/70">Activo:</span>
