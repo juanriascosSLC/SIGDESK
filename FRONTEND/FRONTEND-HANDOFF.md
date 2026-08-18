@@ -163,6 +163,17 @@ Permisos tipados actualmente en `src/features/auth/permissions.ts`:
 
 También se reconoce `*`, `admin.*` y comodines por módulo. El backend nuevo debe definir formalmente los permisos faltantes de Knowledge, Automations, Reports, ChatOps, API Keys y administración, y después agregar sus guards al frontend.
 
+> **Formalizado como ADR-0017** (`SIG-Desk-Backend/Docs/adr/0017-...md`,
+> 2026-08-11) del lado backend: SIGTools sigue autenticando sin cambios;
+> `organization_service` es la única fuente de rol/permisos, correlacionada
+> por email; el aprovisionamiento es **manual** (un admin da de alta al
+> usuario y le asigna rol desde esta misma pantalla — nunca se asigna un
+> rol por defecto automáticamente al iniciar sesión). Esto confirma que
+> `GET /admin/users` puede devolver identidades que ya iniciaron sesión
+> pero **todavía sin rol** (`roles: []`) — la UI de Users & Roles debe
+> distinguir ese estado ("conocido, pendiente de asignar rol") de un
+> usuario ya aprovisionado, en vez de tratar `roles: []` como un error.
+
 ## 7. Cliente HTTP y convenciones
 
 `src/lib/apiClient.ts` concatena la ruta a `VITE_API_URL`, envía JSON, cookie y bearer. Convenciones actuales:
