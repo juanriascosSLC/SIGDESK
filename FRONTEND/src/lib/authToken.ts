@@ -27,3 +27,35 @@ export function setAccessToken(next: string | null): void {
   if (next) sessionStorage.setItem(STORAGE_KEY, next);
   else sessionStorage.removeItem(STORAGE_KEY);
 }
+
+/**
+ * SIG-DESK's OWN short-lived JWT (ADR-0017 decisión 3, `POST /v1/session`
+ * on organization_service — see features/auth/session.service.ts). This is
+ * a DIFFERENT credential than the SIGTools token above: different signer
+ * (organization_service's own JWT_SECRET, not SIGTools'), different
+ * audience (organization_service behind Kong, not SIGTools), and different
+ * claims (role_id/permissions, ADR-0017 decisión 5 — re-verified locally by
+ * every domain API, never a repository round-trip per request). Mixing the
+ * two into one slot would mean SIG-DESK's own API is asked to verify a
+ * token it never signed — that JWT never validates, and every caller
+ * silently degrades to "known identity, no role" (the exact failure mode
+ * this second slot exists to avoid).
+ *
+ * Separate sessionStorage key, same lifetime policy as the SIGTools token
+ * above (gone when the tab closes, not persisted across restarts).
+ */
+const SIG_DESK_STORAGE_KEY = 'sig_desk_session_token';
+
+let sigDeskToken: string | null =
+  typeof window !== 'undefined' ? sessionStorage.getItem(SIG_DESK_STORAGE_KEY) : null;
+
+export function getSigDeskToken(): string | null {
+  return sigDeskToken;
+}
+
+export function setSigDeskToken(next: string | null): void {
+  sigDeskToken = next;
+  if (typeof window === 'undefined') return;
+  if (next) sessionStorage.setItem(SIG_DESK_STORAGE_KEY, next);
+  else sessionStorage.removeItem(SIG_DESK_STORAGE_KEY);
+}

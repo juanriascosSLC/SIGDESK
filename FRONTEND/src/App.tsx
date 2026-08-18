@@ -66,11 +66,27 @@ function ProtectedRoute({
   children,
   requiredPermission,
   requiredAnyPermissions,
+  requireCondition,
+  orCondition,
   fallbackTo,
 }: {
   children: React.ReactNode;
   requiredPermission?: string;
   requiredAnyPermissions?: string[];
+  /**
+   * Extra gate independent of `can()` — for capabilities computed straight
+   * from real organization_service permissions (entity:action:scope) rather
+   * than the dotted SIGTools-registry keys `can()` checks. Required in
+   * addition to any permission above, unless `orCondition` is set.
+   */
+  requireCondition?: boolean;
+  /**
+   * Lets the route through even if the permission checks above fail — used
+   * to admit SIG-DESK admins (real roles/usuarios permissions) into the
+   * /app shell without granting them the ticket-specific permissions
+   * checked by the nested routes inside it.
+   */
+  orCondition?: boolean;
   fallbackTo?: string;
 }) {
   const { isAuthenticated, isLoading, can } = useAuth();
@@ -84,13 +100,12 @@ function ProtectedRoute({
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (requiredPermission && !can(requiredPermission)) {
-    return <Navigate to={fallbackTo ?? '/portal'} replace />;
-  }
-  if (
-    requiredAnyPermissions?.length &&
-    !requiredAnyPermissions.some((permission) => can(permission))
-  ) {
+  const permissionOk =
+    (!requiredPermission || can(requiredPermission)) &&
+    (!requiredAnyPermissions?.length || requiredAnyPermissions.some((permission) => can(permission))) &&
+    (requireCondition === undefined || requireCondition);
+
+  if (!permissionOk && !orCondition) {
     return <Navigate to={fallbackTo ?? '/portal'} replace />;
   }
 
@@ -102,117 +117,160 @@ function ProtectedRoute({
  * they may work tickets, otherwise the self-service portal.
  */
 function LandingRedirect() {
-  const { isAuthenticated, isLoading, can } = useAuth();
+  const { isAuthenticated, isLoading, can, canManageUsersAndRoles, canViewTickets } =
+    useAuth();
   if (isLoading) return <FullScreenLoader />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (can(PERMISSIONS.ticketsView)) return <Navigate to="/app" replace />;
+  // An admin keeps landing on the workspace shell, where the Administration
+  // nav lives. Someone whose real grant is only over tickets lands straight
+  // on their pool instead of /app: the Dashboard there is not their working
+  // surface, "Tickets & Issues" is.
+  if (canManageUsersAndRoles) return <Navigate to="/app" replace />;
+  if (canViewTickets) return <Navigate to="/app/tickets" replace />;
   if (can(PERMISSIONS.changesView)) return <Navigate to="/app/changes" replace />;
   return <Navigate to="/portal" replace />;
+}
+
+/**
+ * Rendered inside <AuthProvider> so it can read real organization_service
+ * capabilities (e.g. canManageUsersAndRoles) to gate routes with, rather
+ * than a role string.
+ */
+function AppRoutes() {
+  const { canManageUsersAndRoles, canViewTickets } = useAuth();
+
+  return (
+    <Routes>
+      {/* Public Routes */}
+      <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/" element={<LandingRedirect />} />
+
+      {/* End User Portal Routes — any authenticated user may raise and
+          follow their own requests. */}
+      <Route path="/portal/*" element={
+        <ProtectedRoute>
+          <EndUserLayout>
+            <Routes>
+              <Route path="/" element={<EndUserDashboard />} />
+              <Route path="/catalog/:categoryId" element={<CatalogForm />} />
+              <Route path="/knowledge" element={<KnowledgeBase />} />
+              <Route path="/knowledge/:id" element={<ArticleDetail />} />
+              <Route path="/tickets" element={<MyTickets />} />
+              <Route path="/tickets/:id" element={<TicketDetail />} />
+            </Routes>
+          </EndUserLayout>
+        </ProtectedRoute>
+      } />
+
+      {/* Agent/Admin App Routes — needs a real grant over tickets
+          (canViewTickets), OR to be a SIG-DESK admin heading straight for
+          /app/admin/users: without that OR, an admin with no
+          ticket/change/problem permission could never reach the Users & Roles
+          screen at all. The dotted requiredAnyPermissions below are kept for
+          the SIGTools-registry vocabulary, but organization_service never
+          emits them — an agent whose only grant is `tickets:read:*` used to
+          fail this gate and get bounced to /portal, unable to enter the
+          workspace at all. */}
+      <Route path="/app/*" element={
+        <ProtectedRoute
+          requiredAnyPermissions={[
+            PERMISSIONS.ticketsView,
+            PERMISSIONS.changesView,
+            PERMISSIONS.problemsView,
+          ]}
+          orCondition={canManageUsersAndRoles || canViewTickets}
+          fallbackTo="/portal"
+        >
+          <AgentLayout>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/catalog" element={<ServiceCatalog />} />
+              <Route path="/catalog/:categoryId" element={<CatalogForm />} />
+              {/* Gated by the real `tickets` grant from the JWT, not by
+                  PERMISSIONS.ticketsView: that dotted SIGTools-registry key
+                  is never emitted by organization_service (emitir_sesion.go
+                  always serializes entity:action:scope), so no real role —
+                  not even one holding tickets:read:global — could satisfy
+                  it. Same pattern as /admin/users below. */}
+              <Route path="/tickets" element={
+                <ProtectedRoute requireCondition={canViewTickets}>
+                  <TicketsKanban />
+                </ProtectedRoute>
+              } />
+              <Route path="/tickets/list" element={
+                <ProtectedRoute requireCondition={canViewTickets}>
+                  <TicketsList />
+                </ProtectedRoute>
+              } />
+              <Route path="/tickets/:id" element={
+                <ProtectedRoute requireCondition={canViewTickets}>
+                  <TicketDetail />
+                </ProtectedRoute>
+              } />
+              <Route path="/changes" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.changesView}>
+                  <ChangeBoard />
+                </ProtectedRoute>
+              } />
+              <Route path="/changes/:id" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.changesView}>
+                  <ChangeDetail />
+                </ProtectedRoute>
+              } />
+              <Route path="/knowledge" element={<KnowledgeBase />} />
+              <Route path="/knowledge/:id" element={<ArticleDetail />} />
+              <Route path="/reports" element={<Reports />} />
+              <Route path="/problems" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.problemsView}>
+                  <ProblemsList />
+                </ProtectedRoute>
+              } />
+              <Route path="/problems/:id" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.problemsView}>
+                  <ProblemDetail />
+                </ProtectedRoute>
+              } />
+              <Route path="/automations" element={<AutomationsList />} />
+              <Route path="/automations/:id" element={<WorkflowBuilder />} />
+
+              {/* Administration — Users & Roles is gated by a real
+                  organization_service permission (roles/usuarios), decoded
+                  from the JWT via GET /me, not a hardcoded role name.
+                  Catalog Builder is explicitly out of scope for this plan
+                  (Docs/plans/conexion-backend-frontend-identidad-rol-plan.md)
+                  and is left unguarded, as before. */}
+              <Route path="/admin/users" element={
+                <ProtectedRoute requireCondition={canManageUsersAndRoles} fallbackTo="/app">
+                  <UsersManager />
+                </ProtectedRoute>
+              } />
+              <Route
+                path="/admin/catalog-builder"
+                element={
+                  <React.Suspense fallback={<FullScreenLoader />}>
+                    <CatalogBuilder />
+                  </React.Suspense>
+                }
+              />
+              <Route path="/settings/sla" element={<SlaPolicies />} />
+              <Route path="/settings/chatops" element={<ChatOps />} />
+              <Route path="/settings/api-keys" element={<ApiKeys />} />
+
+              <Route path="*" element={<div className="p-8 text-on-surface-variant">Module in development...</div>} />
+            </Routes>
+          </AgentLayout>
+        </ProtectedRoute>
+      } />
+    </Routes>
+  );
 }
 
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/" element={<LandingRedirect />} />
-
-          {/* End User Portal Routes — any authenticated user may raise and
-              follow their own requests. */}
-          <Route path="/portal/*" element={
-            <ProtectedRoute>
-              <EndUserLayout>
-                <Routes>
-                  <Route path="/" element={<EndUserDashboard />} />
-                  <Route path="/catalog/:categoryId" element={<CatalogForm />} />
-                  <Route path="/knowledge" element={<KnowledgeBase />} />
-                  <Route path="/knowledge/:id" element={<ArticleDetail />} />
-                  <Route path="/tickets" element={<MyTickets />} />
-                  <Route path="/tickets/:id" element={<TicketDetail />} />
-                </Routes>
-              </EndUserLayout>
-            </ProtectedRoute>
-          } />
-
-          {/* Agent/Admin App Routes — needs permission to work on tickets. */}
-          <Route path="/app/*" element={
-            <ProtectedRoute
-              requiredAnyPermissions={[
-                PERMISSIONS.ticketsView,
-                PERMISSIONS.changesView,
-                PERMISSIONS.problemsView,
-              ]}
-              fallbackTo="/portal"
-            >
-              <AgentLayout>
-                <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/catalog" element={<ServiceCatalog />} />
-                  <Route path="/catalog/:categoryId" element={<CatalogForm />} />
-                  <Route path="/tickets" element={
-                    <ProtectedRoute requiredPermission={PERMISSIONS.ticketsView}>
-                      <TicketsKanban />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/tickets/list" element={
-                    <ProtectedRoute requiredPermission={PERMISSIONS.ticketsView}>
-                      <TicketsList />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/tickets/:id" element={
-                    <ProtectedRoute requiredPermission={PERMISSIONS.ticketsView}>
-                      <TicketDetail />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/changes" element={
-                    <ProtectedRoute requiredPermission={PERMISSIONS.changesView}>
-                      <ChangeBoard />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/changes/:id" element={
-                    <ProtectedRoute requiredPermission={PERMISSIONS.changesView}>
-                      <ChangeDetail />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/knowledge" element={<KnowledgeBase />} />
-                  <Route path="/knowledge/:id" element={<ArticleDetail />} />
-                  <Route path="/reports" element={<Reports />} />
-                  <Route path="/problems" element={
-                    <ProtectedRoute requiredPermission={PERMISSIONS.problemsView}>
-                      <ProblemsList />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/problems/:id" element={
-                    <ProtectedRoute requiredPermission={PERMISSIONS.problemsView}>
-                      <ProblemDetail />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/automations" element={<AutomationsList />} />
-                  <Route path="/automations/:id" element={<WorkflowBuilder />} />
-
-                  {/* Administration */}
-                  <Route path="/admin/users" element={<UsersManager />} />
-                  <Route
-                    path="/admin/catalog-builder"
-                    element={
-                      <React.Suspense fallback={<FullScreenLoader />}>
-                        <CatalogBuilder />
-                      </React.Suspense>
-                    }
-                  />
-                  <Route path="/settings/sla" element={<SlaPolicies />} />
-                  <Route path="/settings/chatops" element={<ChatOps />} />
-                  <Route path="/settings/api-keys" element={<ApiKeys />} />
-
-                  <Route path="*" element={<div className="p-8 text-on-surface-variant">Module in development...</div>} />
-                </Routes>
-              </AgentLayout>
-            </ProtectedRoute>
-          } />
-        </Routes>
+        <AppRoutes />
       </AuthProvider>
     </BrowserRouter>
   );

@@ -54,7 +54,7 @@ Copiar `.env.example` a `.env.local`:
 
 | Variable | Uso | Predeterminado en código |
 |---|---|---|
-| `VITE_API_URL` | Base de la API propia de SIG-DESK | `http://localhost:8080/api/v1` |
+| `VITE_API_URL` | Base de la API propia de SIG-DESK, **detrás de Kong Gateway** — `kong.yml` expone rutas bare (`/me`, `/admin`, `/tickets`, ...) sin prefijo `/api` ni `/v1` (ese versionado es RIG-02, pendiente), puerto `8000` en desarrollo (`compose.override.yaml`) | `http://localhost:8000` |
 | `VITE_SIGTOOLS_API_URL` | Servicio corporativo de autenticación | `http://api.sig.systems:8091` |
 
 No guardar secretos en variables `VITE_*`: Vite las incluye en el JavaScript público.
@@ -192,21 +192,31 @@ CORS debe permitir el origen del frontend y los headers `Authorization`, `Conten
 
 ## 8. Contratos HTTP que ya consume la UI
 
-Todas las rutas siguientes son relativas a `VITE_API_URL` y, por tanto, normalmente a `/api/v1`.
+Todas las rutas siguientes son relativas a `VITE_API_URL`, es decir a Kong
+Gateway directamente — **sin** prefijo `/api/v1` (RIG-02 de versionado de
+ruta sigue pendiente; ver §3). Los shapes de organization_service (Identidad
+y RBAC abajo) son los reales de `adapters/in/dto.go`, no un contrato
+aspiracional: nombres de campo en español/snake_case incluidos — la
+traducción a un shape en inglés queda contenida en
+`src/features/admin/rbac.service.ts`, no expuesta al resto de la app.
 
 ### Identidad y RBAC
 
 | Método | Ruta | Uso |
 |---|---|---|
-| GET | `/me` | `{ identity: { roles, permissions } }` |
-| GET | `/admin/permissions` | Catálogo `{ items }` |
-| GET/POST | `/admin/roles` | Listar/crear roles |
-| PATCH/DELETE | `/admin/roles/:roleId` | Editar/eliminar rol |
-| PUT | `/admin/roles/:roleId/permissions` | Reemplazar grants |
-| GET | `/admin/users` | Usuarios conocidos por SIG-DESK |
-| PUT | `/admin/users/:username/roles` | Reemplazar roles del usuario |
+| POST | `/v1/session` | Login SIG-DESK tras SIGTools — `{ access_token, expires_in, usuario, role_id, permissions }` |
+| GET | `/me` | Claims del JWT decodificados — `{ sub, email, company_id, role_id, permissions }`. `role_id` es **singular** (TODO-088); sin nombre de rol, solo su id — resolverlo a un nombre requiere `GET /admin/roles` aparte |
+| GET | `/admin/permissions` | Catálogo — `{ acciones, alcances, entidades }` (tres arrays de enums fijos, no `{ items: PermissionCatalogEntry[] }`; `entidades` es dinámico, solo las que ya tiene algún rol) |
+| GET | `/admin/roles` | Listar roles — `{ items: [{ id, nombre, descripcion, permisos: [{entidad,accion,alcance}] }] }` |
+| POST | `/roles` *(bare, no `/admin/roles`)* | Crear rol — `{ nombre, descripcion }`; no existe `POST /admin/roles` |
+| PATCH/DELETE | `/admin/roles/:roleId` | Editar metadata / eliminar rol — `DELETE` responde 409 `ROL_EN_USO` si el rol sigue asignado a un usuario |
+| PUT | `/admin/roles/:roleId/permissions` | Reemplaza grants — `{ permissionKeys: ["entidad:accion:alcance", ...] }` |
+| GET | `/admin/users` | `{ items: [{ username, nombre, email, role_id?, ultimo_acceso?, tiene_usuario }] }` — `role_id` vacío y `tiene_usuario:false` es un identidad conocida sin cuenta provisionada, no un error |
+| PUT | `/admin/users/:username/roles` | Reemplaza el rol del usuario — `{ role_id }` **singular** (TODO-088, ya no `roleIds: string[]`); 404 si el `username` no tiene `Usuario` provisionado todavía (`tiene_usuario:false` arriba) |
 
-Las cuentas siguen perteneciendo a SIGTools/Active Directory. SIG-DESK solo registra identidad conocida y asignaciones locales.
+Las cuentas siguen perteneciendo a SIGTools/Active Directory. SIG-DESK solo
+registra identidad conocida y asignaciones locales. El envelope de error es
+`{ error_code, message }` (no `{ error }`) en todos los endpoints propios.
 
 ### Catalog Builder, definiciones y runtime genérico
 

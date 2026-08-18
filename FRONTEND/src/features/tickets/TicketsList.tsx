@@ -238,6 +238,12 @@ export default function TicketsList() {
     return () => window.clearInterval(interval);
   }, []);
 
+  // `site` has no source in the backend domain today (see the field-by-field
+  // notes in api.ts), so this list is empty and the Sitio filter below stays
+  // option-less until a site concept exists. Kept rather than removed: the
+  // column and the filter are already written for "no value" ("-" / "Todos
+  // los Sitios"), and deciding what Sitio should even mean next to
+  // Departamento is Track 1 of the pool plan, not a rename to do here.
   const siteOptions = useMemo(
     () => Array.from(new Set(tickets.map((t) => t.site).filter(Boolean) as string[])).sort(),
     [tickets],
@@ -511,7 +517,10 @@ export default function TicketsList() {
                         className="rounded bg-surface-container border-border/60 text-primary focus:ring-primary/50 cursor-pointer"
                       />
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs font-bold text-primary">{ticket.id}</td>
+                    {/* The human number ("INC-000123") is what an agent reads
+                        and quotes; ticket.id (the BIGINT) stays the routing
+                        key, so the row still navigates by id. */}
+                    <td className="px-4 py-3 font-mono text-xs font-bold text-primary">{ticket.humanId || ticket.id}</td>
                     <td className="px-4 py-3 font-medium truncate max-w-[400px]" title={ticket.title}>{ticket.title}</td>
                     <td className="px-4 py-3 text-center">
                       {ticket.mergedCount && ticket.mergedCount > 0 ? (

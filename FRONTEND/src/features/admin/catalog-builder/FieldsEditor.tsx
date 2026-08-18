@@ -12,9 +12,11 @@ import type {
   FieldType,
 } from '@/features/catalog/metamodel';
 import {
+  bindsToOptions,
   conditionReferences,
   fieldTypes,
   replaceConditionField,
+  resourceTypeOptions,
   technicalKey,
 } from './config';
 import { ConditionalRulesEditor } from './ConditionalRulesEditor';
@@ -58,6 +60,22 @@ export function FieldsEditor({
           );
         }
       }
+      // TODO-103 (T19) — un campo recién vinculado a recurso/agente IT se
+      // marca readOnly en el layout de EDICIÓN si ya tiene un placement ahí
+      // (no se crea uno nuevo — reasignar recurso/agente IT es un flujo de
+      // negocio propio, AsignarTicketUseCase/EscalarAITUseCase, no un campo
+      // de formulario genérico editable).
+      if (changes.bindsTo && current.layouts?.edit) {
+        const markReadOnly = (document: { sections: { placements: { fieldKey?: string; readOnly?: boolean }[] }[] }) => {
+          for (const section of document.sections) {
+            for (const placement of section.placements) {
+              if (placement.fieldKey === next.key) placement.readOnly = true;
+            }
+          }
+        };
+        markReadOnly(current.layouts.edit.default);
+        current.layouts.edit.variants?.forEach((variant) => markReadOnly(variant.document));
+      }
       return current;
     });
   }
@@ -74,6 +92,34 @@ export function FieldsEditor({
       });
       current.views = current.views ?? {};
       current.views.create = [...(current.views.create ?? []), key];
+      // TODO-103 (T20) — addField() antes solo tocaba `views.create`
+      // (mecanismo legado, Metamodel ≤1.3) sin sincronizar
+      // `layouts.create.default` (mecanismo 1.4 real que CatalogForm.tsx
+      // renderiza) — un campo nuevo podía quedar sin placement visible hasta
+      // que un admin lo arrastrara manualmente en el Diseñador de plantilla.
+      // Ahora crítico para bindsTo: tickets_service (T11) rechaza publicar
+      // una definición con un campo bindsTo sin placement en layouts.create.
+      // Arreglado de raíz para CUALQUIER tipo de campo nuevo, no solo bindsTo.
+      if (current.layouts?.create) {
+        const section = current.layouts.create.default.sections[0];
+        if (section) {
+          section.placements.push({
+            id: `placement-create-${key}`,
+            kind: 'field',
+            source: 'catalog',
+            fieldKey: key,
+            columnSpan: 1,
+          });
+        } else {
+          current.layouts.create.default.sections.push({
+            id: 'section-create-main',
+            columns: 1,
+            placements: [
+              { id: `placement-create-${key}`, kind: 'field', source: 'catalog', fieldKey: key, columnSpan: 1 },
+            ],
+          });
+        }
+      }
       return current;
     });
   }
@@ -236,6 +282,54 @@ export function FieldsEditor({
                   label="Mostrar en resumen"
                 />
               </div>
+            </div>
+
+            {/* TODO-103 — control separado de bindsTo, no conflated con el
+                select de `type` de arriba (ver metamodel.ts para el porqué:
+                bindsTo es ortogonal al FieldType nominal, el picker real
+                reemplaza el renderer de DynamicField sin importar `type`). */}
+            <div className="grid md:grid-cols-2 gap-4 mt-4 ml-0 lg:ml-14">
+              <FriendlyField label="Vincular a" help="Referencia real a un recurso/agente IT en vez de un valor de texto.">
+                <select
+                  data-testid={`catalog-field-bindsto-${field.key}`}
+                  value={field.bindsTo ?? ''}
+                  onChange={(event) => {
+                    const value = event.target.value as FieldDefinition['bindsTo'] | '';
+                    updateField(index, {
+                      bindsTo: value || undefined,
+                      resourceType: value === 'recursoId' ? field.resourceType : undefined,
+                    });
+                  }}
+                  className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
+                  style={{ colorScheme: 'dark' }}
+                >
+                  {bindsToOptions.map((option) => (
+                    <option key={option.value || 'none'} value={option.value ?? ''} className="bg-[#191c22] text-[#e1e2eb]">
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </FriendlyField>
+              {field.bindsTo === 'recursoId' && (
+                <FriendlyField label="Tipo de activo permitido">
+                  <select
+                    value={field.resourceType ?? ''}
+                    onChange={(event) =>
+                      updateField(index, {
+                        resourceType: (event.target.value || undefined) as FieldDefinition['resourceType'],
+                      })
+                    }
+                    className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
+                    style={{ colorScheme: 'dark' }}
+                  >
+                    {resourceTypeOptions.map((option) => (
+                      <option key={option.value || 'any'} value={option.value} className="bg-[#191c22] text-[#e1e2eb]">
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </FriendlyField>
+              )}
             </div>
 
             {(field.type === 'text' || field.type === 'textarea') && (

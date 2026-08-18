@@ -1,21 +1,25 @@
-import { getAccessToken } from './authToken';
+import { getSigDeskToken } from './authToken';
 import { AUTH_FAILURE_EVENT } from './sigtoolsClient';
 
+// Behind Kong (ADR-0016/RIG-01): the gateway proxies bare paths — /me,
+// /admin, /tickets, etc. — with no /v1 or /api prefix (kong.yml,
+// strip_path: false; route versioning is RIG-02, still pending). The
+// gateway's dev proxy port is 8000 (compose.override.yaml), not
+// tickets_service's own 8080 — hitting a service directly would skip Kong
+// entirely.
 export const API_BASE_URL = (
-  import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1'
+  import.meta.env.VITE_API_URL || 'http://localhost:8000'
 ).replace(/\/$/, '');
 
 /**
- * Session credential for SIG-DESK's own API.
- *
- * The API validates this against SIGTools, so the token is the same session
- * the user established at login. It has to travel as a bearer header rather
- * than a cookie: sig_token is HttpOnly and scoped to the auth service's
- * domain, so the browser would never send it to this API on a different
- * origin.
+ * Session credential for SIG-DESK's own API (organization_service and
+ * whatever else lives behind Kong) — the short-lived JWT minted by
+ * `POST /v1/session` (ADR-0017 decisión 3), NOT the SIGTools token. This API
+ * verifies the signature itself against its own `JWT_SECRET`; a SIGTools
+ * token would never validate here, since SIGTools never signed it.
  */
 export function authHeaders(): Record<string, string> {
-  const token = getAccessToken();
+  const token = getSigDeskToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
@@ -59,9 +63,13 @@ export async function apiRequest<T>(
 
   if (!response.ok) {
     const contentType = response.headers.get('content-type') ?? '';
-    const payload = contentType.includes('application/json')
-      ? await response.json().catch(() => ({}))
-      : { error: (await response.text()).trim() };
+    // Real envelope (organization_service, tickets_service adapters/in):
+    // { error_code, message }. `error` is kept as a fallback for any
+    // endpoint that still returns the older ad hoc shape.
+    const payload: { error_code?: string; message?: string; error?: string } =
+      contentType.includes('application/json')
+        ? await response.json().catch(() => ({}))
+        : { error: (await response.text()).trim() };
 
     // 401 means the shared session is gone; 403 means it is valid but lacks a
     // permission — only the former should tear the session down, otherwise a
@@ -72,7 +80,8 @@ export async function apiRequest<T>(
 
     const endpoint = `${new URL(API_BASE_URL).pathname}${path}`;
     throw new ApiError(
-      payload.error ||
+      payload.message ||
+        payload.error ||
         `La API respondió ${response.status} en ${endpoint}. Verifica que el backend esté actualizado.`,
       response.status,
     );

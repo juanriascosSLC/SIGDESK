@@ -94,8 +94,18 @@ function SectionHeader({ title, isAmber }: { title: string; isAmber?: boolean })
 function Sidebar() {
   const location = useLocation();
   const currentPath = location.pathname;
-  const { logout, isAdmin, can } = useAuth();
+  const { logout, canManageUsersAndRoles, canViewTickets, can } = useAuth();
   const navigate = useNavigate();
+
+  // Changes/Problems are still gated by dotted SIGTools-registry keys that
+  // organization_service never emits (their backend domain does not exist
+  // yet — /entities/PRB and /entities/RFC answer 501), so this group can
+  // legitimately end up with zero visible links. Count them before drawing
+  // the section title: an "empty" heading reads as broken nav, and it only
+  // went unnoticed while Tickets was equally unreachable.
+  const canViewChanges = can(PERMISSIONS.changesView);
+  const canViewProblems = can(PERMISSIONS.problemsView);
+  const showChangeAndConfig = canViewChanges || canViewProblems;
 
   const handleLogout = async () => {
     await logout();
@@ -136,7 +146,7 @@ function Sidebar() {
               icon={LayoutDashboard}
               label="Dashboard"
             />
-            {can(PERMISSIONS.ticketsView) && (
+            {canViewTickets && (
               <NavButton
                 active={currentPath.startsWith('/app/tickets')}
                 to="/app/tickets"
@@ -152,25 +162,27 @@ function Sidebar() {
             />
           </div>
 
-          <div className="mb-2">
-            <SectionHeader title="Change & Config (ITIL)" />
-            {can(PERMISSIONS.changesView) && (
-              <NavButton
-                active={currentPath.startsWith('/app/changes')}
-                to="/app/changes"
-                icon={Network}
-                label="Change Mgmt"
-              />
-            )}
-            {can(PERMISSIONS.problemsView) && (
-              <NavButton
-                active={currentPath.startsWith('/app/problems')}
-                to="/app/problems"
-                icon={SearchCode}
-                label="Problem Mgmt"
-              />
-            )}
-          </div>
+          {showChangeAndConfig && (
+            <div className="mb-2">
+              <SectionHeader title="Change & Config (ITIL)" />
+              {canViewChanges && (
+                <NavButton
+                  active={currentPath.startsWith('/app/changes')}
+                  to="/app/changes"
+                  icon={Network}
+                  label="Change Mgmt"
+                />
+              )}
+              {canViewProblems && (
+                <NavButton
+                  active={currentPath.startsWith('/app/problems')}
+                  to="/app/problems"
+                  icon={SearchCode}
+                  label="Problem Mgmt"
+                />
+              )}
+            </div>
+          )}
 
           <div className="mb-2">
             <SectionHeader title="Self Service" />
@@ -188,7 +200,7 @@ function Sidebar() {
             />
           </div>
 
-          {isAdmin && (
+          {canManageUsersAndRoles && (
             <div className="mb-2">
               <SectionHeader title="Administration" />
               <NavButton

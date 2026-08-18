@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Shield,
   Search,
   Users as UsersIcon,
   KeyRound,
@@ -10,12 +9,13 @@ import {
   Check,
   Plus,
   Trash2,
-  Lock,
 } from 'lucide-react';
 import {
   rbacService,
+  permissionKey,
   type KnownUser,
-  type PermissionCatalogEntry,
+  type Permission,
+  type PermissionCatalog,
   type Role,
 } from './rbac.service';
 import { useAuth, initialsOf } from '../auth/useAuth';
@@ -31,14 +31,14 @@ import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
  * roles this application defines and what each one may do here.
  */
 export default function UsersManager() {
-  const { isAdmin, can } = useAuth();
+  const { canManageUsersAndRoles } = useAuth();
   const [tab, setTab] = useState<'roles' | 'users'>('roles');
 
-  if (!isAdmin && !can('sigdesk.admin.roles')) {
+  if (!canManageUsersAndRoles) {
     return (
       <EmptyState
         title="Sin acceso a la administración"
-        description="Necesitas el permiso de gestión de roles para entrar aquí."
+        description="Necesitas un permiso sobre roles o usuarios para entrar aquí."
       />
     );
   }
@@ -58,7 +58,7 @@ export default function UsersManager() {
           El <strong className="text-on-surface">inicio de sesión</strong> es compartido con
           SIGInstallations y SIGInventory (Active Directory), pero estos roles y permisos son
           exclusivos de SIG-DESK y viven en su propia base de datos. Los usuarios aparecen aquí
-          en cuanto entran por primera vez.
+          en cuanto entran por primera vez, aunque todavía no tengan rol asignado.
         </p>
       </div>
 
@@ -103,13 +103,12 @@ function RolesTab() {
   };
 
   const savePermissions = useMutation({
-    mutationFn: ({ roleId, keys }: { roleId: string; keys: string[] }) =>
-      rbacService.setRolePermissions(roleId, keys),
+    mutationFn: ({ roleId, permissions }: { roleId: string; permissions: Permission[] }) =>
+      rbacService.setRolePermissions(roleId, permissions),
     onSuccess: invalidate,
   });
   const createRole = useMutation({
-    mutationFn: (input: { name: string; label: string; description: string }) =>
-      rbacService.createRole({ ...input, permissionKeys: [] }),
+    mutationFn: (input: { name: string; description: string }) => rbacService.createRole(input),
     onSuccess: (role) => {
       invalidate();
       setSelectedRoleId(role.id);
@@ -126,14 +125,7 @@ function RolesTab() {
 
   const roles = rolesQuery.data ?? [];
   const selectedRole = roles.find((role) => role.id === selectedRoleId) ?? roles[0] ?? null;
-
-  const byCategory = useMemo(() => {
-    const groups = new Map<string, PermissionCatalogEntry[]>();
-    for (const entry of catalogQuery.data ?? []) {
-      groups.set(entry.category, [...(groups.get(entry.category) ?? []), entry]);
-    }
-    return [...groups.entries()];
-  }, [catalogQuery.data]);
+  const catalog: PermissionCatalog = catalogQuery.data ?? { entities: [], actions: [], scopes: [] };
 
   if (rolesQuery.isLoading || catalogQuery.isLoading) return <LoadingSkeleton type="list" />;
   if (rolesQuery.isError || catalogQuery.isError) {
@@ -157,14 +149,15 @@ function RolesTab() {
     );
   }
 
-  const grantedKeys = new Set(selectedRole?.permissions ?? []);
+  const grantedKeys = new Set((selectedRole?.permissions ?? []).map(permissionKey));
 
-  function togglePermission(key: string) {
+  function togglePermission(entity: string, action: Permission['action'], scope: Permission['scope']) {
     if (!selectedRole) return;
-    const next = new Set(grantedKeys);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
-    savePermissions.mutate({ roleId: selectedRole.id, keys: [...next] });
+    const key = permissionKey({ entity, action, scope });
+    const next = grantedKeys.has(key)
+      ? selectedRole.permissions.filter((p) => permissionKey(p) !== key)
+      : [...selectedRole.permissions, { entity, action, scope }];
+    savePermissions.mutate({ roleId: selectedRole.id, permissions: next });
   }
 
   return (
@@ -211,50 +204,36 @@ function RolesTab() {
         <div className="bg-surface-container-low border border-border/40 rounded-3xl overflow-hidden">
           <div className="px-6 py-4 border-b border-border/40 bg-surface-container/50 flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <h2 className="font-bold text-on-surface flex items-center gap-2">
-                {selectedRole.label}
-                {selectedRole.isSystem && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-purple-400">
-                    <Lock className="w-3 h-3" /> sistema
-                  </span>
-                )}
-              </h2>
+              <h2 className="font-bold text-on-surface">{selectedRole.name}</h2>
               <p className="text-xs text-on-surface-variant mt-0.5">
-                <span className="font-mono">{selectedRole.name}</span> ·{' '}
-                {selectedRole.permissions.length} permiso(s) · {selectedRole.userCount} usuario(s)
+                {selectedRole.description || 'Sin descripción'} ·{' '}
+                {selectedRole.permissions.length} permiso(s)
               </p>
             </div>
             <div className="flex items-center gap-3 shrink-0">
               {savePermissions.isPending && (
                 <Loader2 className="w-4 h-4 animate-spin text-on-surface-variant" />
               )}
-              {!selectedRole.isSystem && (
-                <button
-                  onClick={() => {
-                    if (window.confirm(`¿Eliminar el rol "${selectedRole.label}"? Se revocará de todos sus usuarios.`)) {
-                      deleteRole.mutate(selectedRole.id);
-                    }
-                  }}
-                  className="text-on-surface-variant hover:text-red-400 transition-colors"
-                  title="Eliminar rol"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              )}
+              <button
+                onClick={() => {
+                  if (window.confirm(`¿Eliminar el rol "${selectedRole.name}"?`)) {
+                    deleteRole.mutate(selectedRole.id);
+                  }
+                }}
+                className="text-on-surface-variant hover:text-red-400 transition-colors"
+                title="Eliminar rol"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
             </div>
           </div>
 
-          {selectedRole.name === 'admin' && (
-            <div className="px-6 py-3 bg-purple-500/5 border-b border-border/40">
-              <p className="text-xs text-on-surface-variant">
-                El rol <strong className="text-on-surface">admin</strong> omite todas las
-                verificaciones, así que estas casillas son informativas.
-              </p>
-            </div>
-          )}
           {(savePermissions.isError || deleteRole.isError) && (
             <div className="px-6 py-3 bg-red-500/10 border-b border-red-500/20">
               <p className="text-xs text-red-300">
+                {/* A role still assigned to a user can't be deleted — the
+                    backend answers 409 ROL_EN_USO for that, surfaced here as
+                    any other error rather than a pre-emptive client-side flag. */}
                 {(savePermissions.error ?? deleteRole.error) instanceof Error
                   ? (savePermissions.error ?? deleteRole.error)!.message
                   : 'No se pudo guardar el cambio.'}
@@ -262,51 +241,79 @@ function RolesTab() {
             </div>
           )}
 
-          <div className="divide-y divide-border/20">
-            {byCategory.map(([category, entries]) => (
-              <div key={category} className="p-6">
-                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant mb-3">
-                  {category}
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {entries.map((entry) => {
-                    const isGranted = grantedKeys.has(entry.key);
-                    return (
-                      <label
-                        key={entry.key}
-                        className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer transition-colors ${
-                          isGranted
-                            ? 'bg-cyan-500/10 border-cyan-500/30'
-                            : 'bg-surface-container border-border/40 hover:border-cyan-500/20'
-                        }`}
-                      >
-                        <span
-                          className={`mt-0.5 w-4 h-4 rounded flex items-center justify-center border shrink-0 ${
-                            isGranted ? 'bg-cyan-400 border-cyan-400' : 'border-border'
-                          }`}
-                        >
-                          {isGranted && <Check className="w-3 h-3 text-slate-950" />}
-                        </span>
-                        <input
-                          type="checkbox"
-                          className="hidden"
-                          checked={isGranted}
-                          disabled={savePermissions.isPending}
-                          onChange={() => togglePermission(entry.key)}
-                        />
-                        <span className="min-w-0">
-                          <span className="block text-sm text-on-surface">{entry.label}</span>
-                          <span className="block text-[10px] font-mono text-on-surface-variant truncate">
-                            {entry.key}
-                          </span>
-                        </span>
-                      </label>
-                    );
-                  })}
+          {catalog.entities.length === 0 ? (
+            <div className="p-6">
+              <EmptyState
+                title="Todavía no hay entidades con permisos"
+                description="El catálogo se llena con las entidades que ya tienen al menos un permiso otorgado en algún rol (ver el runbook de bootstrap del primer admin)."
+              />
+            </div>
+          ) : (
+            <div className="divide-y divide-border/20">
+              {catalog.entities.map((entity) => (
+                <div key={entity} className="p-6">
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant mb-3">
+                    {entity}
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="text-sm">
+                      <thead>
+                        <tr>
+                          <th className="text-left pr-4 pb-2 text-[10px] font-bold uppercase text-on-surface-variant">
+                            Acción \ Alcance
+                          </th>
+                          {catalog.scopes.map((scope) => (
+                            <th
+                              key={scope}
+                              className="px-3 pb-2 text-[10px] font-bold uppercase text-on-surface-variant"
+                            >
+                              {scope}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {catalog.actions.map((action) => (
+                          <tr key={action}>
+                            <td className="pr-4 py-1.5 text-xs font-mono text-on-surface-variant">
+                              {action}
+                            </td>
+                            {catalog.scopes.map((scope) => {
+                              const isGranted = grantedKeys.has(
+                                permissionKey({ entity, action, scope }),
+                              );
+                              return (
+                                <td key={scope} className="px-3 py-1.5 text-center">
+                                  <label className="inline-flex cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      className="hidden"
+                                      checked={isGranted}
+                                      disabled={savePermissions.isPending}
+                                      onChange={() => togglePermission(entity, action, scope)}
+                                    />
+                                    <span
+                                      className={`w-5 h-5 rounded flex items-center justify-center border ${
+                                        isGranted
+                                          ? 'bg-cyan-400 border-cyan-400'
+                                          : 'border-border hover:border-cyan-500/40'
+                                      }`}
+                                    >
+                                      {isGranted && <Check className="w-3 h-3 text-slate-950" />}
+                                    </span>
+                                  </label>
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -329,14 +336,11 @@ function RoleListItem({
         isActive ? 'bg-primary/15 border border-primary/30' : 'hover:bg-surface-container border border-transparent'
       }`}
     >
-      <div className="flex items-center gap-2">
-        {role.name === 'admin' && <Shield className="w-3.5 h-3.5 text-purple-400 shrink-0" />}
-        <span className={`text-sm font-bold ${isActive ? 'text-primary' : 'text-on-surface'}`}>
-          {role.label}
-        </span>
-      </div>
+      <span className={`text-sm font-bold ${isActive ? 'text-primary' : 'text-on-surface'}`}>
+        {role.name}
+      </span>
       <p className="text-[10px] font-mono text-on-surface-variant mt-0.5">
-        {role.name} · {role.permissions.length}p · {role.userCount}u
+        {role.permissions.length} permiso(s)
       </p>
     </button>
   );
@@ -349,11 +353,10 @@ function CreateRoleForm({
   error,
 }: {
   onCancel: () => void;
-  onSubmit: (input: { name: string; label: string; description: string }) => void;
+  onSubmit: (input: { name: string; description: string }) => void;
   isPending: boolean;
   error: string | null;
 }) {
-  const [label, setLabel] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
 
@@ -361,7 +364,7 @@ function CreateRoleForm({
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        onSubmit({ name, label, description });
+        onSubmit({ name, description });
       }}
       className="bg-surface-container-low border border-cyan-500/30 rounded-3xl p-5 space-y-3"
     >
@@ -369,30 +372,11 @@ function CreateRoleForm({
         Nuevo rol
       </h3>
       <input
-        value={label}
-        onChange={(event) => {
-          setLabel(event.target.value);
-          // Suggest a technical name from the label so the user does not have
-          // to know the naming rules, while still being able to override it.
-          setName(
-            event.target.value
-              .toLowerCase()
-              .normalize('NFD')
-              .replace(/[̀-ͯ]/g, '')
-              .replace(/[^a-z0-9]+/g, '_')
-              .replace(/^_+|_+$/g, ''),
-          );
-        }}
-        placeholder="Nombre visible (ej. Aprobador CAB)"
-        required
-        className="w-full bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-2 text-on-surface outline-none focus:border-cyan-500/50"
-      />
-      <input
         value={name}
         onChange={(event) => setName(event.target.value)}
-        placeholder="clave_tecnica"
+        placeholder="Nombre (ej. Aprobador CAB)"
         required
-        className="w-full bg-surface-container border border-border/50 text-xs font-mono rounded-lg px-3 py-2 text-on-surface outline-none focus:border-cyan-500/50"
+        className="w-full bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-2 text-on-surface outline-none focus:border-cyan-500/50"
       />
       <textarea
         value={description}
@@ -430,9 +414,9 @@ function UsersTab() {
   const usersQuery = useQuery({ queryKey: ['rbac', 'users'], queryFn: rbacService.listUsers });
   const rolesQuery = useQuery({ queryKey: ['rbac', 'roles'], queryFn: rbacService.listRoles });
 
-  const setUserRoles = useMutation({
-    mutationFn: ({ username, roleIds }: { username: string; roleIds: string[] }) =>
-      rbacService.setUserRoles(username, roleIds),
+  const setUserRole = useMutation({
+    mutationFn: ({ username, roleId }: { username: string; roleId: string }) =>
+      rbacService.setUserRole(username, roleId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['rbac'] });
       setEditing(null);
@@ -479,9 +463,9 @@ function UsersTab() {
         />
       </div>
 
-      {setUserRoles.isError && (
+      {setUserRole.isError && (
         <p className="text-xs text-red-300">
-          {setUserRoles.error instanceof Error ? setUserRoles.error.message : 'No se pudo guardar.'}
+          {setUserRole.error instanceof Error ? setUserRole.error.message : 'No se pudo guardar.'}
         </p>
       )}
 
@@ -491,7 +475,7 @@ function UsersTab() {
             <tr>
               <th className="px-6 py-4 font-bold uppercase tracking-wider text-xs">Usuario</th>
               <th className="px-6 py-4 font-bold uppercase tracking-wider text-xs">
-                Roles en SIG-DESK
+                Rol en SIG-DESK
               </th>
               <th className="px-6 py-4 font-bold uppercase tracking-wider text-xs text-right">
                 Acciones
@@ -505,10 +489,10 @@ function UsersTab() {
                 user={user}
                 roles={roles}
                 isEditing={editing === user.username}
-                isPending={setUserRoles.isPending}
+                isPending={setUserRole.isPending}
                 onEdit={() => setEditing(user.username)}
                 onCancel={() => setEditing(null)}
-                onSave={(roleIds) => setUserRoles.mutate({ username: user.username, roleIds })}
+                onSave={(roleId) => setUserRole.mutate({ username: user.username, roleId })}
               />
             ))}
             {users.length === 0 && (
@@ -542,10 +526,39 @@ function UserRow({
   isPending: boolean;
   onEdit: () => void;
   onCancel: () => void;
-  onSave: (roleIds: string[]) => void;
+  onSave: (roleId: string) => void;
 }) {
-  const currentRoleIds = roles.filter((role) => user.roles.includes(role.name)).map((role) => role.id);
-  const [draft, setDraft] = useState<string[]>(currentRoleIds);
+  const currentRole = roles.find((role) => role.id === user.roleId) ?? null;
+  const [draftRoleId, setDraftRoleId] = useState<string>(user.roleId ?? roles[0]?.id ?? '');
+
+  // Known identity, never provisioned in SIG-DESK: PUT .../roles would 404
+  // (ADR-0017 decisión 4 — provisioning needs a company assignment this
+  // screen doesn't collect yet), so this row can only be observed, not
+  // edited, until that separate flow exists.
+  if (!user.hasAccount) {
+    return (
+      <tr className="align-top">
+        <td className="px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-surface-container-high border border-border/50 flex items-center justify-center text-on-surface font-bold text-xs shrink-0">
+              {initialsOf(user.displayName || user.username)}
+            </div>
+            <div className="min-w-0">
+              <p className="font-bold text-on-surface truncate">
+                {user.displayName || user.username}
+              </p>
+              <p className="text-xs font-mono text-on-surface-variant truncate">{user.username}</p>
+            </div>
+          </div>
+        </td>
+        <td className="px-6 py-4" colSpan={2}>
+          <span className="text-xs italic text-on-surface-variant">
+            identidad conocida, sin cuenta en SIG-DESK todavía — no puede operar
+          </span>
+        </td>
+      </tr>
+    );
+  }
 
   return (
     <tr className="hover:bg-surface-container/50 transition-colors align-top">
@@ -564,54 +577,25 @@ function UserRow({
       </td>
       <td className="px-6 py-4">
         {isEditing ? (
-          <div className="flex flex-wrap gap-2">
-            {roles.map((role) => {
-              const checked = draft.includes(role.id);
-              return (
-                <label
-                  key={role.id}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer text-xs font-bold transition-colors ${
-                    checked
-                      ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300'
-                      : 'bg-surface-container border-border/40 text-on-surface-variant hover:border-cyan-500/20'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    className="hidden"
-                    checked={checked}
-                    onChange={() =>
-                      setDraft((current) =>
-                        current.includes(role.id)
-                          ? current.filter((id) => id !== role.id)
-                          : [...current, role.id],
-                      )
-                    }
-                  />
-                  {checked && <Check className="w-3 h-3" />}
-                  {role.label}
-                </label>
-              );
-            })}
-          </div>
+          <select
+            value={draftRoleId}
+            onChange={(event) => setDraftRoleId(event.target.value)}
+            className="bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-1.5 text-on-surface outline-none focus:border-cyan-500/50"
+          >
+            {roles.map((role) => (
+              <option key={role.id} value={role.id}>
+                {role.name}
+              </option>
+            ))}
+          </select>
+        ) : currentRole ? (
+          <span className="inline-flex items-center gap-1 bg-surface-container-high px-2 py-0.5 rounded-md border border-border/50 text-[10px] font-bold text-on-surface uppercase tracking-wider">
+            {currentRole.name}
+          </span>
         ) : (
-          <div className="flex flex-wrap gap-1">
-            {user.roles.length === 0 ? (
-              <span className="text-xs italic text-on-surface-variant">
-                sin roles — no puede operar
-              </span>
-            ) : (
-              user.roles.map((roleName) => (
-                <span
-                  key={roleName}
-                  className="inline-flex items-center gap-1 bg-surface-container-high px-2 py-0.5 rounded-md border border-border/50 text-[10px] font-bold text-on-surface uppercase tracking-wider"
-                >
-                  {roleName === 'admin' && <Shield className="w-3 h-3 text-purple-400" />}
-                  {roleName}
-                </span>
-              ))
-            )}
-          </div>
+          <span className="text-xs italic text-on-surface-variant">
+            sin rol asignado — no puede operar
+          </span>
         )}
       </td>
       <td className="px-6 py-4 text-right whitespace-nowrap">
@@ -624,8 +608,8 @@ function UserRow({
               Cancelar
             </button>
             <button
-              onClick={() => onSave(draft)}
-              disabled={isPending}
+              onClick={() => onSave(draftRoleId)}
+              disabled={isPending || !draftRoleId}
               className="text-xs font-bold text-cyan-400 hover:text-cyan-300 disabled:opacity-50"
             >
               {isPending ? 'Guardando…' : 'Guardar'}
@@ -634,12 +618,13 @@ function UserRow({
         ) : (
           <button
             onClick={() => {
-              setDraft(currentRoleIds);
+              setDraftRoleId(user.roleId ?? roles[0]?.id ?? '');
               onEdit();
             }}
-            className="text-xs font-bold text-cyan-500 hover:text-cyan-400"
+            disabled={roles.length === 0}
+            className="text-xs font-bold text-cyan-500 hover:text-cyan-400 disabled:opacity-50 disabled:text-on-surface-variant"
           >
-            Editar roles
+            {user.roleId ? 'Cambiar rol' : 'Asignar rol'}
           </button>
         )}
       </td>

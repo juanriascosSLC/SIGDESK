@@ -42,6 +42,18 @@ export interface ConditionExpression {
   any?: ConditionExpression[];
 }
 
+// TODO-103 (plan "Catalog Builder + rediseño de PKs" + review CEO/Diseño/Eng
+// de esta sesión): bindsTo es ortogonal a `type` — un campo con bindsTo se
+// renderiza SIEMPRE con el picker de recurso/agente IT (ver BindingPicker.tsx
+// en CatalogForm.tsx), sin importar su `type` nominal. Se modela así (una
+// propiedad explícita, no un FieldType nuevo) porque tickets_service ya trata
+// `especificacion` como un mapa genérico — agregar un FieldType nuevo
+// obligaría a coordinar un cambio de esquema en el backend que este campo no
+// necesita. `resourceType` solo aplica cuando bindsTo === 'recursoId' (filtra
+// qué tipo de recurso es válido para este campo — enum cerrado contra lo que
+// resource_service realmente modela, domain.TipoRecurso).
+export type ResourceTypeFilter = 'hardware' | 'software_licencia' | 'infraestructura_red';
+
 export interface FieldDefinition {
   key: string;
   label: string;
@@ -55,6 +67,18 @@ export interface FieldDefinition {
   defaultValue?: unknown;
   options?: FieldOption[];
   validation?: Record<string, unknown>;
+  bindsTo?: 'recursoId' | 'agenteItId';
+  resourceType?: ResourceTypeFilter;
+}
+
+// Valor guardado en `data[field.key]` para un campo con `bindsTo` — un objeto
+// enriquecido, NUNCA el id plano (decisión de la review de Diseño de esta
+// sesión): permite mostrar el recurso/agente elegido en detalle sin refetch,
+// y condicionar otros campos por `tipo` vía `visibleWhen` en el futuro.
+export interface BindingValue {
+  id: string;
+  displayName: string;
+  tipo?: string;
 }
 
 export type DetailFieldSource = 'catalog' | 'ticket';
@@ -556,6 +580,41 @@ export async function listAvailableResources() {
   return response.items;
 }
 
+// TODO-103 — recursos/agentes IT reales para el picker de bindsTo. Ambos
+// endpoints viven fuera de /catalog (son de resource_service/
+// organization_service, no de tickets_service) y devuelven un array bare,
+// no `{items: []}` — distinto del resto de esta API, verificado contra el
+// DTO Go real (escribirJSON(w, 200, dtos) donde dtos es []recursoListadoDTO).
+// Requieren JWT + permiso (recursos:read:global / agentes_it:read:global) —
+// un 403 de apiRequest no destruye la sesión (ver apiClient.ts), a
+// diferencia de un 401.
+interface RecursoListadoApi {
+  id: string;
+  nombre: string;
+  tipo: string;
+}
+
+interface AgenteITListadoApi {
+  id: string;
+  nombre: string;
+  habilidad_o_categoria: string;
+  capacidad_carga: number;
+}
+
+export async function listRecursos(): Promise<BindingValue[]> {
+  const items = await apiRequest<RecursoListadoApi[]>('/recursos');
+  return items.map((item) => ({ id: item.id, displayName: item.nombre, tipo: item.tipo }));
+}
+
+export async function listAgentesIT(): Promise<BindingValue[]> {
+  const items = await apiRequest<AgenteITListadoApi[]>('/agentes_it');
+  return items.map((item) => ({
+    id: item.id,
+    displayName: item.nombre,
+    tipo: item.habilidad_o_categoria,
+  }));
+}
+
 export async function getPublishedDefinition(entityKey: string) {
   const definition = await apiRequest<CatalogDefinition>(
     `/catalog/definitions/${encodeURIComponent(entityKey)}`,
@@ -670,17 +729,23 @@ export function updateEntity(
   );
 }
 
+// TODO-103 — recursoId/agenteItId son aditivos al payload {data} ya existente
+// (crearEntidadRequest en tickets_service ya los acepta como opcionales,
+// omitempty). Sin ellos, `POST /entities/:entityKey` para un entityKey cuya
+// definición tenga un campo bindsTo sigue fallando con ErrRecursoIDVacio —
+// esta firma es lo que cierra ese ciclo del lado del cliente.
 export function createEntity(
   entityKey: string,
   data: Record<string, unknown>,
   idempotencyKey?: string,
+  binding?: { recursoId?: string; agenteItId?: string },
 ) {
   return apiRequest<EntityRecord>(
     `/entities/${encodeURIComponent(entityKey)}`,
     {
       method: 'POST',
       headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
-      body: JSON.stringify({ data }),
+      body: JSON.stringify({ data, ...binding }),
     },
   );
 }
