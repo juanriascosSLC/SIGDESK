@@ -33,7 +33,7 @@ import {
 test('un admin con permisos reales sobre roles/usuarios entra a Users & Roles', async ({
   page,
 }) => {
-  await mockAuthenticatedAdmin(page);
+  await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
 
   // RolesTab (UsersManager.tsx) dispara estas dos GET incondicionalmente
   // al montar, sin importar la pestaña activa (rbac.service.ts). Se
@@ -60,7 +60,7 @@ test('un admin con permisos reales sobre roles/usuarios entra a Users & Roles', 
     }),
   );
 
-  await page.goto('/app/admin/users');
+  await page.goto('/app/admin/users', { waitUntil: 'domcontentloaded' });
 
   await expect(
     page.getByRole('heading', { name: 'Roles y Permisos', exact: true }),
@@ -79,17 +79,15 @@ test('un admin con permisos reales sobre roles/usuarios entra a Users & Roles', 
 test('un usuario sin permiso sobre roles/usuarios ve exactamente eso: nada de Users & Roles', async ({
   page,
 }) => {
-  await mockAuthenticatedAgentWithoutAdminAccess(page);
+  await mockAuthenticatedAgentWithoutAdminAccess(page, { forwardUnmatched: false });
 
-  await page.goto('/app/admin/users');
+  await page.goto('/app/admin/users', { waitUntil: 'domcontentloaded' });
 
   // App.tsx: la ruta /admin/users tiene su propio ProtectedRoute
   // (requireCondition={canManageUsersAndRoles}, fallbackTo="/app") —
   // independiente del guard externo de /app/* que este fixture sí supera
-  // (permissions:['*'] alcanza para el `can()` de las rutas de
-  // tickets/changes/problems, pero canManageUsersAndRoles se calcula
-  // aparte, solo a partir de un permiso con prefijo roles:/usuarios:, que
-  // este fixture deliberadamente no tiene). El bounce debe aterrizar en
+  // (`tickets:read:global` alcanza para el guard exterior del workspace,
+  // pero no otorga lectura sobre roles/usuarios). El bounce debe aterrizar en
   // /app, nunca de vuelta en /login — la sesión es válida, el permiso no.
   await expect(page).toHaveURL(/\/app\/?$/);
   await expect(

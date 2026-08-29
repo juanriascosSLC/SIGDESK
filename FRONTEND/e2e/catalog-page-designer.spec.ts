@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type APIResponse, type Locator, type Page, type Response } from '@playwright/test';
-import { mockAuthenticatedAdmin } from './support';
+import { mockAuthenticatedAdmin, SIG_DESK_API_BASE } from './support';
 import { definitionData, type Definition } from './catalog-support';
 
-const apiBaseURL = process.env.PLAYWRIGHT_API_URL ?? 'http://127.0.0.1:8080/api/v1';
+const apiBaseURL = SIG_DESK_API_BASE;
 
 type Entity = {
   id: string;
@@ -119,7 +119,7 @@ function paletteItem(page: Page, key: string): Locator {
 async function saveDraftAndPublish(page: Page, expectedNextVersion: number): Promise<Definition> {
   const saveResponsePromise = page.waitForResponse(
     (response) =>
-      new URL(response.url()).pathname === '/api/v1/catalog/definitions' &&
+      new URL(response.url()).pathname === '/catalog/definitions' &&
       response.request().method() === 'POST' &&
       response.ok(),
   );

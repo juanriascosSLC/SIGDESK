@@ -19,6 +19,7 @@ graphify-out/
 
 # OS and editors
 .DS_Store
+desktop.ini
 Thumbs.db
 .idea/
 .vscode/*

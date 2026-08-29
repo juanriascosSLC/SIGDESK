@@ -31,8 +31,10 @@ import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
  * roles this application defines and what each one may do here.
  */
 export default function UsersManager() {
-  const { canManageUsersAndRoles } = useAuth();
-  const [tab, setTab] = useState<'roles' | 'users'>('roles');
+  const { can, canManageUsersAndRoles } = useAuth();
+  const canReadRoles = can('roles:read');
+  const canReadUsers = can('usuarios:read');
+  const [tab, setTab] = useState<'roles' | 'users'>(canReadRoles ? 'roles' : 'users');
 
   if (!canManageUsersAndRoles) {
     return (
@@ -66,31 +68,37 @@ export default function UsersManager() {
         {([
           { id: 'roles' as const, label: 'Roles y permisos', icon: KeyRound },
           { id: 'users' as const, label: 'Usuarios', icon: UsersIcon },
-        ]).map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setTab(id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-              tab === id
-                ? 'bg-primary text-primary-foreground shadow-[0_0_10px_rgba(34,211,238,0.3)]'
-                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container'
-            }`}
-          >
-            <Icon className="w-4 h-4" />
-            {label}
-          </button>
-        ))}
+        ])
+          .filter(({ id }) => (id === 'roles' ? canReadRoles : canReadUsers))
+          .map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                tab === id
+                  ? 'bg-primary text-primary-foreground shadow-[0_0_10px_rgba(34,211,238,0.3)]'
+                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {label}
+            </button>
+          ))}
       </div>
 
-      {tab === 'roles' ? <RolesTab /> : <UsersTab />}
+      {tab === 'roles' && canReadRoles ? <RolesTab /> : canReadUsers ? <UsersTab /> : null}
     </div>
   );
 }
 
 function RolesTab() {
+  const { can } = useAuth();
   const queryClient = useQueryClient();
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const canCreateRole = can('roles:create');
+  const canUpdateRole = can('roles:update');
+  const canDeleteRole = can('roles:delete');
 
   const rolesQuery = useQuery({ queryKey: ['rbac', 'roles'], queryFn: rbacService.listRoles });
   const catalogQuery = useQuery({
@@ -168,13 +176,15 @@ function RolesTab() {
             <h2 className="text-xs font-black uppercase tracking-wider text-on-surface-variant">
               Roles ({roles.length})
             </h2>
-            <button
-              onClick={() => setIsCreating((value) => !value)}
-              className="text-cyan-400 hover:text-cyan-300 transition-colors"
-              title="Crear rol"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
+            {canCreateRole && (
+              <button
+                onClick={() => setIsCreating((value) => !value)}
+                className="text-cyan-400 hover:text-cyan-300 transition-colors"
+                title="Crear rol"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            )}
           </div>
           <div className="p-2 space-y-1">
             {roles.map((role) => (
@@ -188,7 +198,7 @@ function RolesTab() {
           </div>
         </div>
 
-        {isCreating && (
+        {canCreateRole && isCreating && (
           <CreateRoleForm
             onCancel={() => setIsCreating(false)}
             onSubmit={(input) => createRole.mutate(input)}
@@ -214,17 +224,19 @@ function RolesTab() {
               {savePermissions.isPending && (
                 <Loader2 className="w-4 h-4 animate-spin text-on-surface-variant" />
               )}
-              <button
-                onClick={() => {
-                  if (window.confirm(`¿Eliminar el rol "${selectedRole.name}"?`)) {
-                    deleteRole.mutate(selectedRole.id);
-                  }
-                }}
-                className="text-on-surface-variant hover:text-red-400 transition-colors"
-                title="Eliminar rol"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              {canDeleteRole && (
+                <button
+                  onClick={() => {
+                    if (window.confirm(`¿Eliminar el rol "${selectedRole.name}"?`)) {
+                      deleteRole.mutate(selectedRole.id);
+                    }
+                  }}
+                  className="text-on-surface-variant hover:text-red-400 transition-colors"
+                  title="Eliminar rol"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
 
@@ -284,12 +296,14 @@ function RolesTab() {
                               );
                               return (
                                 <td key={scope} className="px-3 py-1.5 text-center">
-                                  <label className="inline-flex cursor-pointer">
+                                  <label
+                                    className={`inline-flex ${canUpdateRole ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                                  >
                                     <input
                                       type="checkbox"
                                       className="hidden"
                                       checked={isGranted}
-                                      disabled={savePermissions.isPending}
+                                      disabled={!canUpdateRole || savePermissions.isPending}
                                       onChange={() => togglePermission(entity, action, scope)}
                                     />
                                     <span
@@ -407,12 +421,19 @@ function CreateRoleForm({
 }
 
 function UsersTab() {
+  const { can } = useAuth();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
+  const canReadRoles = can('roles:read');
+  const canAssignRoles = can('usuarios:update') && canReadRoles;
 
   const usersQuery = useQuery({ queryKey: ['rbac', 'users'], queryFn: rbacService.listUsers });
-  const rolesQuery = useQuery({ queryKey: ['rbac', 'roles'], queryFn: rbacService.listRoles });
+  const rolesQuery = useQuery({
+    queryKey: ['rbac', 'roles'],
+    queryFn: rbacService.listRoles,
+    enabled: canReadRoles,
+  });
 
   const setUserRole = useMutation({
     mutationFn: ({ username, roleId }: { username: string; roleId: string }) =>
@@ -433,7 +454,9 @@ function UsersTab() {
     );
   }, [usersQuery.data, search]);
 
-  if (usersQuery.isLoading || rolesQuery.isLoading) return <LoadingSkeleton type="list" />;
+  if (usersQuery.isLoading || (canReadRoles && rolesQuery.isLoading)) {
+    return <LoadingSkeleton type="list" />;
+  }
   if (usersQuery.isError) {
     return (
       <EmptyState
@@ -488,6 +511,7 @@ function UsersTab() {
                 key={user.username}
                 user={user}
                 roles={roles}
+                canEdit={canAssignRoles}
                 isEditing={editing === user.username}
                 isPending={setUserRole.isPending}
                 onEdit={() => setEditing(user.username)}
@@ -514,6 +538,7 @@ function UsersTab() {
 function UserRow({
   user,
   roles,
+  canEdit,
   isEditing,
   isPending,
   onEdit,
@@ -522,6 +547,7 @@ function UserRow({
 }: {
   user: KnownUser;
   roles: Role[];
+  canEdit: boolean;
   isEditing: boolean;
   isPending: boolean;
   onEdit: () => void;
@@ -592,6 +618,8 @@ function UserRow({
           <span className="inline-flex items-center gap-1 bg-surface-container-high px-2 py-0.5 rounded-md border border-border/50 text-[10px] font-bold text-on-surface uppercase tracking-wider">
             {currentRole.name}
           </span>
+        ) : user.roleId ? (
+          <span className="text-xs font-mono text-on-surface-variant">{user.roleId}</span>
         ) : (
           <span className="text-xs italic text-on-surface-variant">
             sin rol asignado — no puede operar
@@ -615,7 +643,7 @@ function UserRow({
               {isPending ? 'Guardando…' : 'Guardar'}
             </button>
           </div>
-        ) : (
+        ) : canEdit ? (
           <button
             onClick={() => {
               setDraftRoleId(user.roleId ?? roles[0]?.id ?? '');
@@ -626,6 +654,8 @@ function UserRow({
           >
             {user.roleId ? 'Cambiar rol' : 'Asignar rol'}
           </button>
+        ) : (
+          <span className="text-xs text-on-surface-variant">Solo lectura</span>
         )}
       </td>
     </tr>

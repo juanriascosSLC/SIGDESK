@@ -1,10 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type APIResponse } from '@playwright/test';
-import { mockAuthenticatedAdmin } from './support';
+import { mockAuthenticatedAdmin, SIG_DESK_API_BASE } from './support';
 import { definitionData, type Definition } from './catalog-support';
 
-const apiBaseURL =
-  process.env.PLAYWRIGHT_API_URL ?? 'http://127.0.0.1:8080/api/v1';
+const apiBaseURL = SIG_DESK_API_BASE;
 
 // This entity key is scratch space owned entirely by this spec. Deliberately
 // NOT "INC": once a layout is published for an entity key it can never be

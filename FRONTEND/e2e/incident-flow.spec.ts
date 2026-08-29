@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { mockAuthenticatedAdmin } from './support';
+import { mockAuthenticatedAdmin, SIG_DESK_API_BASE } from './support';
 import {
   definitionData,
   type Definition,
 } from './catalog-support';
 
-const apiBaseURL = process.env.PLAYWRIGHT_API_URL ?? 'http://127.0.0.1:8080/api/v1';
+const apiBaseURL = SIG_DESK_API_BASE;
 const incidentTitle = 'Playwright camera SLA validation';
 const activityComment = 'Playwright verified Catalog, Tickets and SLA integration.';
 
@@ -92,7 +92,7 @@ test('shows the real SLA assessment and Catalog-driven incident detail', async (
 
   const slaResponse = page.waitForResponse(
     (response) =>
-      response.url().endsWith('/api/v1/sla/assessments') &&
+      response.url().endsWith('/sla/assessments') &&
       response.status() === 200,
   );
   await page.goto('/app/tickets/list');

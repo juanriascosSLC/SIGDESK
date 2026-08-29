@@ -2,7 +2,7 @@
 
 > Fuente de verdad para el equipo que implementará el nuevo backend.
 >
-> Estado del documento: 4 de agosto de 2026. El backend anterior fue eliminado deliberadamente. Los contratos descritos aquí se obtienen del frontend que permanece en este repositorio; no implican que exista una API ejecutándose.
+> Estado del documento: 29 de agosto de 2026. Este repositorio solo contiene el frontend. Los commits del equipo integran clientes para servicios externos, pero el código de `organization_service`, `tickets_service`, `resource_service` y Kong vive en otro repositorio que no está enlazado ni disponible aquí. Los contratos descritos abajo se obtienen de esos clientes y de las ADR citadas en los commits; no demuestran por sí solos que una API esté desplegada.
 
 ## 1. Qué es esta entrega
 
@@ -90,8 +90,7 @@ FRONTEND/
 ├─ package.json                  Scripts y dependencias
 ├─ vite.config.ts               Alias `@`, React, Tailwind y puerto 3003
 ├─ playwright.config.ts         Configuración E2E
-├─ Dockerfile / nginx.conf      Entrega productiva del SPA
-└─ BACKEND-REQUIREMENTS.md      Documento histórico; no es el contrato actual
+└─ Dockerfile / nginx.conf      Entrega productiva del SPA
 ```
 
 ## 5. Rutas y superficies
@@ -119,15 +118,15 @@ FRONTEND/
 
 | Ruta | Permiso principal |
 |---|---|
-| `/app` | Uno de tickets, changes o problems view |
+| `/app` | Lectura de tickets, changes o problems |
 | `/app/catalog` | Usuario autenticado del workspace |
-| `/app/tickets`, `/app/tickets/list`, `/app/tickets/:id` | `sigdesk.tickets.view` |
-| `/app/problems`, `/app/problems/:id` | `sigdesk.problems.view` |
-| `/app/changes`, `/app/changes/:id` | `sigdesk.changes.view` |
+| `/app/tickets`, `/app/tickets/list`, `/app/tickets/:id` | `tickets:read:<scope>` |
+| `/app/problems`, `/app/problems/:id` | `problems:read:<scope>` |
+| `/app/changes`, `/app/changes/:id` | `changes:read:<scope>` |
 | `/app/knowledge*` | Usuario autenticado del workspace |
 | `/app/reports` | Usuario autenticado del workspace |
 | `/app/automations*` | Usuario autenticado del workspace |
-| `/app/admin/users` | Actualmente sin guard específico adicional |
+| `/app/admin/users` | `roles:read:<scope>` o `usuarios:read:<scope>`; cada mutación exige además su acción correspondiente |
 | `/app/admin/catalog-builder` | Actualmente sin guard específico adicional |
 | `/app/settings/sla` | Actualmente sin guard específico adicional |
 | `/app/settings/chatops` | Actualmente sin guard específico adicional |
@@ -140,7 +139,7 @@ El backend siempre debe volver a comprobar permisos. Ocultar una ruta o botón e
 Hay dos responsabilidades diferentes:
 
 1. **SIGTools autentica** contra las identidades corporativas. El frontend usa cookies con `credentials: include`, CSRF para métodos inseguros y bearer token como respaldo entre orígenes.
-2. **SIG-DESK autoriza** con roles y permisos propios. Después de restaurar la sesión, el frontend consulta `GET /me` en la API de SIG-DESK.
+2. **SIG-DESK autoriza** con roles y permisos propios. Después de restaurar la sesión SIGTools, el frontend intercambia la identidad mediante `POST /v1/session` y conserva el JWT propio únicamente en memoria.
 
 Endpoints SIGTools, relativos a `{VITE_SIGTOOLS_API_URL}/api/v1/web-auth`:
 
@@ -151,7 +150,7 @@ Endpoints SIGTools, relativos a `{VITE_SIGTOOLS_API_URL}/api/v1/web-auth`:
 | POST | `/logout/` | 204 o respuesta exitosa |
 | POST | `/logout-all/` | Revoca todas las sesiones |
 
-La API SIG-DESK recibe `Authorization: Bearer <token>` cuando existe. Un `401` cierra la sesión global; un `403` solo deniega esa operación.
+`POST /v1/session` recibe el bearer emitido por SIGTools cuando está disponible; el backend debe validarlo y correlacionar el email autenticado. Nunca debe confiar en un email enviado por el navegador sin prueba de identidad. Las llamadas posteriores reciben `Authorization: Bearer <jwt-sig-desk>`. Un `401` cierra la sesión global; un `403` solo deniega esa operación.
 
 Permisos tipados actualmente en `src/features/auth/permissions.ts`:
 
@@ -161,7 +160,7 @@ Permisos tipados actualmente en `src/features/auth/permissions.ts`:
 - `sigdesk.changes.{view,create,edit,approve,implement}`
 - `sigdesk.problems.{view,create,edit,resolve}`
 
-También se reconoce `*`, `admin.*` y comodines por módulo. El backend nuevo debe definir formalmente los permisos faltantes de Knowledge, Automations, Reports, ChatOps, API Keys y administración, y después agregar sus guards al frontend.
+El adaptador conserva las claves punteadas anteriores para compatibilidad, pero las traduce a capacidades reales `entidad:acción:alcance` como `tickets:update:global`. También reconoce `*` como grant global explícito. El backend debe definir formalmente los permisos faltantes de Knowledge, Automations, Reports, ChatOps, API Keys y administración, y después agregar sus guards al frontend.
 
 > **Formalizado como ADR-0017** (`SIG-Desk-Backend/Docs/adr/0017-...md`,
 > 2026-08-11) del lado backend: SIGTools sigue autenticando sin cambios;
@@ -178,10 +177,10 @@ También se reconoce `*`, `admin.*` y comodines por módulo. El backend nuevo de
 
 `src/lib/apiClient.ts` concatena la ruta a `VITE_API_URL`, envía JSON, cookie y bearer. Convenciones actuales:
 
-- Respuestas y cuerpos en JSON con nombres `camelCase`.
+- El runtime/catalog usa principalmente `camelCase`; RBAC usa actualmente español y `snake_case`. Los adaptadores deben contener esa traducción y OpenAPI debe formalizarla.
 - Listas como `{ items: [...] }`; tickets además usan `{ nextCursor, hasMore }`.
 - `204 No Content` para operaciones sin cuerpo.
-- Error JSON preferido: `{ "error": "mensaje accionable" }`.
+- Error actual de los servicios propios: `{ "error_code": "CODIGO", "message": "mensaje accionable" }`; el cliente conserva fallback para `{ "error" }` durante la convergencia.
 - `401` significa sesión inválida; `403`, sesión válida sin permiso.
 - Creaciones sensibles aceptan `Idempotency-Key`.
 - Actualizaciones de entidad usan `expectedUpdatedAt` para concurrencia optimista.
@@ -252,11 +251,23 @@ Crear una entidad envía `{ data }`; actualizar envía `{ data, expectedUpdatedA
 
 ### Tickets / INC
 
+La lectura y creación nueva ya convergen al runtime genérico: lista/detalle se
+obtienen desde `/entities/INC` y el intake crea con `POST /entities/INC`. El
+identificador para volver a consultar una entidad es el `id` interno; el
+`humanId` (`INC-000123`) es solo presentación.
+
+La tabla siguiente describe el contrato que todavía necesita el módulo
+Tickets para completar sus widgets y comandos. En la integración recibida el
+nuevo `tickets_service` **no implementa aún** status, assign, merge/unmerge,
+comments, attachments, watchers ni activity. Esas llamadas permanecen en el
+cliente como compatibilidad histórica y fallarán hasta que el backend publique
+una fachada o comandos equivalentes sobre el runtime.
+
 | Método | Ruta | Uso |
 |---|---|---|
-| GET | `/tickets` | Lista paginada y filtrable |
-| GET | `/tickets/:id` | Proyección de ticket |
-| POST | `/tickets` | Compatibilidad legado; intake nuevo usa `/entities/INC` |
+| GET | `/entities/INC` | Lista paginada del runtime; la UI proyecta el registro a Ticket |
+| GET | `/entities/INC/:id` | Entidad INC y proyección de ticket |
+| POST | `/entities/INC` | Intake nuevo dirigido por definición publicada |
 | PATCH | `/tickets/:id/status` | Compatibilidad de estado |
 | POST | `/tickets/:id/assign` | Asignación |
 | POST | `/tickets/:primaryId/merge` | Combinar `{ mergedIds, actorName? }` |
@@ -268,7 +279,7 @@ Crear una entidad envía `{ data }`; actualizar envía `{ data, expectedUpdatedA
 | DELETE | `/tickets/:id/watchers/:watcherName` | Quitar observador |
 | GET | `/tickets/:id/activity` | Actividad versionada |
 
-Filtros soportados: `status`, `priority`, `category`, `site`, `assignee`, `unassigned`, `q`, `cursor`, `limit`, `mergedInto`.
+Filtros objetivo: `status`, `priority`, `category`, `site`, `assignee`, `unassigned`, `q`, `cursor`, `limit`, `mergedInto`. Hoy la UI aplica varios filtros después de descargar una sola página; el backend debe soportarlos antes de paginar para que búsqueda, conteos y kanban sean correctos globalmente.
 
 La proyección de ticket debe exponer como mínimo `id`, `entityId`, `title`, `description`, `status`, `priority`, `category`, `requesterName`, `assigneeName`, `createdAt`, `assetId`, `site`, `mergedCount` y `mergedIntoId`.
 
@@ -352,13 +363,13 @@ La resolución declara uno de estos modos: `latest-compatible`, `previous-compat
 
 | Módulo | Estado del frontend | Dependencia del backend nuevo |
 |---|---|---|
-| Auth | Conectado a SIGTools y `/me` | Validación bearer y autorización local |
-| Users & Roles | Cliente real | Persistencia RBAC y enforcement |
+| Auth | SIGTools + intercambio `POST /v1/session` | Validar el bearer SIGTools; no aceptar intercambio basado solo en email |
+| Users & Roles | Cliente real, guards de lectura y mutación | Persistencia RBAC, aprovisionamiento y enforcement |
 | Catalog Builder | Cliente, editor, validación/publicación y diseñadores reales | Definiciones, recursos, manifiestos y versiones |
 | Service Catalog | Render dinámico real | Definiciones publicadas y runtime de entidades |
-| Tickets / INC | Listas, kanban, detalle, merge, comentarios, adjuntos, watchers y widgets | Proyección consistente del runtime INC |
-| Problems / PRB | UI y operaciones genéricas reales | Runtime PRB y relaciones |
-| Changes / RFC | Board, detalle, edición y transición reales | Fachada RFC/runtime genérico |
+| Tickets / INC | Lista, detalle e intake conectados a `/entities/INC`; UI de comandos/widgets existente | Filtros server-side y comandos de status, assign, merge, comentarios, adjuntos, watchers y actividad |
+| Problems / PRB | UI y cliente preparados | Runtime PRB y relaciones; el servicio recibido solo declara INC |
+| Changes / RFC | Board, detalle, edición y transición preparados | Fachada RFC/runtime genérico; el servicio recibido solo declara INC |
 | SLA Policies | CRUD de draft, publish, preview y assessments conectado | Motor de calendarios y evaluación |
 | Automations | Diseñador visual principalmente demostrativo/local | CRUD, publicación, ejecución, delays, logs y retries |
 | Knowledge Base | Datos locales/demostrativos | Artículos, categorías, búsqueda, permisos y publicación |
@@ -393,8 +404,9 @@ El backend debe ser la autoridad. El caché del navegador y los guards son optim
 | `catalog-layout-versions.spec.ts` | Versiones/activación de layout |
 | `catalog-page-designer.spec.ts` | Diseñador WYSIWYG del detalle |
 | `catalog-template-designer.spec.ts` | Formularios y drag-and-drop |
+| `users-roles-milestone3.spec.ts` | Guards RBAC con permisos `entidad:acción:alcance` |
 
-`npm run test:e2e` necesita un frontend y una API compatibles. Hasta que exista el backend nuevo, CI ejecuta typecheck, lint y build, pero no la suite integrada.
+`npm run test:e2e` necesita un frontend y una API compatibles. La base SIG-DESK se puede sobrescribir con `PLAYWRIGHT_API_URL`; las llamadas directas del runner aceptan `PLAYWRIGHT_SIGDESK_TOKEN`. Los fixtures interceptan SIGTools y el intercambio `/v1/session`, pero los recorridos de catálogo/tickets requieren los servicios reales. Hasta que el repositorio backend y su entorno reproducible estén disponibles, CI debe ejecutar typecheck, lint y build y activar cada E2E integrado al disponer de sus dependencias.
 
 ## 14. Orden recomendado para el backend nuevo
 

@@ -38,6 +38,48 @@ const TICKETS_SURFACE_ENTITY = 'tickets';
  *  wildcard identity behaves the same on both vocabularies. */
 const WILDCARD_GRANT = '*';
 
+type Capability = { entity: string; action: string };
+
+const LEGACY_PERMISSION_CAPABILITIES: Record<string, Capability> = {
+  'sigdesk.tickets.view': { entity: 'tickets', action: 'read' },
+  'sigdesk.tickets.create': { entity: 'tickets', action: 'create' },
+  'sigdesk.tickets.edit': { entity: 'tickets', action: 'update' },
+  'sigdesk.tickets.assign': { entity: 'tickets', action: 'update' },
+  'sigdesk.tickets.resolve': { entity: 'tickets', action: 'update' },
+  'sigdesk.tickets.merge': { entity: 'tickets', action: 'update' },
+  'sigdesk.tickets.comment': { entity: 'tickets', action: 'update' },
+  'sigdesk.tickets.attach': { entity: 'tickets', action: 'update' },
+  'sigdesk.catalog.view': { entity: 'catalog', action: 'read' },
+  'sigdesk.catalog.author': { entity: 'catalog', action: 'update' },
+  'sigdesk.catalog.publish': { entity: 'catalog', action: 'update' },
+  'sigdesk.sla.view': { entity: 'sla', action: 'read' },
+  'sigdesk.sla.manage': { entity: 'sla', action: 'update' },
+  'sigdesk.changes.view': { entity: 'changes', action: 'read' },
+  'sigdesk.changes.create': { entity: 'changes', action: 'create' },
+  'sigdesk.changes.edit': { entity: 'changes', action: 'update' },
+  'sigdesk.changes.approve': { entity: 'changes', action: 'update' },
+  'sigdesk.changes.implement': { entity: 'changes', action: 'update' },
+  'sigdesk.problems.view': { entity: 'problems', action: 'read' },
+  'sigdesk.problems.create': { entity: 'problems', action: 'create' },
+  'sigdesk.problems.edit': { entity: 'problems', action: 'update' },
+  'sigdesk.problems.resolve': { entity: 'problems', action: 'update' },
+};
+
+function hasCapability(
+  permissions: string[],
+  entity: string,
+  action: string,
+): boolean {
+  if (permissions.includes(WILDCARD_GRANT)) return true;
+  return permissions.some((permission) => {
+    const [grantedEntity, grantedAction] = permission.split(':');
+    return (
+      (grantedEntity === entity || grantedEntity === WILDCARD_GRANT) &&
+      (grantedAction === action || grantedAction === WILDCARD_GRANT)
+    );
+  });
+}
+
 const CLEARED_STATE: AuthState = {
   user: null,
   accessLevel: null,
@@ -138,8 +180,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Real capability, not a role name: true only if the JWT actually granted
   // a permission over an entity this screen manages. Roles are not fixed or
   // predefined (glossary.md "Rol") — there is no "admin" string to match.
-  const canManageUsersAndRoles = state.permissions.some((permission) =>
-    ADMIN_SURFACE_ENTITIES.includes(permission.split(':')[0]),
+  const canManageUsersAndRoles = ADMIN_SURFACE_ENTITIES.some((entity) =>
+    hasCapability(state.permissions, entity, 'read'),
   );
 
   // Same shape as canManageUsersAndRoles, for the ticket surfaces: a real
@@ -148,11 +190,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // the bare '*' wildcard, because `can()` already treats that as a blanket
   // grant and the ticket routes used to be reachable that way. 'tickets:*'
   // needs no special case — its entity prefix already matches.
-  const canViewTickets =
-    state.permissions.includes(WILDCARD_GRANT) ||
-    state.permissions.some(
-      (permission) => permission.split(':')[0] === TICKETS_SURFACE_ENTITY,
-    );
+  const canViewTickets = hasCapability(
+    state.permissions,
+    TICKETS_SURFACE_ENTITY,
+    'read',
+  );
 
   const value = useMemo(() => {
     // FRONTEND-HANDOFF.md §6: a bare "*" or a "<module>.*" wildcard is a
@@ -162,6 +204,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!state.isAuthenticated) return false;
       if (state.permissions.includes('*')) return true;
       if (state.permissions.includes(permissionKey)) return true;
+      const legacyCapability = LEGACY_PERMISSION_CAPABILITIES[permissionKey];
+      if (legacyCapability) {
+        return hasCapability(
+          state.permissions,
+          legacyCapability.entity,
+          legacyCapability.action,
+        );
+      }
+      const [entity, action] = permissionKey.split(':');
+      if (entity && action) {
+        return hasCapability(state.permissions, entity, action);
+      }
       const [module] = permissionKey.split('.');
       return module ? state.permissions.includes(`${module}.*`) : false;
     }

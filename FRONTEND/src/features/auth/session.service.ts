@@ -20,6 +20,7 @@
  * login error.
  */
 import { apiRequest } from '@/lib/apiClient';
+import { getAccessToken } from '@/lib/authToken';
 
 /** sesionDTO — POST /v1/session response shape
  *  (organization_service adapters/in/dto.go). */
@@ -31,10 +32,20 @@ export interface SesionDTO {
 }
 
 export const sessionService = {
-  /** Exchanges a SIGTools-confirmed email for SIG-DESK's own short-lived JWT. */
-  emitir: (email: string): Promise<SesionDTO> =>
-    apiRequest<SesionDTO>('/v1/session', {
+  /**
+   * Exchanges a SIGTools-confirmed email for SIG-DESK's own short-lived JWT.
+   * The corporate bearer is forwarded explicitly: the SIG-DESK token cannot
+   * prove the identity during the initial exchange.
+   */
+  emitir: (email: string): Promise<SesionDTO> => {
+    const sigtoolsToken = getAccessToken();
+    return apiRequest<SesionDTO>('/v1/session', {
       method: 'POST',
+      suppressAuthFailure: true,
+      headers: sigtoolsToken
+        ? { Authorization: `Bearer ${sigtoolsToken}` }
+        : undefined,
       body: JSON.stringify({ email }),
-    }),
+    });
+  },
 };

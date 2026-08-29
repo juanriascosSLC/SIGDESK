@@ -16,6 +16,9 @@ export default defineConfig({
   ],
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3003',
+    extraHTTPHeaders: process.env.PLAYWRIGHT_SIGDESK_TOKEN
+      ? { Authorization: `Bearer ${process.env.PLAYWRIGHT_SIGDESK_TOKEN}` }
+      : undefined,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'off',
