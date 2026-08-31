@@ -73,6 +73,8 @@ export interface KnownUser {
    *  PUT /admin/users/:username/roles would 404 (ADR-0017 decisión 4:
    *  provisioning is a separate, manual step from role assignment). */
   hasAccount: boolean;
+  companyId: string | null;
+  status: string | null;
 }
 
 // --- Wire DTOs (organization_service/adapters/in/dto.go) -------------------
@@ -110,6 +112,8 @@ interface AdminUsuarioDTO {
   role_id?: string;
   ultimo_acceso?: string;
   tiene_usuario: boolean;
+  company_id?: string;
+  estado?: string;
 }
 
 function knownUserFromDTO(dto: AdminUsuarioDTO): KnownUser {
@@ -120,6 +124,8 @@ function knownUserFromDTO(dto: AdminUsuarioDTO): KnownUser {
     lastSeenAt: dto.ultimo_acceso ?? null,
     roleId: dto.role_id || null,
     hasAccount: dto.tiene_usuario,
+    companyId: dto.company_id ?? null,
+    status: dto.estado ?? null,
   };
 }
 
@@ -198,4 +204,12 @@ export const rbacService = {
       method: 'PUT',
       body: JSON.stringify({ role_id: roleId }),
     }),
+
+  setUserAssignment: (username: string, companyId: string, roleId: string): Promise<void> =>
+    apiRequest<void>(`/admin/users/${encodeURIComponent(username)}/assignment`, {
+      method: 'PUT', body: JSON.stringify({ company_id: companyId, role_id: roleId }),
+    }),
+
+  revokeUserAccess: (username: string): Promise<void> =>
+    apiRequest<void>(`/admin/users/${encodeURIComponent(username)}/roles`, { method: 'DELETE' }),
 };

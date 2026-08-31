@@ -20,7 +20,6 @@ import {
   type CatalogDefinition,
   type CatalogSpecification,
 } from '@/features/catalog/metamodel';
-import { createLayoutDraft, publishLayoutDraft, updateLayoutDraft } from '@/features/catalog/api';
 import { ApiError } from '@/lib/apiClient';
 import {
   guidedSteps,
@@ -112,15 +111,10 @@ export default function CatalogBuilder() {
     // way out was publishing a real layout on top; the bad one could never
     // be fixed or removed.
     mutationFn: async (definition: CatalogDefinition) => {
-      const created = await createDefinitionDraft(definition);
-      const detailPage = definition.specification.detailPage;
-      if (detailPage) {
-        const doc = { detail: detailPage } as unknown as Record<string, unknown>;
-        await createLayoutDraft(definition.entityKey, doc).catch(() =>
-          updateLayoutDraft(definition.entityKey, doc),
-        );
-      }
-      return created;
+      // The complete catalog document is persisted with the definition. The
+      // separate layout routes are not part of tickets_service's current
+      // contract; a second write here made a successful save look failed.
+      return createDefinitionDraft(definition);
     },
     onSuccess: async (created) => {
       await queryClient.invalidateQueries({ queryKey: ['catalog-definitions'] });
@@ -145,10 +139,6 @@ export default function CatalogBuilder() {
       // there was no detailPage to mirror in the first place (nothing for
       // the Page Designer to publish), there is no draft and this 404s —
       // that case, and only that case, is a no-op.
-      await publishLayoutDraft(entityKey).catch((error) => {
-        if (error instanceof ApiError && error.status === 404) return;
-        throw error;
-      });
       return published;
     },
     onSuccess: async (published) => {
@@ -562,7 +552,11 @@ export default function CatalogBuilder() {
               data-testid="catalog-editor-error"
               className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300"
             >
-              {editorError || mutationError?.message}
+              {editorError || (
+                mutationError instanceof ApiError && mutationError.issues?.length
+                  ? mutationError.issues.map((issue) => `${issue.path || 'especificación'}: ${issue.message}`).join('\n')
+                  : mutationError?.message
+              )}
             </div>
           )}
           {notice && (

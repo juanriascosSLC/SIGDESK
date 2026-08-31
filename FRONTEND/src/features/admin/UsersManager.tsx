@@ -422,6 +422,15 @@ function UsersTab() {
       setEditing(null);
     },
   });
+  const setUserAssignment = useMutation({
+    mutationFn: ({ username, companyId, roleId }: { username: string; companyId: string; roleId: string }) =>
+      rbacService.setUserAssignment(username, companyId, roleId),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['rbac'] }); },
+  });
+  const revokeAccess = useMutation({
+    mutationFn: (username: string) => rbacService.revokeUserAccess(username),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['rbac'] }); },
+  });
 
   const roles = rolesQuery.data ?? [];
   const users = useMemo(() => {
@@ -489,10 +498,12 @@ function UsersTab() {
                 user={user}
                 roles={roles}
                 isEditing={editing === user.username}
-                isPending={setUserRole.isPending}
+                isPending={setUserRole.isPending || setUserAssignment.isPending || revokeAccess.isPending}
                 onEdit={() => setEditing(user.username)}
                 onCancel={() => setEditing(null)}
                 onSave={(roleId) => setUserRole.mutate({ username: user.username, roleId })}
+                onAssign={(companyId, roleId) => setUserAssignment.mutate({ username: user.username, companyId, roleId })}
+                onRevoke={() => revokeAccess.mutate(user.username)}
               />
             ))}
             {users.length === 0 && (
@@ -519,6 +530,8 @@ function UserRow({
   onEdit,
   onCancel,
   onSave,
+  onAssign,
+  onRevoke,
 }: {
   user: KnownUser;
   roles: Role[];
@@ -527,6 +540,8 @@ function UserRow({
   onEdit: () => void;
   onCancel: () => void;
   onSave: (roleId: string) => void;
+  onAssign: (companyId: string, roleId: string) => void;
+  onRevoke: () => void;
 }) {
   const currentRole = roles.find((role) => role.id === user.roleId) ?? null;
   const [draftRoleId, setDraftRoleId] = useState<string>(user.roleId ?? roles[0]?.id ?? '');
@@ -551,10 +566,13 @@ function UserRow({
             </div>
           </div>
         </td>
-        <td className="px-6 py-4" colSpan={2}>
+        <td className="px-6 py-4">
           <span className="text-xs italic text-on-surface-variant">
             identidad conocida, sin cuenta en SIG-DESK todavía — no puede operar
           </span>
+        </td>
+        <td className="px-6 py-4 text-right">
+          <button onClick={() => { const companyId = window.prompt('ID del departamento'); const roleId = window.prompt('ID del rol'); if (companyId && roleId) onAssign(companyId, roleId); }} disabled={isPending || roles.length === 0} className="text-xs font-bold text-cyan-500 disabled:opacity-50">Asignar departamento y rol</button>
         </td>
       </tr>
     );
@@ -616,6 +634,7 @@ function UserRow({
             </button>
           </div>
         ) : (
+          <div>
           <button
             onClick={() => {
               setDraftRoleId(user.roleId ?? roles[0]?.id ?? '');
@@ -626,6 +645,12 @@ function UserRow({
           >
             {user.roleId ? 'Cambiar rol' : 'Asignar rol'}
           </button>
+          {user.status !== 'inactivo' && (
+            <button onClick={() => { if (window.confirm('¿Revocar acceso a este usuario?')) onRevoke(); }} className="ml-4 text-xs font-bold text-red-400 hover:text-red-300">
+              Quitar acceso
+            </button>
+          )}
+          </div>
         )}
       </td>
     </tr>

@@ -25,14 +25,17 @@ export function authHeaders(): Record<string, string> {
 
 export class ApiError extends Error {
   readonly status: number;
+  readonly issues?: Array<{ path: string; code: string; message: string; severity: string }>;
 
   constructor(
     message: string,
     status: number,
+    issues?: Array<{ path: string; code: string; message: string; severity: string }>,
   ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.issues = issues;
   }
 }
 
@@ -66,7 +69,7 @@ export async function apiRequest<T>(
     // Real envelope (organization_service, tickets_service adapters/in):
     // { error_code, message }. `error` is kept as a fallback for any
     // endpoint that still returns the older ad hoc shape.
-    const payload: { error_code?: string; message?: string; error?: string } =
+    const payload: { error_code?: string; message?: string; error?: string; issues?: ApiError['issues'] } =
       contentType.includes('application/json')
         ? await response.json().catch(() => ({}))
         : { error: (await response.text()).trim() };
@@ -84,6 +87,7 @@ export async function apiRequest<T>(
         payload.error ||
         `La API respondió ${response.status} en ${endpoint}. Verifica que el backend esté actualizado.`,
       response.status,
+      payload.issues,
     );
   }
 
