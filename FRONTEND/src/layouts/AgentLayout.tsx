@@ -23,6 +23,7 @@ import {
   PanelLeftOpen
 } from 'lucide-react';
 import UserProfilePopover from '../components/layout/UserProfilePopover';
+import RagChatbot from '../features/assistant/RagChatbot';
 import { useAuth } from '../features/auth/useAuth';
 import { PERMISSIONS } from '../features/auth/permissions';
 import { useNavStore } from '../store/navStore';
@@ -448,6 +449,7 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
           {children}
         </div>
       </main>
+      <RagChatbot />
     </div>
   );
 }

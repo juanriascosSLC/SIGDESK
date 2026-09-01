@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { FolderKanban, BookOpen, Ticket as TicketIcon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import UserProfilePopover from '../components/layout/UserProfilePopover';
+import RagChatbot from '../features/assistant/RagChatbot';
 
 function NavItem({ to, icon: Icon, label, active }: { to: string, icon: LucideIcon, label: string, active: boolean }) {
   return (
@@ -62,6 +63,7 @@ export default function EndUserLayout({ children }: { children: React.ReactNode 
       <footer className="py-6 text-center border-t border-border/20 bg-surface-container-lowest text-xs text-on-surface-variant font-mono">
         © 2026 SIG Systems, Inc. · IT Service Desk
       </footer>
+      <RagChatbot />
     </div>
   );
 }
