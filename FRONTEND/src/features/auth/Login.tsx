@@ -70,7 +70,7 @@ export default function Login() {
               Ingresa con tu <span className="font-bold text-on-surface">cuenta de dominio SIG</span>
             </p>
             <p className="text-xs text-on-surface-variant/70 mt-1">
-              La misma que usas en SIGInstallations y SIGInventory
+              La misma que usas en SIGInstallations - SIGInventory y SIGtools
             </p>
           </div>
 

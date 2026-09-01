@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronDown, Eye, EyeOff, GitBranch, Merge, Pencil, RotateCcw, UserPlus } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Eye, EyeOff, GitBranch, GitPullRequest, Merge, Pencil, RotateCcw, UserPlus } from 'lucide-react';
 import type { TicketPageContext } from './context';
 
 export function TicketActionsWidget({ context }: { context: TicketPageContext }) {
@@ -15,13 +15,15 @@ export function TicketActionsWidget({ context }: { context: TicketPageContext })
           Editar datos
         </button>
       )}
-      <button
-        onClick={actions.onAssign}
-        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 border border-primary/30 text-primary text-xs font-bold hover:bg-primary/20 hover:shadow-[0_0_15px_rgba(34,211,238,0.2)] transition-all"
-      >
-        <UserPlus className="w-3.5 h-3.5" />
-        {ticket.assignee === currentUserName ? 'Reassign' : 'Assign to me'}
-      </button>
+      {actions.canAssign && (
+        <button
+          onClick={actions.onAssign}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 border border-primary/30 text-primary text-xs font-bold hover:bg-primary/20 hover:shadow-[0_0_15px_rgba(34,211,238,0.2)] transition-all"
+        >
+          <UserPlus className="w-3.5 h-3.5" />
+          {ticket.assignee === currentUserName ? 'Reasignar' : 'Asignar'}
+        </button>
+      )}
       <div className="relative">
         <select
           data-testid="ticket-status-select"
@@ -57,6 +59,15 @@ export function TicketActionsWidget({ context }: { context: TicketPageContext })
           Gestionar problema
         </button>
       )}
+      {actions.canCreateChange && (
+        <button
+          onClick={actions.onOpenChangeDialog}
+          className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-bold text-amber-300 transition-colors hover:bg-amber-500/20"
+        >
+          <GitPullRequest className="h-3.5 w-3.5" />
+          Crear RFC
+        </button>
+      )}
       <button
         onClick={actions.onToggleWatch}
         className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-bold transition-colors ${
@@ -86,11 +97,11 @@ export function TicketActionsWidget({ context }: { context: TicketPageContext })
       )}
       <button
         onClick={actions.onResolve}
-        disabled={ticket.status === 'Resolved' || actions.updateStatusPending}
+        disabled={!actions.canResolve || actions.updateStatusPending}
         className="flex items-center gap-2 px-5 py-2 rounded-xl bg-emerald-500/90 text-slate-950 text-xs font-black uppercase tracking-wider shadow-[0_0_15px_rgba(52,211,153,0.3)] hover:shadow-[0_0_25px_rgba(52,211,153,0.5)] transition-all disabled:opacity-50"
       >
         <CheckCircle2 className="w-3.5 h-3.5" />
-        {actions.updateStatusPending ? 'Resolving...' : 'Resolve'}
+        {actions.updateStatusPending ? 'Resolviendo...' : 'Resolver'}
       </button>
       {actions.updateStatusError && (
         <p className="-mb-2 w-full text-sm text-red-400">{actions.updateStatusError}</p>

@@ -1,4 +1,5 @@
 import { apiRequest, API_BASE_URL, authHeaders } from '@/lib/apiClient';
+import { getResolvedDefinition, type LifecycleTransitionDefinition } from '@/features/catalog/api';
 import type {
   CreateTicketInput,
   Ticket,
@@ -17,11 +18,9 @@ import type {
  * backend actually serves are `ticketDTO` (snake_case Spanish, `GET /tickets`)
  * and `entityRecordDTO` (`GET /entities/INC`, see TicketEntityRecord below).
  *
- * It survives here ONLY as the declared response type of the mutation helpers
- * further down (status/assign/merge/unmerge), whose endpoints do not exist in
- * tickets_service either — they are pending work in the pool plan (T3/T21),
- * not a contract in use. Reads (`listTickets`/`getTicket`) no longer go
- * through it; they use the real `/entities/INC` contract instead.
+ * It survives only at the legacy `createTicket` compatibility boundary.
+ * Reads and normal commands use `/entities/INC` plus the collaboration
+ * endpoints implemented by tickets_service.
  */
 interface ApiTicket {
   id: string;
@@ -69,7 +68,14 @@ interface TicketEntityRecord {
   recursoId?: string;
   creadorId?: string;
   agenteItId?: string;
+  primerResponsableId?: string;
   prioridad?: string;
+  mergedCount?: number;
+  mergedIntoId?: string | null;
+  assetContext?: {
+    siteAssetId?: string;
+    links: Array<{ assetId: string; role?: string; snapshot: Record<string, unknown> }>;
+  };
 }
 
 interface TicketEntityListResponse {
@@ -97,10 +103,51 @@ function labelToApi(value: string): string {
 // Exported so callers that need to match a ticket's displayed status against
 // backend-shaped data (e.g. a lifecycle's transition `from`/`to` keys, which
 // are always snake_case) can convert without duplicating this mapping.
-export const statusFromApi = labelFromApi;
-export const statusToApi = labelToApi;
-const priorityFromApi = labelFromApi;
-const priorityToApi = labelToApi;
+export function statusFromApi(value: string): string {
+  const normalized = labelToApi(value);
+  const labels: Record<string, string> = {
+    abierto: 'Open', en_progreso: 'In Progress', en_espera: 'Pending Review',
+    resuelto: 'Resolved', cerrado: 'Closed', reabierto: 'Reopened',
+    pending: 'Pending Review', waiting: 'Pending Review', on_hold: 'Pending Review',
+  };
+  return labels[normalized] ?? labelFromApi(value);
+}
+
+export function statusToApi(value: string): string {
+  return canonicalTicketState(value);
+}
+
+/** Compatibility boundary while the INC aggregate persists Spanish state
+ * keys and older Catalog definitions may use their English equivalents. */
+export function canonicalTicketState(value: string): string {
+  const key = labelToApi(value);
+  const aliases: Record<string, string> = {
+    open: 'abierto',
+    opened: 'abierto',
+    in_progress: 'en_progreso',
+    resolved: 'resuelto',
+    closed: 'cerrado',
+    reopened: 'reabierto',
+    pending: 'en_espera',
+    pending_review: 'en_espera',
+    waiting: 'en_espera',
+    on_hold: 'en_espera',
+  };
+  return aliases[key] ?? key;
+}
+
+export function ticketStatesMatch(left: string, right: string): boolean {
+  return canonicalTicketState(left) === canonicalTicketState(right);
+}
+function priorityFromApi(value: string): string {
+  const labels: Record<string, string> = { baja: 'Low', media: 'Medium', alta: 'High', critica: 'Critical' };
+  return labels[labelToApi(value)] ?? labelFromApi(value);
+}
+function priorityToApi(value: string): string {
+  const values: Record<string, string> = { low: 'baja', medium: 'media', high: 'alta', critical: 'critica' };
+  const normalized = labelToApi(value);
+  return values[normalized] ?? normalized;
+}
 
 function toTicket(ticket: ApiTicket): Ticket {
   return {
@@ -175,11 +222,9 @@ function dataString(
  * - `title`/`description` <- the dynamic `data` bag, with a fallback: they are
  *   catalog fields, so a Definition without them is legitimate. `title` never
  *   becomes undefined, since search and the table title both index it.
- * - NO SOURCE AT ALL — deliberately left undefined/null rather than faked:
- *   `site` (no site/location concept anywhere in domain.Ticket) and
- *   `mergedCount`/`mergedIntoId` (no merge in the backend domain; the merge
- *   endpoints this file calls do not exist yet). The pool JSX already renders
- *   these as "-", so they degrade to an empty cell instead of breaking.
+ * - `site` stays optional because it is definition/resource data, not a fixed
+ *   Ticket aggregate property. Merge metadata is projected explicitly by the
+ *   collaboration repository.
  */
 function toTicketFromEntityRecord(record: TicketEntityRecord): Ticket {
   const data = record.data ?? {};
@@ -196,30 +241,21 @@ function toTicketFromEntityRecord(record: TicketEntityRecord): Ticket {
     priority: record.prioridad ? priorityFromApi(record.prioridad) : '',
     category: record.entityKey,
     requester: record.creadorId ?? '',
-    assignee: record.agenteItId || null,
+    assignee: record.primerResponsableId || record.agenteItId || null,
     createdAt: record.createdAt,
     assetId: record.recursoId || undefined,
     site: undefined,
-    mergedCount: undefined,
-    mergedIntoId: null,
+    mergedCount: record.mergedCount ?? 0,
+    mergedIntoId: record.mergedIntoId ?? null,
+    assetContext: record.assetContext,
   };
 }
 
 /**
- * `GET /entities/{entityKey}` accepts only `cursor` and `limit` — status,
- * priority, site, assignee, unassigned, q and mergedInto have no server-side
- * support (the backend deliberately does not accept params it would ignore).
- * They are applied here instead, over the page that came back.
- *
- * Stated rather than hidden: this filters a PAGE, not the whole set, the same
- * limitation the quick-view counts in TicketsList already carry. Two of these
- * are load-bearing rather than cosmetic:
- *  - `q` is the only one a user can actually type, so dropping it would make
- *    the search box look broken.
- *  - `mergedInto` MUST filter: TicketDetail asks for "tickets merged into this
- *    one", and passing that through unfiltered would claim the whole page was
- *    merged into it. With no merge data in the backend, the honest answer is
- *    an empty list, which is what this produces.
+ * The backend applies status, priority, assignee, unassigned, q and
+ * mergedInto before cursor pagination. This second pass is intentionally
+ * defensive and also handles presentation-only category/site filters; it
+ * must never be treated as the source of global counts.
  */
 function applyClientFilters(items: Ticket[], filters: TicketFilters): Ticket[] {
   const q = filters.q?.trim().toLowerCase();
@@ -246,6 +282,13 @@ export async function listTickets(filters: TicketFilters = {}): Promise<TicketPa
   const params = new URLSearchParams();
   if (filters.cursor) params.set('cursor', filters.cursor);
   if (filters.limit) params.set('limit', String(filters.limit));
+  if (filters.status) params.set('status', statusToApi(filters.status));
+  if (filters.priority) params.set('priority', priorityToApi(filters.priority));
+  if (filters.assignee) params.set('assignee', filters.assignee);
+  if (filters.unassigned) params.set('unassigned', 'true');
+  if (filters.q?.trim()) params.set('q', filters.q.trim());
+  if (filters.mergedInto) params.set('mergedInto', filters.mergedInto);
+  if (filters.assetId) params.set('assetId', filters.assetId);
   const query = params.toString();
 
   const response = await apiRequest<TicketEntityListResponse>(
@@ -309,26 +352,74 @@ export async function updateTicketStatus(
   id: string,
   status: TicketStatus,
   actorName?: string,
+  options: {
+    transitionKey?: string;
+    motivo?: string;
+    justificacionIncumplimientoSla?: string;
+  } = {},
 ): Promise<Ticket> {
-  return toTicket(
-    await apiRequest<ApiTicket>(`/tickets/${id}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status: statusToApi(status), actorName: actorName || null }),
-    }),
-  );
+  void actorName; // actor identity comes exclusively from the SIG-DESK JWT.
+  const transition = options.transitionKey
+    ? { key: options.transitionKey } as LifecycleTransitionDefinition
+    : await transitionForTarget(id, status);
+  return executeTicketTransition(id, transition.key, {
+    motivo: options.motivo,
+    justificacionIncumplimientoSla: options.justificacionIncumplimientoSla,
+  });
 }
 
 export async function assignTicket(
   id: string,
   assigneeName: string | null,
   actorName?: string,
+  transitionKey?: string,
 ): Promise<Ticket> {
-  return toTicket(
-    await apiRequest<ApiTicket>(`/tickets/${id}/assign`, {
-      method: 'POST',
-      body: JSON.stringify({ assigneeName, actorName: actorName || null }),
-    }),
+  void actorName;
+  if (!assigneeName?.trim()) {
+    throw new Error('Debes seleccionar un agente para asignar el ticket.');
+  }
+  const transition = transitionKey
+    ? { key: transitionKey } as LifecycleTransitionDefinition
+    : await transitionForTarget(id, 'In Progress');
+  return executeTicketTransition(id, transition.key, {
+    agenteItId: assigneeName.trim(),
+    tipoAsignacion: 'manual',
+  });
+}
+
+interface ExecuteTransitionPayload {
+  agenteItId?: string;
+  tipoAsignacion?: 'manual' | 'automatica';
+  justificacionIncumplimientoSla?: string;
+  motivo?: string;
+}
+
+async function transitionForTarget(id: string, targetStatus: TicketStatus): Promise<LifecycleTransitionDefinition> {
+  const ticket = await getTicket(id);
+  if (!ticket.entityId) throw new Error('El ticket no está vinculado a una definición de catálogo.');
+  const definition = await getResolvedDefinition(TICKET_ENTITY_KEY, ticket.entityId);
+  const transition = definition.lifecycle.transitions.find(
+    (candidate) => ticketStatesMatch(candidate.from, ticket.status) && ticketStatesMatch(candidate.to, targetStatus),
   );
+  if (!transition) {
+    throw new Error(`La definición histórica no permite pasar de "${ticket.status}" a "${targetStatus}".`);
+  }
+  return transition;
+}
+
+async function executeTicketTransition(
+  id: string,
+  transitionKey: string,
+  payload: ExecuteTransitionPayload,
+): Promise<Ticket> {
+  const record = await apiRequest<TicketEntityRecord>(
+    `/entities/${TICKET_ENTITY_KEY}/${encodeURIComponent(id)}/transitions/${encodeURIComponent(transitionKey)}`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  );
+  return toTicketFromEntityRecord(record);
 }
 
 export async function mergeTickets(
@@ -336,12 +427,12 @@ export async function mergeTickets(
   mergedIds: string[],
   actorName?: string,
 ): Promise<Ticket> {
-  return toTicket(
-    await apiRequest<ApiTicket>(`/tickets/${primaryId}/merge`, {
-      method: 'POST',
-      body: JSON.stringify({ mergedIds, actorName: actorName || null }),
-    }),
-  );
+  void actorName;
+  await apiRequest<void>(`/tickets/${primaryId}/merge`, {
+    method: 'POST',
+    body: JSON.stringify({ mergedIds }),
+  });
+  return getTicket(primaryId);
 }
 
 export async function unmergeTicket(
@@ -349,12 +440,9 @@ export async function unmergeTicket(
   mergedId: string,
   actorName?: string,
 ): Promise<Ticket> {
-  return toTicket(
-    await apiRequest<ApiTicket>(`/tickets/${primaryId}/unmerge/${mergedId}`, {
-      method: 'POST',
-      body: JSON.stringify({ actorName: actorName || null }),
-    }),
-  );
+  void actorName;
+  await apiRequest<void>(`/tickets/${primaryId}/unmerge/${mergedId}`, { method: 'POST' });
+  return getTicket(primaryId);
 }
 
 export async function listComments(ticketId: string): Promise<TicketComment[]> {
@@ -396,16 +484,26 @@ export async function uploadAttachment(
     body: form,
   });
   if (!response.ok) {
-    const payload = await response
+    const payload: { error?: string; message?: string } = await response
       .json()
       .catch(() => ({ error: 'The server returned an unexpected response.' }));
-    throw new Error(payload.error || `Upload failed with status ${response.status}.`);
+    throw new Error(payload.message || payload.error || `Upload failed with status ${response.status}.`);
   }
   return response.json() as Promise<TicketAttachment>;
 }
 
-export function attachmentDownloadUrl(attachmentId: string): string {
-  return `${API_BASE_URL}/attachments/${attachmentId}/download`;
+export async function downloadAttachment(attachmentId: string, fileName: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/attachments/${attachmentId}/download`, {
+    credentials: 'include',
+    headers: authHeaders(),
+  });
+  if (!response.ok) throw new Error(`No se pudo descargar el adjunto (${response.status}).`);
+  const url = URL.createObjectURL(await response.blob());
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 export async function listWatchers(ticketId: string): Promise<TicketWatcher[]> {

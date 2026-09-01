@@ -58,6 +58,26 @@ export function GuidedProgress({
   );
 }
 
+// Compara por CONTENIDO, no por serialización: los diseñadores reconstruyen
+// sus objetos con spreads en cada edición, así que el orden de claves cambia
+// sin que cambie nada real. Un `JSON.stringify` directo reportaría
+// diferencias fantasma en cuanto el resumen empezara a mirar los layouts.
+function sameContent(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (left === null || right === null || typeof left !== 'object' || typeof right !== 'object') {
+    return false;
+  }
+  if (Array.isArray(left) !== Array.isArray(right)) return false;
+  if (Array.isArray(left) && Array.isArray(right)) {
+    return left.length === right.length && left.every((item, index) => sameContent(item, right[index]));
+  }
+  const leftEntries = Object.entries(left as Record<string, unknown>).filter(([, value]) => value !== undefined);
+  const rightEntries = Object.entries(right as Record<string, unknown>).filter(([, value]) => value !== undefined);
+  if (leftEntries.length !== rightEntries.length) return false;
+  const rightMap = new Map(rightEntries);
+  return leftEntries.every(([key, value]) => rightMap.has(key) && sameContent(value, rightMap.get(key)));
+}
+
 export function ReviewEditor({
   selected,
   published,
@@ -77,24 +97,24 @@ export function ReviewEditor({
   const publishedFieldKeys = new Set(publishedFields.map((field) => field.key));
   const addedFields = specification.fields.filter((field) => !publishedFieldKeys.has(field.key));
   const removedFields = publishedFields.filter((field) => !currentFieldKeys.has(field.key));
+  // El resumen incluye los DOS sistemas de layout. Antes sólo miraba
+  // `detailLayout`, el mecanismo legado que ningún diseñador escribe ya: una
+  // sesión entera rediseñando formularios o la página de detalle se publicaba
+  // bajo el cartel "No hay diferencias frente a lo publicado".
   const changedAreas = published
-    ? [
-        JSON.stringify(specification.fields) !== JSON.stringify(published.specification.fields)
-          ? 'Campos y reglas de captura'
-          : '',
-        JSON.stringify(specification.lifecycle) !== JSON.stringify(published.specification.lifecycle)
-          ? 'Flujo de trabajo'
-          : '',
-        JSON.stringify(specification.relations ?? []) !== JSON.stringify(published.specification.relations ?? [])
-          ? 'Relaciones'
-          : '',
-        JSON.stringify(specification.bindings ?? []) !== JSON.stringify(published.specification.bindings ?? [])
-          ? 'Recursos conectados'
-          : '',
-        JSON.stringify(specification.detailLayout ?? null) !== JSON.stringify(published.specification.detailLayout ?? null)
-          ? 'Vista de detalle'
-          : '',
-      ].filter(Boolean)
+    ? (
+        [
+          [specification.fields, published.specification.fields, 'Campos y reglas de captura'],
+          [specification.lifecycle, published.specification.lifecycle, 'Flujo de trabajo'],
+          [specification.relations ?? [], published.specification.relations ?? [], 'Relaciones'],
+          [specification.bindings ?? [], published.specification.bindings ?? [], 'Recursos conectados'],
+          [specification.layouts ?? null, published.specification.layouts ?? null, 'Formularios de creación y edición'],
+          [specification.detailPage ?? null, published.specification.detailPage ?? null, 'Diseño de la página de detalle'],
+          [specification.detailLayout ?? null, published.specification.detailLayout ?? null, 'Vista de detalle (formato anterior)'],
+        ] as Array<[unknown, unknown, string]>
+      )
+        .filter(([current, previous]) => !sameContent(current, previous))
+        .map(([, , label]) => label)
     : ['Primera publicación de la entidad'];
   return (
     <section className="panel-card p-6 lg:p-8">
@@ -218,6 +238,7 @@ export function AdvancedEditor({
         por el backend antes de guardar.
       </div>
       <textarea
+        data-testid="catalog-advanced-json"
         spellCheck={false}
         value={value}
         onChange={(event) => onChange(event.target.value)}

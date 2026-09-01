@@ -1,0 +1,176 @@
+import { expect, test, type Page } from '@playwright/test';
+import {
+  mockAuthenticatedAdmin,
+  mockAuthenticatedTaskExecutor,
+  SIG_DESK_API_BASE,
+} from './support';
+
+/**
+ * La vertical de Organization en las Tasks de RFC, desde la UI.
+ *
+ * Estos casos son hermeticos a proposito: no dependen de que el arbol
+ * organizacional local tenga Inventory/Warehouse sembrados. Lo que verifican
+ * es lo que el codigo del frontend decide por su cuenta — a quien deja
+ * entrar, que nombre muestra y de donde lo saca — que es justo la parte que
+ * un walkthrough contra infraestructura real no distingue de un fallo de
+ * datos. El recorrido completo contra backend vivo esta en
+ * itsm-golden-path.spec.ts.
+ */
+
+const apiPort = new URL(SIG_DESK_API_BASE).port;
+
+const warehouseTask = {
+  task: {
+    id: '9',
+    humanId: 'TSK-000009',
+    changeId: '4',
+    title: 'Preparar stock de reemplazo',
+    description: 'Alistar el equipo de reemplazo en bodega.',
+    // Texto libre historico VACIO: una tarea nueva ya no lo usa. Si la UI
+    // mostrara nombres solo desde aqui, la tarjeta saldria en blanco.
+    area: '',
+    team: '',
+    assigneeId: '',
+    departmentId: 'depto-inv',
+    teamId: 'equipo-wh',
+    assigneeUserId: 'wanda',
+    organization: {
+      departmentId: 'depto-inv',
+      departmentName: 'Inventario',
+      teamId: 'equipo-wh',
+      teamName: 'Warehouse',
+      assigneeUserId: 'wanda',
+      assigneeName: 'Wanda Ortiz',
+      assigneeEmail: 'wanda@sig.systems',
+      capturedAt: '2026-08-31T10:00:00Z',
+    },
+    priority: 'high',
+    required: true,
+    status: 'in_progress',
+    dependencyIds: [],
+    dueAt: null,
+    blockedReason: '',
+    evidence: [],
+    createdBy: 'services-lead',
+    createdAt: '2026-08-31T10:00:00Z',
+    updatedAt: '2026-08-31T10:00:00Z',
+    completedAt: null,
+  },
+  // CONTEXTO MINIMO de la RFC padre. Si esta respuesta trajera la RFC
+  // entera, el operario estaria leyendo un cambio de otro departamento.
+  change: { id: '4', humanId: 'RFC-000004', state: 'implementing', title: 'Reemplazar switch de bodega' },
+};
+
+/** Intercepta la bandeja de trabajo asignado y recuerda que filtro pidio. */
+async function stubAssignedTasks(page: Page, items: unknown[]) {
+  const requested: string[] = [];
+  await page.route(
+    (url) => url.port === apiPort && url.pathname === '/changes/tasks/assigned',
+    async (route) => {
+      requested.push(new URL(route.request().url()).search);
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items }),
+      });
+    },
+  );
+  return requested;
+}
+
+test('el asignado entra a su bandeja aunque no pueda leer las RFC', async ({ page }) => {
+  await mockAuthenticatedTaskExecutor(page, { forwardUnmatched: false });
+  await stubAssignedTasks(page, [warehouseTask]);
+
+  // Sin ningun destino explicito: su superficie de trabajo es su bandeja.
+  await page.goto('/');
+  await expect(page).toHaveURL(/\/app\/changes\/my-tasks$/);
+
+  const nav = page.locator('#app-nav');
+  await expect(nav.getByText('Mis tareas')).toBeVisible();
+  await expect(nav.getByText('Change Mgmt')).toHaveCount(0);
+});
+
+test('la tarjeta muestra nombres del snapshot y solo el contexto minimo de la RFC', async ({ page }) => {
+  await mockAuthenticatedTaskExecutor(page, { forwardUnmatched: false });
+  await stubAssignedTasks(page, [warehouseTask]);
+
+  await page.goto('/app/changes/my-tasks');
+  const card = page.locator('article').filter({ hasText: 'TSK-000009' });
+  await expect(card).toBeVisible();
+
+  // Nombres, no UUIDs, y venidos del snapshot congelado — el texto libre
+  // llega vacio en este fixture.
+  await expect(card.getByText('Inventario')).toBeVisible();
+  await expect(card.getByText('Warehouse')).toBeVisible();
+  await expect(card.getByText('Wanda Ortiz')).toBeVisible();
+  await expect(card.getByText('wanda', { exact: true })).toHaveCount(0);
+  await expect(card.getByText('equipo-wh')).toHaveCount(0);
+
+  // De la RFC padre solo su codigo, titulo y estado.
+  await expect(card.getByText('RFC-000004')).toBeVisible();
+  await expect(card.getByText('Reemplazar switch de bodega')).toBeVisible();
+  await expect(card.getByText('implementing')).toBeVisible();
+});
+
+test('completar exige evidencia y la envia en la transicion', async ({ page }) => {
+  await mockAuthenticatedTaskExecutor(page, { forwardUnmatched: false });
+  await stubAssignedTasks(page, [warehouseTask]);
+
+  let sent: Record<string, unknown> | null = null;
+  await page.route(
+    (url) => url.port === apiPort && url.pathname.endsWith('/tasks/9/transitions/complete'),
+    async (route) => {
+      sent = route.request().postDataJSON() as Record<string, unknown>;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ...warehouseTask.task, status: 'completed', evidence: ['Stock alistado'] }),
+      });
+    },
+  );
+
+  await page.goto('/app/changes/my-tasks');
+  await page.getByRole('button', { name: /Completar con evidencia/ }).click();
+
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  // El textarea es `required`: enviar vacio no dispara la peticion.
+  await dialog.getByRole('button', { name: /Completar tarea/ }).click();
+  expect(sent).toBeNull();
+
+  await dialog.getByRole('textbox').fill('Stock alistado');
+  await dialog.getByRole('button', { name: /Completar tarea/ }).click();
+
+  await expect(page.getByText(/TSK-000009 ahora está completada/i)).toBeVisible();
+  expect(sent).toEqual({ evidence: ['Stock alistado'] });
+});
+
+test('el filtro por defecto pide solo lo asignado a quien pregunta', async ({ page }) => {
+  await mockAuthenticatedTaskExecutor(page, { forwardUnmatched: false });
+  const requested = await stubAssignedTasks(page, [warehouseTask]);
+
+  await page.goto('/app/changes/my-tasks');
+  await expect(page.locator('article').filter({ hasText: 'TSK-000009' })).toBeVisible();
+  expect(requested[0]).toBe('?assignedToMe=true');
+
+  await page.getByRole('tab', { name: 'De mi equipo' }).click();
+  await expect.poll(() => requested).toContain('?scope=team');
+});
+
+test('la bandeja vacia se distingue de un fallo de carga', async ({ page }) => {
+  await mockAuthenticatedTaskExecutor(page, { forwardUnmatched: false });
+  await stubAssignedTasks(page, []);
+
+  await page.goto('/app/changes/my-tasks');
+  await expect(page.getByText('No tienes tareas asignadas')).toBeVisible();
+});
+
+test('un administrador global ve la bandeja y tambien el tablero de RFC', async ({ page }) => {
+  await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
+  await stubAssignedTasks(page, [warehouseTask]);
+
+  await page.goto('/app/changes/my-tasks');
+  await expect(page.locator('article').filter({ hasText: 'TSK-000009' })).toBeVisible();
+  await expect(page.locator('#app-nav').getByText('Change Mgmt')).toBeVisible();
+});

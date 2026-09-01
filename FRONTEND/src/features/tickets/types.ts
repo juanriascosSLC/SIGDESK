@@ -42,6 +42,18 @@ export interface Ticket {
   site?: string;
   mergedCount?: number;
   mergedIntoId?: string | null;
+  assetContext?: TicketAssetContext;
+}
+
+export interface TicketAssetLink {
+  assetId: string;
+  role?: string;
+  snapshot: Record<string, unknown>;
+}
+
+export interface TicketAssetContext {
+  siteAssetId?: string;
+  links: TicketAssetLink[];
 }
 
 export interface CreateTicketInput {
@@ -65,6 +77,7 @@ export interface TicketFilters {
   cursor?: string;
   limit?: number;
   mergedInto?: string;
+  assetId?: string;
 }
 
 export interface TicketPage {

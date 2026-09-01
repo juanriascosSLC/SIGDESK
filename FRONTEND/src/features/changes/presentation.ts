@@ -1,4 +1,5 @@
 import type { EntityRecord } from '@/features/catalog/metamodel';
+import type { ChangeTaskStatus } from './api';
 
 export const changeStateLabels: Record<string, string> = {
   draft: 'Borrador',
@@ -26,6 +27,21 @@ export const changeStateStyles: Record<string, string> = {
   failed: 'border-red-500/30 bg-red-500/10 text-red-300',
   rolled_back: 'border-orange-500/30 bg-orange-500/10 text-orange-300',
   closed: 'border-slate-500/30 bg-slate-500/10 text-slate-300',
+};
+
+/**
+ * Etiquetas de estado de una Task de RFC. Viven aquí y no en el tablero
+ * porque ahora hay dos superficies que las pintan: el plan de trabajo de la
+ * RFC (quien gobierna el cambio) y «Mis tareas» (quien lo ejecuta). Con una
+ * copia por vista, la misma tarea acabaría llamándose distinto en cada una.
+ */
+export const taskStatusMeta: Record<ChangeTaskStatus, { label: string; style: string }> = {
+  pending: { label: 'Esperando dependencias', style: 'border-slate-500/30 bg-slate-500/10 text-slate-300' },
+  ready: { label: 'Lista', style: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300' },
+  in_progress: { label: 'En progreso', style: 'border-blue-500/30 bg-blue-500/10 text-blue-300' },
+  blocked: { label: 'Bloqueada', style: 'border-amber-500/30 bg-amber-500/10 text-amber-300' },
+  completed: { label: 'Completada', style: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' },
+  canceled: { label: 'Cancelada', style: 'border-red-500/30 bg-red-500/10 text-red-300' },
 };
 
 export const riskStyles: Record<string, string> = {

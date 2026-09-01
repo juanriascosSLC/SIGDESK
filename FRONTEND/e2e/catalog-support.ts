@@ -17,6 +17,7 @@ export type Field = {
   defaultValue?: unknown;
   options?: Array<{ value: string; label?: string }>;
   minLength?: number;
+  bindsTo?: 'recursoId' | 'agenteItId' | 'siteAssetId' | 'assetId';
 };
 
 export type Placement = {
@@ -38,6 +39,12 @@ export type Definition = {
     detailLayout?: {
       fields?: Placement[];
     };
+    // Metamodelo 1.6 — las tres paginas disenables. Se declaran opacas a
+    // proposito: estos specs solo comprueban que la definicion publicada las
+    // lleva consigo, no su contenido.
+    detailPage?: unknown;
+    createPage?: unknown;
+    editPage?: unknown;
   };
 };
 
@@ -121,22 +128,36 @@ export function definitionData(
 ): Record<string, unknown> {
   const fields = definition.specification.fields;
   const fieldsByKey = new Map(fields.map((field) => [field.key, field]));
+  const aliases: Record<string, string[]> = {
+    title: ['title', 'titulo', 'asunto'],
+    description: ['description', 'descripcion'],
+    priority: ['priority', 'prioridad'],
+    category: ['category', 'categoria'],
+    site: ['site', 'sitio'],
+    assetId: ['assetid', 'activo', 'dispositivo', 'equipo'],
+  };
   const data: Record<string, unknown> = {};
 
   for (const field of fields) {
-    if (!excluded.has(field.key) && field.defaultValue !== undefined) {
+    if (!field.bindsTo && !excluded.has(field.key) && field.defaultValue !== undefined) {
       data[field.key] = field.defaultValue;
     }
   }
   for (const [key, value] of Object.entries(requested)) {
-    const field = fieldsByKey.get(key);
-    if (field && !excluded.has(key)) {
-      data[key] = normalizeRequestedValue(field, value);
+    const semanticKeys = aliases[key] ?? [key];
+    const field = fieldsByKey.get(key) ?? fields.find((candidate) => {
+      const normalizedKey = candidate.key.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+      const normalizedLabel = candidate.label.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+      return semanticKeys.some((semantic) => semantic.toLocaleLowerCase() === normalizedKey || semantic.toLocaleLowerCase() === normalizedLabel);
+    });
+    if (field && !excluded.has(field.key)) {
+      data[field.key] = normalizeRequestedValue(field, value);
     }
   }
   for (let pass = 0; pass < 2; pass += 1) {
     for (const field of fields) {
       if (
+        field.bindsTo ||
         excluded.has(field.key) ||
         !conditionMatches(field.visibleWhen, data)
       ) {

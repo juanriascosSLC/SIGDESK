@@ -38,10 +38,9 @@ export function permissionKey(permission: Permission): string {
   return `${permission.entity}:${permission.action}:${permission.scope}`;
 }
 
-/** Acciones/alcances are fixed enums; entidades is dynamic — only the
- *  entities some role already has a permission over (CatalogoPermisosUseCase
- *  derives it, it is not a fixed registry). Can be sparse right after a
- *  fresh bootstrap. */
+/** The backend publishes the complete, deterministic permission vocabulary;
+ *  a fresh installation offers the same entities even before custom roles
+ *  have been created. */
 export interface PermissionCatalog {
   entities: string[];
   actions: PermissionAction[];
@@ -56,6 +55,8 @@ export interface Role {
 }
 
 export interface KnownUser {
+  /** Internal Organization user id; null until access is provisioned. */
+  id: string | null;
   username: string;
   displayName: string;
   email: string;
@@ -68,6 +69,8 @@ export interface KnownUser {
    * `hasAccount`.
    */
   roleId: string | null;
+  /** Current company/department/team snapshot in Organization. */
+  companyId: string | null;
   /** False for an identity that only ever reached the login screen — no
    *  organization_service Usuario exists for them yet, so
    *  PUT /admin/users/:username/roles would 404 (ADR-0017 decisión 4:
@@ -75,6 +78,13 @@ export interface KnownUser {
   hasAccount: boolean;
   companyId: string | null;
   status: string | null;
+}
+
+export interface Company {
+  id: string;
+  name: string;
+  type: 'empresa' | 'departamento' | 'equipo';
+  parentId: string | null;
 }
 
 // --- Wire DTOs (organization_service/adapters/in/dto.go) -------------------
@@ -107,22 +117,42 @@ function roleFromDTO(dto: RolDTO): Role {
 
 interface AdminUsuarioDTO {
   username: string;
+  usuario_id?: string;
   nombre: string;
   email: string;
   role_id?: string;
+  company_id?: string;
   ultimo_acceso?: string;
   tiene_usuario: boolean;
   company_id?: string;
   estado?: string;
 }
 
+interface CompanyDTO {
+  id: string;
+  nombre: string;
+  tipo: Company['type'];
+  parent_id?: string;
+}
+
+function companyFromDTO(dto: CompanyDTO): Company {
+  return {
+    id: dto.id,
+    name: dto.nombre,
+    type: dto.tipo,
+    parentId: dto.parent_id || null,
+  };
+}
+
 function knownUserFromDTO(dto: AdminUsuarioDTO): KnownUser {
   return {
+    id: dto.usuario_id || null,
     username: dto.username,
     displayName: dto.nombre,
     email: dto.email,
     lastSeenAt: dto.ultimo_acceso ?? null,
     roleId: dto.role_id || null,
+    companyId: dto.company_id || null,
     hasAccount: dto.tiene_usuario,
     companyId: dto.company_id ?? null,
     status: dto.estado ?? null,
@@ -137,9 +167,8 @@ interface CatalogoPermisosDTO {
 
 export const rbacService = {
   /** The permission vocabulary SIG-DESK's own roles can be granted. Comes
-   *  from the backend so the screen can never offer a combination the
-   *  domain would reject. `entities` reflects only entities already in use
-   *  by some role (CatalogoPermisosUseCase) — sparse on a fresh install. */
+   *  from the backend so the screen can never offer a capability unknown to
+   *  the current deployment. */
   listPermissionCatalog: async (): Promise<PermissionCatalog> => {
     const dto = await apiRequest<CatalogoPermisosDTO>('/admin/permissions');
     return { entities: dto.entidades, actions: dto.acciones, scopes: dto.alcances };
@@ -150,11 +179,8 @@ export const rbacService = {
     return response.items.map(roleFromDTO);
   },
 
-  /** No POST /admin/roles exists yet (TODO-089 left creation on the bare,
-   *  pre-existing namespace) — organization_service only accepts it at
-   *  POST /roles. */
   createRole: async (input: { name: string; description: string }): Promise<Role> => {
-    const dto = await apiRequest<RolDTO>('/roles', {
+    const dto = await apiRequest<RolDTO>('/admin/roles', {
       method: 'POST',
       body: JSON.stringify({ nombre: input.name, descripcion: input.description }),
     });
@@ -194,6 +220,59 @@ export const rbacService = {
     const response = await apiRequest<{ items: AdminUsuarioDTO[] }>('/admin/users');
     return response.items.map(knownUserFromDTO);
   },
+
+  listCompanies: async (): Promise<Company[]> => {
+    const response = await apiRequest<{ items: CompanyDTO[] }>('/admin/companies');
+    return response.items.map(companyFromDTO);
+  },
+
+  createCompany: async (input: {
+    name: string;
+    type: Company['type'];
+    parentId: string | null;
+  }): Promise<Company> => {
+    const dto = await apiRequest<CompanyDTO>('/companies', {
+      method: 'POST',
+      body: JSON.stringify({
+        nombre: input.name,
+        tipo: input.type,
+        ...(input.parentId ? { parent_id: input.parentId } : {}),
+      }),
+    });
+    return companyFromDTO(dto);
+  },
+
+  updateCompany: async (
+    companyId: string,
+    input: { name?: string; parentId?: string },
+  ): Promise<Company> => {
+    const dto = await apiRequest<CompanyDTO>(`/companies/${companyId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        ...(input.name ? { nombre: input.name } : {}),
+        ...(input.parentId ? { parent_id: input.parentId } : {}),
+      }),
+    });
+    return companyFromDTO(dto);
+  },
+
+  provisionUser: (
+    username: string,
+    input: { companyId: string; roleId: string },
+  ): Promise<void> =>
+    apiRequest<void>(`/admin/users/${encodeURIComponent(username)}/provision`, {
+      method: 'POST',
+      body: JSON.stringify({ company_id: input.companyId, role_id: input.roleId }),
+    }),
+
+  updateUser: (
+    userId: string,
+    input: { companyId: string; roleId: string },
+  ): Promise<void> =>
+    apiRequest<void>(`/usuarios/${encodeURIComponent(userId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ company_id: input.companyId, role_id: input.roleId }),
+    }),
 
   /** TODO-088: one role per user, ratified as the authoritative model — the
    *  backend rejects a plural roleIds body. Requires the target to already

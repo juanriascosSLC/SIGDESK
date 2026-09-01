@@ -3,46 +3,44 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { AuthProvider } from './features/auth/AuthProvider';
 import { useAuth } from './features/auth/useAuth';
 import { PERMISSIONS } from './features/auth/permissions';
+import { CatalogBuilderErrorBoundary } from './features/admin/catalog-builder/CatalogBuilderErrorBoundary';
 
 // Layouts
 import AgentLayout from './layouts/AgentLayout';
 import EndUserLayout from './layouts/EndUserLayout';
 
-// Auth Features
-import Login from './features/auth/Login';
-import ForgotPassword from './features/auth/ForgotPassword';
-
-// App Features (Agent/Admin)
-import TicketsKanban from './features/tickets/TicketsKanban';
-import TicketDetail from './features/tickets/TicketDetail';
-import TicketsList from './features/tickets/TicketsList';
-import CatalogForm from './features/catalog/CatalogForm';
-import ApiKeys from './features/settings/ApiKeys';
-import ChatOps from './features/settings/ChatOps';
-import ChangeBoard from './features/changes/ChangeBoard';
-import ChangeDetail from './features/changes/ChangeDetail';
-import AutomationsList from './features/automations/AutomationsList';
-import WorkflowBuilder from './features/automations/WorkflowBuilder';
-import KnowledgeBase from './features/knowledge/KnowledgeBase';
-import ArticleDetail from './features/knowledge/ArticleDetail';
-import SlaPolicies from './features/settings/SlaPolicies';
-import Reports from './features/reports/Reports';
-import ProblemsList from './features/problems/ProblemsList';
-import ProblemDetail from './features/problems/ProblemDetail';
-
-// End User Portal Features
-import EndUserDashboard from './features/endUser/EndUserDashboard';
-import MyTickets from './features/endUser/MyTickets';
-
-// Admin Features
-import UsersManager from './features/admin/UsersManager';
-const CatalogBuilder = React.lazy(
-  () => import('./features/admin/CatalogBuilder'),
+// Route-level code splitting: opening Tickets must not download Catalog
+// Builder, Assets, Reports and every administration screen up front.
+const Login = React.lazy(() => import('./features/auth/Login'));
+const ForgotPassword = React.lazy(() => import('./features/auth/ForgotPassword'));
+const TicketsKanban = React.lazy(() => import('./features/tickets/TicketsKanban'));
+const TicketDetail = React.lazy(() => import('./features/tickets/TicketDetail'));
+const TicketsList = React.lazy(() => import('./features/tickets/TicketsList'));
+const CatalogForm = React.lazy(() => import('./features/catalog/CatalogForm'));
+const ApiKeys = React.lazy(() => import('./features/settings/ApiKeys'));
+const ChatOps = React.lazy(() => import('./features/settings/ChatOps'));
+const ChangeBoard = React.lazy(() => import('./features/changes/ChangeBoard'));
+const ChangeDetail = React.lazy(() => import('./features/changes/ChangeDetail'));
+const MyChangeTasks = React.lazy(() => import('./features/changes/MyChangeTasks'));
+const AutomationsList = React.lazy(() => import('./features/automations/AutomationsList'));
+const WorkflowBuilder = React.lazy(() => import('./features/automations/WorkflowBuilder'));
+const KnowledgeBase = React.lazy(() => import('./features/knowledge/KnowledgeBase'));
+const ArticleDetail = React.lazy(() => import('./features/knowledge/ArticleDetail'));
+const SlaPolicies = React.lazy(() => import('./features/settings/SlaPolicies'));
+const Reports = React.lazy(() => import('./features/reports/Reports'));
+const ProblemsList = React.lazy(() => import('./features/problems/ProblemsList'));
+const ProblemDetail = React.lazy(() => import('./features/problems/ProblemDetail'));
+const AssetsCMDB = React.lazy(() => import('./features/assets/AssetsCMDB'));
+const EndUserDashboard = React.lazy(() => import('./features/endUser/EndUserDashboard'));
+const MyTickets = React.lazy(() => import('./features/endUser/MyTickets'));
+const UsersManager = React.lazy(() => import('./features/admin/UsersManager'));
+const CatalogBuilder = React.lazy(() => import('./features/admin/CatalogBuilder'));
+const Dashboard = React.lazy(() =>
+  import('./features/dashboard/Dashboard').then((module) => ({ default: module.Dashboard })),
 );
-
-// Mock components previously in App.tsx
-import { Dashboard } from './features/dashboard/Dashboard';
-import { ServiceCatalog } from './features/catalog/ServiceCatalog';
+const ServiceCatalog = React.lazy(() =>
+  import('./features/catalog/ServiceCatalog').then((module) => ({ default: module.ServiceCatalog })),
+);
 
 function FullScreenLoader() {
   return (
@@ -128,6 +126,9 @@ function LandingRedirect() {
   if (canManageUsersAndRoles) return <Navigate to="/app" replace />;
   if (canViewTickets) return <Navigate to="/app/tickets" replace />;
   if (can(PERMISSIONS.changesView)) return <Navigate to="/app/changes" replace />;
+  // Su superficie de trabajo es su propia bandeja de tareas, no el tablero
+  // de RFC — que ademas no puede leer.
+  if (can(PERMISSIONS.changeTasksView)) return <Navigate to="/app/changes/my-tasks" replace />;
   return <Navigate to="/portal" replace />;
 }
 
@@ -137,7 +138,7 @@ function LandingRedirect() {
  * than a role string.
  */
 function AppRoutes() {
-  const { canManageUsersAndRoles, canViewTickets } = useAuth();
+  const { canManageUsersAndRoles, canViewTickets, can } = useAuth();
 
   return (
     <Routes>
@@ -175,18 +176,34 @@ function AppRoutes() {
       <Route path="/app/*" element={
         <ProtectedRoute
           requiredAnyPermissions={[
-            PERMISSIONS.ticketsView,
             PERMISSIONS.changesView,
+            // Quien solo EJECUTA tareas de RFC no tiene `changes:read` — su
+            // grant es sobre `change_tasks`. Sin esta linea, el asignado de
+            // una Task no podia entrar al workspace donde vive su trabajo.
+            PERMISSIONS.changeTasksView,
             PERMISSIONS.problemsView,
+            PERMISSIONS.assetsView,
+            PERMISSIONS.reportsView,
+            PERMISSIONS.automationsView,
+            PERMISSIONS.slaView,
+            PERMISSIONS.catalogAuthor,
           ]}
-          orCondition={canManageUsersAndRoles || canViewTickets}
+          orCondition={canManageUsersAndRoles || canViewTickets || can(PERMISSIONS.assetsView)}
           fallbackTo="/portal"
         >
           <AgentLayout>
             <Routes>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/catalog" element={<ServiceCatalog />} />
-              <Route path="/catalog/:categoryId" element={<CatalogForm />} />
+              <Route path="/catalog" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.catalogView}>
+                  <ServiceCatalog />
+                </ProtectedRoute>
+              } />
+              <Route path="/catalog/:categoryId" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.catalogView}>
+                  <CatalogForm />
+                </ProtectedRoute>
+              } />
               {/* Gated by the real `tickets` grant from the JWT, not by
                   PERMISSIONS.ticketsView: that dotted SIGTools-registry key
                   is never emitted by organization_service (emitir_sesion.go
@@ -213,14 +230,40 @@ function AppRoutes() {
                   <ChangeBoard />
                 </ProtectedRoute>
               } />
+              {/* Antes de /changes/:id a proposito: si no, "my-tasks" se
+                  interpreta como el identificador de una RFC. Y se gatea con
+                  changeTasksView, NO con changesView: ver el trabajo que te
+                  asignaron no es leer las RFC de otro departamento. */}
+              <Route path="/changes/my-tasks" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.changeTasksView}>
+                  <MyChangeTasks />
+                </ProtectedRoute>
+              } />
               <Route path="/changes/:id" element={
                 <ProtectedRoute requiredPermission={PERMISSIONS.changesView}>
                   <ChangeDetail />
                 </ProtectedRoute>
               } />
-              <Route path="/knowledge" element={<KnowledgeBase />} />
-              <Route path="/knowledge/:id" element={<ArticleDetail />} />
-              <Route path="/reports" element={<Reports />} />
+              <Route path="/knowledge" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.knowledgeView}>
+                  <KnowledgeBase />
+                </ProtectedRoute>
+              } />
+              <Route path="/knowledge/:id" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.knowledgeView}>
+                  <ArticleDetail />
+                </ProtectedRoute>
+              } />
+              <Route path="/reports" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.reportsView}>
+                  <Reports />
+                </ProtectedRoute>
+              } />
+              <Route path="/assets" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.assetsView}>
+                  <AssetsCMDB />
+                </ProtectedRoute>
+              } />
               <Route path="/problems" element={
                 <ProtectedRoute requiredPermission={PERMISSIONS.problemsView}>
                   <ProblemsList />
@@ -231,8 +274,16 @@ function AppRoutes() {
                   <ProblemDetail />
                 </ProtectedRoute>
               } />
-              <Route path="/automations" element={<AutomationsList />} />
-              <Route path="/automations/:id" element={<WorkflowBuilder />} />
+              <Route path="/automations" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.automationsView}>
+                  <AutomationsList />
+                </ProtectedRoute>
+              } />
+              <Route path="/automations/:id" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.automationsManage}>
+                  <WorkflowBuilder />
+                </ProtectedRoute>
+              } />
 
               {/* Administration — Users & Roles is gated by a real
                   organization_service permission (roles/usuarios), decoded
@@ -248,12 +299,20 @@ function AppRoutes() {
               <Route
                 path="/admin/catalog-builder"
                 element={
-                  <React.Suspense fallback={<FullScreenLoader />}>
-                    <CatalogBuilder />
-                  </React.Suspense>
+                  <ProtectedRoute requiredPermission={PERMISSIONS.catalogAuthor} fallbackTo="/app">
+                    <React.Suspense fallback={<FullScreenLoader />}>
+                      <CatalogBuilderErrorBoundary>
+                        <CatalogBuilder />
+                      </CatalogBuilderErrorBoundary>
+                    </React.Suspense>
+                  </ProtectedRoute>
                 }
               />
-              <Route path="/settings/sla" element={<SlaPolicies />} />
+              <Route path="/settings/sla" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.slaView} fallbackTo="/app">
+                  <SlaPolicies />
+                </ProtectedRoute>
+              } />
               <Route path="/settings/chatops" element={<ChatOps />} />
               <Route path="/settings/api-keys" element={<ApiKeys />} />
 
@@ -270,7 +329,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <React.Suspense fallback={<FullScreenLoader />}>
+          <AppRoutes />
+        </React.Suspense>
       </AuthProvider>
     </BrowserRouter>
   );

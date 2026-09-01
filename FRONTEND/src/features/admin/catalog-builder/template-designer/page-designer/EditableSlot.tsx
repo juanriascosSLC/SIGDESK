@@ -1,19 +1,73 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useDraggable } from '@dnd-kit/core';
-import { GripVertical, Lock, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Copy, GripVertical, Lock, MoveLeft, MoveRight, Trash2, type LucideIcon } from 'lucide-react';
 import { ALLOWED_SPANS, type DesignerSpan } from './designer-grid-model';
+
+export interface SlotNeighbours {
+  canMoveLeft: boolean;
+  canMoveRight: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+}
+
+function ChromeButton({
+  label,
+  onClick,
+  danger,
+  children,
+  testId,
+  disabled,
+}: {
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+  children: ReactNode;
+  testId?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      data-testid={testId}
+      disabled={disabled}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
+      className={`rounded-md p-1 transition-colors disabled:opacity-25 ${
+        danger ? 'text-on-surface-variant hover:bg-red-500/15 hover:text-red-300' : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
 
 // Wraps the REAL rendered widget/field/content (same component runtime and
 // preview use) with the chrome needed to edit it in place: selection ring,
-// drag handle, remove button, resize handle, locked indicator. This is what
-// makes the designer WYSIWYG instead of showing technical placeholder cards.
+// drag handle, a labelled toolbar, keyboard-reachable move/duplicate/remove
+// buttons, a resize handle and a live width readout.
+//
+// The rendered child is intentionally inert (`pointer-events: none`): this is
+// a canvas, and a click anywhere on a card must select that card. It used to
+// re-enable pointer events on the child, which meant clicking RESOLVER or the
+// status dropdown of the previewed actions bar operated the *simulated* ticket
+// instead of selecting the element the admin was trying to configure.
 export function EditableSlot({
   cellId,
   span,
   locked,
   selected,
+  label,
+  icon: Icon,
+  neighbours,
+  canDuplicate,
   onSelect,
   onRemove,
+  onDuplicate,
+  onMove,
   onResize,
   onResizeEnd,
   children,
@@ -22,8 +76,14 @@ export function EditableSlot({
   span: DesignerSpan;
   locked: boolean;
   selected: boolean;
+  label: string;
+  icon?: LucideIcon;
+  neighbours: SlotNeighbours;
+  canDuplicate: boolean;
   onSelect: () => void;
   onRemove: () => void;
+  onDuplicate: () => void;
+  onMove: (direction: 'left' | 'right' | 'up' | 'down') => void;
   onResize: (nextSpan: DesignerSpan) => void;
   onResizeEnd: (nextSpan: DesignerSpan) => void;
   children: ReactNode;
@@ -73,66 +133,141 @@ export function EditableSlot({
     setResizing(true);
   }
 
+  // The chrome is revealed on hover, but stays pinned open while the element
+  // is selected — otherwise the buttons vanish the moment the pointer travels
+  // to the properties panel.
+  const chromeVisible = selected ? 'opacity-100' : 'opacity-0 group-hover/slot:opacity-100 focus-within:opacity-100';
+
   return (
     <div
       ref={(node) => {
         wrapperRef.current = node;
         setNodeRef(node);
       }}
+      role="group"
+      aria-label={`${label} — ${span} de 12 columnas`}
       onClick={onSelect}
       data-testid={`page-designer-slot-${cellId}`}
-      className={`group/slot relative h-full cursor-pointer rounded-2xl transition-shadow ${
-        selected ? 'ring-2 ring-primary' : 'hover:ring-1 hover:ring-primary/40'
+      className={`group/slot relative h-full cursor-pointer rounded-2xl outline-none transition-shadow ${
+        selected ? 'ring-2 ring-primary' : 'hover:ring-1 hover:ring-primary/40 focus-within:ring-1 focus-within:ring-primary/40'
       } ${isDragging ? 'opacity-40' : ''}`}
       style={transform ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: 20 } : undefined}
     >
-      <div className="pointer-events-none absolute inset-0 rounded-2xl border border-dashed border-transparent group-hover/slot:border-primary/30" />
-      <div className="absolute -top-3 left-2 z-10 flex items-center gap-1 opacity-0 transition-opacity group-hover/slot:opacity-100">
-        {!locked && (
+      <div
+        className={`pointer-events-none absolute inset-0 rounded-2xl border border-dashed transition-colors ${
+          selected ? 'border-primary/40' : 'border-transparent group-hover/slot:border-primary/25'
+        }`}
+      />
+
+      {/* Toolbar — identity on the left, destructive action on the right, so
+          the label never sits under the pointer on its way to Quitar. */}
+      <div
+        className={`absolute -top-3.5 left-2 right-2 z-20 flex items-center justify-between gap-2 transition-opacity ${chromeVisible}`}
+      >
+        <div className="flex min-w-0 items-center gap-0.5 rounded-lg border border-border/50 bg-surface-container px-1 py-0.5 shadow-lg">
+          {locked ? (
+            <span
+              aria-label="Bloqueado"
+              title="Elemento fijo de esta zona: no se puede mover ni quitar"
+              className="p-1 text-on-surface-variant"
+            >
+              <Lock className="h-3 w-3" />
+            </span>
+          ) : (
+            <button
+              type="button"
+              {...attributes}
+              {...listeners}
+              aria-label="Arrastrar"
+              title="Arrastrar para mover"
+              data-testid={`page-designer-drag-${cellId}`}
+              className="cursor-grab rounded-md p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface active:cursor-grabbing"
+            >
+              <GripVertical className="h-3 w-3" />
+            </button>
+          )}
+          {/* The accessible way to select this element: the wrapper stays a
+              plain div so the chrome buttons are not nested inside a control. */}
           <button
             type="button"
-            {...attributes}
-            {...listeners}
-            aria-label="Arrastrar"
-            data-testid={`page-designer-drag-${cellId}`}
-            className="cursor-grab rounded-lg border border-border/50 bg-surface-container p-1 text-on-surface-variant shadow active:cursor-grabbing"
+            aria-pressed={selected}
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelect();
+            }}
+            title={`Seleccionar ${label}`}
+            className="flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 text-left hover:bg-surface-container-high"
           >
-            <GripVertical className="h-3 w-3" />
+            {Icon && <Icon className="h-3 w-3 shrink-0 text-primary/80" />}
+            <span className="truncate text-[10px] font-black uppercase tracking-wider text-on-surface-variant">
+              {label}
+            </span>
           </button>
-        )}
-        {locked && (
-          <span
-            aria-label="Bloqueado"
-            className="rounded-lg border border-border/50 bg-surface-container p-1 text-on-surface-variant shadow"
-          >
-            <Lock className="h-3 w-3" />
+          <span className="shrink-0 rounded bg-surface-container-high px-1.5 py-0.5 font-mono text-[9px] font-black text-primary">
+            {span}/12
           </span>
+        </div>
+
+        {!locked && (
+          <div className="flex items-center gap-0.5 rounded-lg border border-border/50 bg-surface-container px-1 py-0.5 shadow-lg">
+            <ChromeButton label="Mover a la izquierda" onClick={() => onMove('left')} disabled={!neighbours.canMoveLeft}>
+              <MoveLeft className="h-3 w-3" />
+            </ChromeButton>
+            <ChromeButton label="Mover a la derecha" onClick={() => onMove('right')} disabled={!neighbours.canMoveRight}>
+              <MoveRight className="h-3 w-3" />
+            </ChromeButton>
+            <ChromeButton label="Subir la fila" onClick={() => onMove('up')} disabled={!neighbours.canMoveUp}>
+              <ArrowUp className="h-3 w-3" />
+            </ChromeButton>
+            <ChromeButton label="Bajar la fila" onClick={() => onMove('down')} disabled={!neighbours.canMoveDown}>
+              <ArrowDown className="h-3 w-3" />
+            </ChromeButton>
+            {canDuplicate && (
+              <ChromeButton label="Duplicar" onClick={onDuplicate}>
+                <Copy className="h-3 w-3" />
+              </ChromeButton>
+            )}
+            <ChromeButton
+              label="Quitar"
+              onClick={onRemove}
+              danger
+              testId={`page-designer-remove-${cellId}`}
+            >
+              <Trash2 className="h-3 w-3" />
+            </ChromeButton>
+          </div>
         )}
       </div>
+
+      {/* `inert` on top of pointer-events: since 1.6 the form surfaces render
+          REAL inputs here, and pointer-events alone still leaves them in the
+          tab order — tabbing across the canvas would drop the caret inside a
+          simulated form instead of moving between cards. */}
+      <div inert className="pointer-events-none h-full select-none">{children}</div>
+
       {!locked && (
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onRemove();
-          }}
-          aria-label="Quitar"
-          data-testid={`page-designer-remove-${cellId}`}
-          className="absolute -top-3 right-2 z-10 rounded-lg border border-border/50 bg-surface-container p-1 text-on-surface-variant opacity-0 shadow transition-opacity hover:text-red-400 group-hover/slot:opacity-100"
-        >
-          <X className="h-3 w-3" />
-        </button>
+        <>
+          <div
+            onPointerDown={startResize}
+            data-testid={`page-designer-resize-${cellId}`}
+            role="separator"
+            aria-label="Cambiar ancho"
+            title="Arrastra para cambiar el ancho"
+            className={`absolute -right-1.5 top-1/2 z-20 flex h-12 w-3 -translate-y-1/2 cursor-ew-resize items-center justify-center rounded-full border bg-surface-container shadow transition-all ${
+              resizing
+                ? 'border-primary bg-primary/20 opacity-100'
+                : `border-border/60 hover:border-primary ${selected ? 'opacity-100' : 'opacity-0 group-hover/slot:opacity-100'}`
+            }`}
+          >
+            <span aria-hidden className="h-4 w-px bg-on-surface-variant/60" />
+          </div>
+          {resizing && (
+            <span className="pointer-events-none absolute -top-3.5 left-1/2 z-30 -translate-x-1/2 rounded-full border border-primary bg-surface-container px-2 py-0.5 font-mono text-[10px] font-black text-primary shadow-lg">
+              {span} / 12 columnas
+            </span>
+          )}
+        </>
       )}
-      <div className="pointer-events-none h-full">
-        <div className="pointer-events-auto h-full">{children}</div>
-      </div>
-      <div
-        onPointerDown={startResize}
-        data-testid={`page-designer-resize-${cellId}`}
-        role="separator"
-        aria-label="Cambiar ancho"
-        className="absolute -right-1.5 top-1/2 z-10 h-10 w-3 -translate-y-1/2 cursor-ew-resize rounded-full border border-border/50 bg-surface-container opacity-0 shadow transition-opacity group-hover/slot:opacity-100"
-      />
     </div>
   );
 }

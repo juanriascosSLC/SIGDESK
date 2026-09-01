@@ -20,6 +20,7 @@ import {
   isFieldRequired,
   isFieldVisible,
   listEntityRelations,
+  deleteChangeRelation,
   type FieldDefinition,
   type TransitionDefinition,
 } from '@/features/catalog/metamodel';
@@ -39,6 +40,8 @@ import {
   riskStyles,
   textData,
 } from './presentation';
+import { ChangeTasksBoard } from './ChangeTasksBoard';
+import { ConfiguredRecordDetail } from '@/features/tickets/ConfiguredRecordDetail';
 
 function fieldValue(field: FieldDefinition, value: unknown): string {
   if (value === null || value === undefined || value === '') return '—';
@@ -84,7 +87,7 @@ export default function ChangeDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { can } = useAuth();
+  const { can, displayName } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Record<string, unknown>>({});
   const [notice, setNotice] = useState('');
@@ -149,6 +152,10 @@ export default function ChangeDetail() {
       void queryClient.invalidateQueries({ queryKey: ['changes'] });
       setNotice(`Estado actualizado a ${changeStateLabels[updated.state] ?? updated.state}.`);
     },
+  });
+  const deleteRelationMutation = useMutation({
+    mutationFn: (relationId: string) => deleteChangeRelation(id!, relationId),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['changes', id, 'relations'] }),
   });
 
   const editableFields = useMemo(() => {
@@ -227,6 +234,7 @@ export default function ChangeDetail() {
   const change = changeQuery.data;
   const specification = manifestQuery.data.specification;
   const risk = textData(change, 'riskLevel') || 'medium';
+  const riskLabel: Record<string, string> = { low: 'Bajo', medium: 'Medio', high: 'Alto', critical: 'Crítico' };
   const availableTransitions = specification.lifecycle.transitions.filter(
     (transition) =>
       transition.from === change.state &&
@@ -261,7 +269,70 @@ export default function ChangeDetail() {
     });
   }
 
-  const actionError = transitionMutation.error ?? updateMutation.error;
+  const actionError = transitionMutation.error ?? updateMutation.error ?? deleteRelationMutation.error;
+
+  const configuredEditPanel = isEditing ? (
+    <form onSubmit={submitEdit} className="rounded-3xl border border-primary/30 bg-surface-container-low p-6">
+      <div className="flex items-start justify-between border-b border-border/40 pb-4">
+        <div>
+          <h2 className="font-black text-on-surface">Editar RFC</h2>
+          <p className="mt-1 text-xs text-on-surface-variant">
+            Campos interpretados desde la definición inmutable v{change.definitionVersion}.
+          </p>
+        </div>
+        <button type="button" onClick={() => setIsEditing(false)} className="rounded-lg p-2 text-on-surface-variant" aria-label="Cancelar edición">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="mt-5 grid gap-5 md:grid-cols-2">
+        {editableFields.map((field) => (
+          <div key={field.key} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>
+            <DynamicField
+              field={field}
+              value={editData[field.key]}
+              required={isFieldRequired(field, editData)}
+              onChange={(value) => setEditData((current) => ({ ...current, [field.key]: value }))}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="mt-6 flex justify-end gap-3 border-t border-border/40 pt-5">
+        <button type="button" onClick={() => setIsEditing(false)} className="secondary-button">Cancelar</button>
+        <button type="submit" disabled={updateMutation.isPending} className="primary-button disabled:opacity-50">
+          <Save className="h-4 w-4" /> Guardar cambios
+        </button>
+      </div>
+    </form>
+  ) : null;
+
+  if (specification.detailPage) {
+    return (
+      <ConfiguredRecordDetail
+        record={change}
+        specification={specification}
+        currentUserName={displayName}
+        relations={relationsQuery.data ?? []}
+        transitions={availableTransitions}
+        onTransition={(transition) => transitionMutation.mutate(transition)}
+        transitionPending={transitionMutation.isPending}
+        transitionError={transitionMutation.error?.message}
+        canEdit={can(PERMISSIONS.changesEdit)}
+        onEdit={startEditing}
+        isEditing={isEditing}
+        canManageChangeTasks={can(PERMISSIONS.changesImplement)}
+        canDeleteRelation={(relation) => can(PERMISSIONS.changesEdit) && relation.sourceEntityKey === 'RFC'}
+        onDeleteRelation={(relationId) => {
+          const relation = (relationsQuery.data ?? []).find((candidate) => candidate.id === relationId);
+          if (relation?.sourceEntityKey === 'RFC') deleteRelationMutation.mutate(relationId);
+        }}
+        beforeLayout={configuredEditPanel}
+        notice={notice}
+        error={actionError?.message}
+        onBack={() => navigate('/app/changes')}
+        onNavigate={navigate}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-surface-container-lowest p-6 lg:p-8">
@@ -285,7 +356,7 @@ export default function ChangeDetail() {
                   {changeStateLabels[change.state] ?? change.state}
                 </span>
                 <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase ${riskStyles[risk] ?? riskStyles.medium}`}>
-                  Riesgo {risk}
+                  Riesgo {riskLabel[risk] ?? risk}
                 </span>
               </div>
               <h1 className="text-3xl font-black text-on-surface">
@@ -345,7 +416,9 @@ export default function ChangeDetail() {
           <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
-              {actionError instanceof ApiError && actionError.status === 409
+              {actionError instanceof ApiError &&
+              actionError.status === 409 &&
+              /cambi|concurr/i.test(actionError.message)
                 ? 'La RFC cambió mientras la editabas. Recarga la página antes de continuar.'
                 : actionError.message}
             </span>
@@ -431,6 +504,12 @@ export default function ChangeDetail() {
             ))}
           </div>
         </div>
+
+        <ChangeTasksBoard
+          changeId={change.id}
+          canManage={can(PERMISSIONS.changesImplement)}
+          availableAssets={change.assetContext?.links ?? []}
+        />
 
         <section className="mb-6 rounded-3xl border border-border/40 bg-surface-container-low p-6">
           <div className="mb-5 flex items-center gap-2">

@@ -47,10 +47,17 @@ const SAMPLE_SLA: SlaAssessment = {
 // calls, no persistence; every handler is a local no-op/state update.
 export interface SimulatedTicketContext {
   context: TicketPageContext;
+  /** The sample values behind the context, so a surface-agnostic caller (the
+   *  preview modal) can render editors for them without knowing where this
+   *  particular context keeps them. */
+  sampleData: Record<string, unknown>;
   setFieldSampleValue: (key: string, value: unknown) => void;
 }
 
-export function useSimulatedTicketContext(specification: CatalogSpecification): SimulatedTicketContext {
+export function useSimulatedTicketContext(
+  specification: CatalogSpecification,
+  entityKey = 'INC',
+): SimulatedTicketContext {
   const [sampleData, setSampleData] = useState<Record<string, unknown>>(() =>
     Object.fromEntries(specification.fields.map((field) => [field.key, sampleValue(field)])),
   );
@@ -64,7 +71,16 @@ export function useSimulatedTicketContext(specification: CatalogSpecification): 
   }
 
   const context: TicketPageContext = {
-    ticket: { ...SAMPLE_TICKET, status },
+    entityKey,
+    preview: true,
+    ticket: {
+      ...SAMPLE_TICKET,
+      id: `${entityKey}-0001`,
+      humanId: `${entityKey}-0001`,
+      title: String(sampleData.title || `${entityKey} de ejemplo`),
+      description: String(sampleData.description || SAMPLE_TICKET.description),
+      status,
+    },
     currentUserName: 'Vista previa',
     can: () => true,
     onNavigate: () => {},
@@ -72,6 +88,21 @@ export function useSimulatedTicketContext(specification: CatalogSpecification): 
     entityData: sampleData,
     fieldsLoading: false,
     fieldsError: false,
+    assets: {
+      siteAssetId: '00000000-0000-0000-0000-000000000001',
+      links: [
+        {
+          assetId: '00000000-0000-0000-0000-000000000001',
+          role: 'site',
+          snapshot: { displayName: 'Sitio de ejemplo', assetType: 'site', status: 'active' },
+        },
+        {
+          assetId: '00000000-0000-0000-0000-000000000002',
+          role: 'affected',
+          snapshot: { displayName: 'Cámara CAM-0001', assetType: 'camera', manufacturer: 'Hikvision', model: 'DS-2CD', ipAddress: '10.10.1.25', status: 'online' },
+        },
+      ],
+    },
     sla: { assessment: SAMPLE_SLA, loading: false },
     attachments: {
       items: [
@@ -85,6 +116,7 @@ export function useSimulatedTicketContext(specification: CatalogSpecification): 
           createdAt: new Date().toISOString(),
         },
       ],
+      canUpload: true,
       onUpload: () => {},
       onTriggerPicker: () => {},
       uploadPending: false,
@@ -95,17 +127,30 @@ export function useSimulatedTicketContext(specification: CatalogSpecification): 
       tab: activityTab,
       onTabChange: setActivityTab,
       loading: false,
+      canComment: true,
+      canAddInternalNote: true,
       commentBody,
       onCommentBodyChange: setCommentBody,
       onSubmitComment: () => setCommentBody(''),
       commentPending: false,
     },
     mergedTickets: { items: [], loading: false, onUnmerge: () => {}, canUnmerge: false },
+    stakeholders: {
+      userIds: ['user-ana'],
+      unitIds: ['unit-services'],
+      directory: {
+        units: [{ id: 'unit-services', name: 'Servicios', departmentId: 'department-services' }],
+        users: [{ id: 'user-ana', name: 'Ana Martínez', email: 'ana@sig.systems', unitId: 'unit-it' }],
+      },
+      loading: false,
+    },
     relations: { items: [], linkedProblemIds: new Set() },
+    changeTasks: entityKey === 'RFC' ? { canManage: false } : undefined,
     actions: {
       isEditingFields: false,
       onStartEditingFields: () => {},
       canEditFields: true,
+      canAssign: entityKey === 'INC',
       onAssign: () => {},
       onStatusChange: setStatus,
       statusOptions: ['Open', 'In Progress', 'Pending Review', 'Resolved', 'Closed'],
@@ -115,14 +160,17 @@ export function useSimulatedTicketContext(specification: CatalogSpecification): 
       canMerge: true,
       onOpenProblemDialog: () => {},
       canManageProblem: true,
+      onOpenChangeDialog: () => {},
+      canCreateChange: entityKey === 'INC',
       isWatching,
       watchersCount: isWatching ? 1 : 0,
       onToggleWatch: () => setIsWatching((current) => !current),
       onResolve: () => setStatus('Resolved'),
+      canResolve: status !== 'Resolved' && status !== 'Closed',
       canReopen: status === 'Resolved' || status === 'Closed',
       onReopen: () => setStatus('Open'),
     },
   };
 
-  return { context, setFieldSampleValue };
+  return { context, sampleData, setFieldSampleValue };
 }

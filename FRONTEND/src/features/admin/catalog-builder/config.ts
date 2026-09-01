@@ -17,15 +17,42 @@ import type {
 
 export type Section = 'general' | 'fields' | 'detail' | 'workflow' | 'relations' | 'resources' | 'review' | 'advanced';
 
-export const fieldTypes: Array<{ value: FieldType; label: string; description: string }> = [
-  { value: 'text', label: 'Texto corto', description: 'Nombres, asuntos o identificadores' },
-  { value: 'textarea', label: 'Texto largo', description: 'Descripciones y comentarios' },
-  { value: 'select', label: 'Lista de opciones', description: 'Una opción de una lista controlada' },
-  { value: 'boolean', label: 'Sí / No', description: 'Una confirmación o condición' },
-  { value: 'number', label: 'Número', description: 'Cantidades y valores numéricos' },
-  { value: 'date', label: 'Fecha', description: 'Una fecha seleccionable' },
-  { value: 'datetime', label: 'Fecha y hora', description: 'Una ventana con fecha y hora' },
+export const fieldTypes: Array<{
+  value: FieldType;
+  label: string;
+  description: string;
+  /** Agrupa el selector. Una lista plana de once tipos no se lee. */
+  group: 'Texto' | 'Opciones' | 'Números y fechas' | 'Contacto';
+}> = [
+  { value: 'text', label: 'Texto corto', description: 'Nombres, asuntos o identificadores', group: 'Texto' },
+  { value: 'textarea', label: 'Texto largo', description: 'Descripciones y comentarios', group: 'Texto' },
+  { value: 'select', label: 'Lista desplegable', description: 'Una opción de una lista controlada', group: 'Opciones' },
+  { value: 'radio', label: 'Opciones visibles', description: 'Una opción, todas a la vista', group: 'Opciones' },
+  { value: 'multiselect', label: 'Selección múltiple', description: 'Varias opciones de una lista', group: 'Opciones' },
+  { value: 'boolean', label: 'Sí / No', description: 'Una confirmación o condición', group: 'Opciones' },
+  { value: 'number', label: 'Número', description: 'Cantidades y valores numéricos', group: 'Números y fechas' },
+  { value: 'date', label: 'Fecha', description: 'Una fecha seleccionable', group: 'Números y fechas' },
+  { value: 'datetime', label: 'Fecha y hora', description: 'Una ventana con fecha y hora', group: 'Números y fechas' },
+  { value: 'email', label: 'Correo electrónico', description: 'Se valida el formato en el servidor', group: 'Contacto' },
+  { value: 'phone', label: 'Teléfono', description: 'Dígitos, espacios y prefijo internacional', group: 'Contacto' },
+  { value: 'url', label: 'Enlace', description: 'Una dirección http o https', group: 'Contacto' },
 ];
+
+export const fieldTypeGroups = ['Texto', 'Opciones', 'Números y fechas', 'Contacto'] as const;
+
+/** Los formatos que se pueden exigir sobre un campo de texto ya publicado,
+ *  sin cambiarle el tipo. Los resuelve el servidor. */
+export const textFormatOptions: Array<{ value: '' | 'email' | 'phone' | 'url'; label: string }> = [
+  { value: '', label: 'Sin formato exigido' },
+  { value: 'email', label: 'Correo electrónico' },
+  { value: 'phone', label: 'Teléfono' },
+  { value: 'url', label: 'Enlace http/https' },
+];
+
+/** Etiqueta corta de un tipo, para el resumen de una tarjeta colapsada. */
+export function fieldTypeLabel(type: FieldType): string {
+  return fieldTypes.find((candidate) => candidate.value === type)?.label ?? type;
+}
 
 // TODO-103 — control separado de "vincular a" (bindsTo), no un FieldType
 // nuevo (ver metamodel.ts para el porqué). Label deliberadamente "Activo /
@@ -40,8 +67,18 @@ export const bindsToOptions: Array<{
   { value: '', label: 'Ninguno', description: 'Un campo normal de la definición' },
   {
     value: 'recursoId',
-    label: 'Activo / Recurso IT',
-    description: 'Referencia real a un recurso registrado en resource_service',
+    label: 'Recurso legado',
+    description: 'Compatibilidad con recursos creados manualmente',
+  },
+  {
+    value: 'siteAssetId',
+    label: 'Sitio de Inventory',
+    description: 'Sitio real sincronizado desde Assets / CMDB',
+  },
+  {
+    value: 'assetId',
+    label: 'Dispositivo del sitio',
+    description: 'Cámara, NVR, switch, servidor u otro activo del sitio elegido',
   },
   {
     value: 'agenteItId',
@@ -55,6 +92,18 @@ export const resourceTypeOptions: Array<{ value: ResourceTypeFilter | ''; label:
   { value: 'hardware', label: 'Hardware' },
   { value: 'software_licencia', label: 'Licencia de software' },
   { value: 'infraestructura_red', label: 'Infraestructura de red' },
+  { value: 'camera', label: 'Cámara' },
+  { value: 'nvr', label: 'NVR' },
+  { value: 'server', label: 'Servidor' },
+  { value: 'switch', label: 'Switch' },
+  { value: 'router', label: 'Router' },
+  { value: 'pdu', label: 'PDU' },
+  { value: 'access-point', label: 'Punto de acceso' },
+  { value: 'access-control', label: 'Control de acceso' },
+  { value: 'radio', label: 'Radio' },
+  { value: 'speaker', label: 'Altavoz' },
+  { value: 'software', label: 'Software / sistema' },
+  { value: 'site', label: 'Sitio' },
 ];
 
 export const conditionOperators: Array<{ value: ConditionOperator; label: string }> = [
@@ -122,27 +171,23 @@ export const sectionItems: Array<{
   description: string;
   icon: typeof Info;
 }> = [
-  { id: 'general', label: 'Información', description: 'Identidad y propósito', icon: Info },
-  { id: 'fields', label: 'Campos', description: 'Datos que captura', icon: ListChecks },
-  { id: 'detail', label: 'Diseñador de plantilla', description: 'Crear, Editar y Detalle', icon: LayoutDashboard },
-  { id: 'workflow', label: 'Flujo de trabajo', description: 'Estados y movimientos', icon: GitBranch },
-  { id: 'relations', label: 'Relaciones', description: 'Vínculos entre entidades', icon: GitBranch },
-  { id: 'resources', label: 'Recursos', description: 'Permisos, SLA y módulos', icon: Link2 },
-  { id: 'review', label: 'Revisar', description: 'Comprobar y guardar', icon: CheckCircle2 },
-  { id: 'advanced', label: 'Avanzado', description: 'Especificación técnica', icon: Code2 },
+  { id: 'general', label: 'Información general', description: 'Nombre, código y propósito', icon: Info },
+  { id: 'fields', label: 'Campos del formulario', description: 'Qué datos deben completar', icon: ListChecks },
+  { id: 'detail', label: 'Diseño visual', description: 'Dónde aparece cada elemento', icon: LayoutDashboard },
+  { id: 'workflow', label: 'Estados y transiciones', description: 'Ciclo de vida del registro', icon: GitBranch },
+  { id: 'relations', label: 'Relaciones ITSM', description: 'Vínculos INC, PRB y RFC', icon: GitBranch },
+  { id: 'resources', label: 'Módulos conectados', description: 'IAM, SLA y automatizaciones', icon: Link2 },
+  { id: 'review', label: 'Validar y publicar', description: 'Revisar antes de activar', icon: CheckCircle2 },
+  { id: 'advanced', label: 'Configuración avanzada', description: 'JSON para usuarios expertos', icon: Code2 },
 ];
 
 export const guidedSteps = sectionItems.filter((item) => item.id !== 'advanced');
 
-export function technicalKey(value: string, uppercase = false) {
-  const normalized = value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9]+(.)/g, (_, character: string) => character.toUpperCase())
-    .replace(/[^a-zA-Z0-9_]/g, '');
-  const safe = normalized.replace(/^[^a-zA-Z]+/, '');
-  return uppercase ? safe.toUpperCase() : `${safe.charAt(0).toLowerCase()}${safe.slice(1)}`;
-}
+// `technicalKey` se movio a features/catalog/field-types.ts, un modulo sin
+// dependencias, para que la logica pura del editor de campos se pueda
+// verificar desde Node. Se reexporta desde aqui porque medio builder la
+// importa por esta ruta.
+export { technicalKey } from '@/features/catalog/field-types';
 
 export function statusLabel(status?: string) {
   if (status === 'published') return 'Publicada';

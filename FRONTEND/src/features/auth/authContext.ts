@@ -13,6 +13,7 @@ export interface AuthState {
    * error.
    */
   roleId: string | null;
+  deskUserId: string | null;
   /**
    * Flat "entity:action:scope" grants decoded from the JWT by GET /me
    * (ADR-0017 decisión 5) — e.g. "usuarios:read:global". Never a role name:
@@ -44,6 +45,18 @@ export interface AuthContextValue extends AuthState {
    * never be true for a real role.
    */
   canViewTickets: boolean;
+  /**
+   * Capacidad real de buscar en el inventario (entidad `assets`, acción
+   * `read`, con alcance distinto de `propio`) — gobierna el picker de sitios
+   * y dispositivos del Catalog Builder en TODAS las audiencias, portal
+   * incluido.
+   *
+   * Sustituye a la vieja restricción por ruta (`audienceKey === 'requester'`),
+   * que no se podía relajar por usuario: el backend ya filtra por alcance en
+   * la consulta, así que un solicitante con permiso ve exactamente los
+   * equipos de su área y uno sin permiso sigue viendo el mensaje.
+   */
+  canSearchAssets: boolean;
   displayName: string;
 }
 

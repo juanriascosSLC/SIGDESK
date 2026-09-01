@@ -21,6 +21,7 @@ import { useAuth } from '@/features/auth/useAuth';
 import { PERMISSIONS } from '@/features/auth/permissions';
 import { ApiError } from '@/lib/apiClient';
 import { createChange, getChangeDefinition, listChanges } from './api';
+import { AssignedChangeTasksPanel } from './AssignedChangeTasksPanel';
 import {
   changeStateLabels,
   changeStateStyles,
@@ -170,6 +171,8 @@ export default function ChangeBoard() {
             </button>
           )}
         </div>
+
+        <AssignedChangeTasksPanel />
 
         <div className="mb-6 grid gap-4 sm:grid-cols-3">
           {[

@@ -1,24 +1,31 @@
 import { X } from 'lucide-react';
 import type { CatalogSpecification, PageLayout } from '@/features/catalog/metamodel';
 import { DynamicField } from '@/features/catalog/DynamicField';
-import { TicketPageLayout } from '@/features/tickets/TicketPageLayout';
-import { useSimulatedTicketContext } from './useSimulatedTicketContext';
+import { PageLayoutRenderer } from '@/features/catalog/runtime/PageLayoutRenderer';
+import type { AnyPageSurface } from './surface';
 
-// Uses the exact same TicketPageLayout the real page and the designer canvas
-// use — with a simulated TicketPageContext instead of live data — so the
-// widgets shown here (SLA, adjuntos, actividad, etc.) are the real
-// components, not lookalikes. Sample field values are editable so
-// `visibleWhen` conditions can be exercised interactively.
+// Uses the exact same PageLayoutRenderer and placement dispatcher the real
+// page and the designer canvas use — with a simulated context instead of live
+// data — so what is shown here are the real components, not lookalikes.
+// Sample field values are editable so `visibleWhen` conditions can be
+// exercised interactively.
 export function PageTemplatePreview({
+  surface,
+  entityKey,
   page,
   specification,
   onClose,
 }: {
+  surface: AnyPageSurface;
+  entityKey: string;
   page: PageLayout;
   specification: CatalogSpecification;
   onClose: () => void;
 }) {
-  const { context, setFieldSampleValue } = useSimulatedTicketContext(specification);
+  const { context, sampleData, setFieldSampleValue } = surface.useSimulatedContext(
+    specification,
+    entityKey,
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" onClick={onClose}>
@@ -29,7 +36,7 @@ export function PageTemplatePreview({
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-sm font-black uppercase tracking-wider text-on-surface-variant">
-            Vista previa — Detalle
+            Vista previa — {surface.kindLabel}
           </h3>
           <button
             type="button"
@@ -51,7 +58,7 @@ export function PageTemplatePreview({
                 <DynamicField
                   key={field.key}
                   field={field}
-                  value={context.entityData[field.key]}
+                  value={sampleData[field.key]}
                   required={false}
                   onChange={(value) => setFieldSampleValue(field.key, value)}
                 />
@@ -60,7 +67,11 @@ export function PageTemplatePreview({
           </details>
         )}
 
-        <TicketPageLayout page={page} context={context} onAssignClick={() => {}} />
+        <PageLayoutRenderer
+          page={page}
+          data={sampleData}
+          renderPlacement={(placement) => surface.renderPlacementContent(placement, context)}
+        />
       </div>
     </div>
   );

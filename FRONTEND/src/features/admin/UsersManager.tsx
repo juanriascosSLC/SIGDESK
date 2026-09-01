@@ -9,10 +9,12 @@ import {
   Check,
   Plus,
   Trash2,
+  Building2,
 } from 'lucide-react';
 import {
   rbacService,
   permissionKey,
+  type Company,
   type KnownUser,
   type Permission,
   type PermissionCatalog,
@@ -27,18 +29,23 @@ import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
  *
  * Accounts are provisioned on the corporate platform (Active Directory +
  * SIGTools) and shared with SIGInstallations and SIGInventory, so this screen
- * cannot create, delete or reset users. What it does own is authorization: the
- * roles this application defines and what each one may do here.
+ * cannot delete or reset those identities. This screen owns their access to
+ * SIG-DESK, its organization tree, roles and permissions.
  */
 export default function UsersManager() {
-  const { canManageUsersAndRoles } = useAuth();
-  const [tab, setTab] = useState<'roles' | 'users'>('roles');
+  const { can, canManageUsersAndRoles } = useAuth();
+  const canReadRoles = can('roles:read');
+  const canReadUsers = can('usuarios:read');
+  const canReadCompanies = can('companies:read');
+  const [tab, setTab] = useState<'roles' | 'users' | 'organization'>(
+    canReadRoles ? 'roles' : canReadUsers ? 'users' : 'organization',
+  );
 
-  if (!canManageUsersAndRoles) {
+  if (!canManageUsersAndRoles && !canReadCompanies) {
     return (
       <EmptyState
         title="Sin acceso a la administración"
-        description="Necesitas un permiso sobre roles o usuarios para entrar aquí."
+        description="Necesitas un permiso sobre usuarios, roles u organización para entrar aquí."
       />
     );
   }
@@ -46,9 +53,9 @@ export default function UsersManager() {
   return (
     <div className="p-6 lg:p-8 space-y-6 w-full">
       <div>
-        <h1 className="text-2xl font-black text-on-surface">Roles y Permisos</h1>
+        <h1 className="text-2xl font-black text-on-surface">Usuarios, roles y organización</h1>
         <p className="text-sm text-on-surface-variant mt-1">
-          Roles propios de SIG-DESK. Las cuentas se administran en la plataforma corporativa.
+          Controla quién entra, qué puede hacer y a qué unidad pertenece dentro de SIG-DESK.
         </p>
       </div>
 
@@ -57,8 +64,8 @@ export default function UsersManager() {
         <p className="text-xs text-on-surface-variant leading-relaxed">
           El <strong className="text-on-surface">inicio de sesión</strong> es compartido con
           SIGInstallations y SIGInventory (Active Directory), pero estos roles y permisos son
-          exclusivos de SIG-DESK y viven en su propia base de datos. Los usuarios aparecen aquí
-          en cuanto entran por primera vez, aunque todavía no tengan rol asignado.
+          exclusivos de SIG-DESK y viven en su propia base de datos. Las identidades aparecen aquí
+          al ingresar por primera vez; un administrador decide cuándo darles acceso, rol y unidad.
         </p>
       </div>
 
@@ -66,31 +73,46 @@ export default function UsersManager() {
         {([
           { id: 'roles' as const, label: 'Roles y permisos', icon: KeyRound },
           { id: 'users' as const, label: 'Usuarios', icon: UsersIcon },
-        ]).map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setTab(id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-              tab === id
-                ? 'bg-primary text-primary-foreground shadow-[0_0_10px_rgba(34,211,238,0.3)]'
-                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container'
-            }`}
-          >
-            <Icon className="w-4 h-4" />
-            {label}
-          </button>
-        ))}
+          { id: 'organization' as const, label: 'Organización', icon: Building2 },
+        ])
+          .filter(({ id }) =>
+            id === 'roles' ? canReadRoles : id === 'users' ? canReadUsers : canReadCompanies,
+          )
+          .map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                tab === id
+                  ? 'bg-primary text-primary-foreground shadow-[0_0_10px_rgba(34,211,238,0.3)]'
+                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {label}
+            </button>
+          ))}
       </div>
 
-      {tab === 'roles' ? <RolesTab /> : <UsersTab />}
+      {tab === 'roles' && canReadRoles ? (
+        <RolesTab />
+      ) : tab === 'users' && canReadUsers ? (
+        <UsersTab />
+      ) : canReadCompanies ? (
+        <OrganizationTab />
+      ) : null}
     </div>
   );
 }
 
 function RolesTab() {
+  const { can } = useAuth();
   const queryClient = useQueryClient();
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const canCreateRole = can('roles:create');
+  const canUpdateRole = can('roles:update');
+  const canDeleteRole = can('roles:delete');
 
   const rolesQuery = useQuery({ queryKey: ['rbac', 'roles'], queryFn: rbacService.listRoles });
   const catalogQuery = useQuery({
@@ -168,13 +190,15 @@ function RolesTab() {
             <h2 className="text-xs font-black uppercase tracking-wider text-on-surface-variant">
               Roles ({roles.length})
             </h2>
-            <button
-              onClick={() => setIsCreating((value) => !value)}
-              className="text-cyan-400 hover:text-cyan-300 transition-colors"
-              title="Crear rol"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
+            {canCreateRole && (
+              <button
+                onClick={() => setIsCreating((value) => !value)}
+                className="text-cyan-400 hover:text-cyan-300 transition-colors"
+                title="Crear rol"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            )}
           </div>
           <div className="p-2 space-y-1">
             {roles.map((role) => (
@@ -188,7 +212,7 @@ function RolesTab() {
           </div>
         </div>
 
-        {isCreating && (
+        {canCreateRole && isCreating && (
           <CreateRoleForm
             onCancel={() => setIsCreating(false)}
             onSubmit={(input) => createRole.mutate(input)}
@@ -214,17 +238,19 @@ function RolesTab() {
               {savePermissions.isPending && (
                 <Loader2 className="w-4 h-4 animate-spin text-on-surface-variant" />
               )}
-              <button
-                onClick={() => {
-                  if (window.confirm(`¿Eliminar el rol "${selectedRole.name}"?`)) {
-                    deleteRole.mutate(selectedRole.id);
-                  }
-                }}
-                className="text-on-surface-variant hover:text-red-400 transition-colors"
-                title="Eliminar rol"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              {canDeleteRole && (
+                <button
+                  onClick={() => {
+                    if (window.confirm(`¿Eliminar el rol "${selectedRole.name}"?`)) {
+                      deleteRole.mutate(selectedRole.id);
+                    }
+                  }}
+                  className="text-on-surface-variant hover:text-red-400 transition-colors"
+                  title="Eliminar rol"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
 
@@ -284,12 +310,14 @@ function RolesTab() {
                               );
                               return (
                                 <td key={scope} className="px-3 py-1.5 text-center">
-                                  <label className="inline-flex cursor-pointer">
+                                  <label
+                                    className={`inline-flex ${canUpdateRole ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                                  >
                                     <input
                                       type="checkbox"
                                       className="hidden"
                                       checked={isGranted}
-                                      disabled={savePermissions.isPending}
+                                      disabled={!canUpdateRole || savePermissions.isPending}
                                       onChange={() => togglePermission(entity, action, scope)}
                                     />
                                     <span
@@ -406,13 +434,222 @@ function CreateRoleForm({
   );
 }
 
+function OrganizationTab() {
+  const { can } = useAuth();
+  const queryClient = useQueryClient();
+  const [isCreating, setIsCreating] = useState(false);
+  const [name, setName] = useState('');
+  const [type, setType] = useState<Company['type']>('departamento');
+  const [parentId, setParentId] = useState('');
+  const canCreate = can('companies:create');
+
+  const companiesQuery = useQuery({
+    queryKey: ['rbac', 'companies'],
+    queryFn: rbacService.listCompanies,
+  });
+  const createCompany = useMutation({
+    mutationFn: () =>
+      rbacService.createCompany({
+        name: name.trim(),
+        type,
+        parentId: type === 'empresa' ? null : parentId,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['rbac', 'companies'] });
+      setName('');
+      setParentId('');
+      setIsCreating(false);
+    },
+  });
+
+  if (companiesQuery.isLoading) return <LoadingSkeleton type="list" />;
+  if (companiesQuery.isError) {
+    return (
+      <EmptyState
+        title="No se pudo cargar la organización"
+        description={
+          companiesQuery.error instanceof Error ? companiesQuery.error.message : 'Error desconocido'
+        }
+      />
+    );
+  }
+
+  const companies = companiesQuery.data ?? [];
+  const rootExists = companies.some(
+    (company) => company.type === 'empresa' && company.parentId === null,
+  );
+  const validParents = companies.filter((company) =>
+    type === 'departamento'
+      ? company.type === 'empresa'
+      : type === 'equipo'
+        ? company.type === 'departamento'
+        : false,
+  );
+  const ordered = orderCompanies(companies);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h2 className="font-bold text-on-surface">Estructura organizacional</h2>
+          <p className="text-xs text-on-surface-variant mt-1">
+            Empresa → áreas/departamentos → equipos. Puedes ampliar esta estructura cuando la empresa lo necesite.
+          </p>
+        </div>
+        {canCreate && (
+          <button
+            onClick={() => {
+              setType(rootExists ? 'departamento' : 'empresa');
+              setParentId('');
+              setIsCreating((value) => !value);
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-bold"
+          >
+            <Plus className="w-4 h-4" />
+            Agregar área o equipo
+          </button>
+        )}
+      </div>
+
+      {isCreating && (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            createCompany.mutate();
+          }}
+          className="grid gap-3 md:grid-cols-[1fr_190px_1fr_auto] items-end bg-surface-container-low border border-cyan-500/30 rounded-2xl p-4"
+        >
+          <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
+            Nombre del área o equipo
+            <input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              required
+              className="bg-surface-container border border-border/50 rounded-lg px-3 py-2 text-sm text-on-surface outline-none focus:border-cyan-500/50"
+            />
+          </label>
+          <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
+            Tipo
+            <select
+              value={type}
+              onChange={(event) => {
+                setType(event.target.value as Company['type']);
+                setParentId('');
+              }}
+              className="bg-surface-container border border-border/50 rounded-lg px-3 py-2 text-sm text-on-surface outline-none focus:border-cyan-500/50"
+            >
+              <option value="empresa" disabled={rootExists}>
+                Empresa{rootExists ? ' (ya existe)' : ''}
+              </option>
+              <option value="departamento">Departamento</option>
+              <option value="equipo">Equipo</option>
+            </select>
+          </label>
+          <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
+            Pertenece a
+            <select
+              value={parentId}
+              onChange={(event) => setParentId(event.target.value)}
+              required={type !== 'empresa'}
+              disabled={type === 'empresa'}
+              className="bg-surface-container border border-border/50 rounded-lg px-3 py-2 text-sm text-on-surface outline-none focus:border-cyan-500/50 disabled:opacity-50"
+            >
+              <option value="">{type === 'empresa' ? 'No aplica' : 'Selecciona una unidad'}</option>
+              {validParents.map((company) => (
+                <option key={company.id} value={company.id}>
+                  {company.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="submit"
+            disabled={createCompany.isPending || !name.trim() || (type !== 'empresa' && !parentId)}
+            className="px-4 py-2 rounded-lg bg-cyan-500 text-slate-950 text-sm font-black disabled:opacity-50"
+          >
+            {createCompany.isPending ? 'Creando…' : 'Crear'}
+          </button>
+          {createCompany.isError && (
+            <p className="md:col-span-4 text-xs text-red-300">
+              {createCompany.error instanceof Error
+                ? createCompany.error.message
+                : 'No se pudo crear la unidad.'}
+            </p>
+          )}
+        </form>
+      )}
+
+      <div className="bg-surface-container-low border border-border/40 rounded-3xl overflow-hidden">
+        {ordered.length === 0 ? (
+          <p className="p-8 text-sm text-center text-on-surface-variant">
+            Crea la empresa raíz para comenzar la estructura organizacional.
+          </p>
+        ) : (
+          <div className="divide-y divide-border/20">
+            {ordered.map(({ company, depth }) => (
+              <div key={company.id} className="flex items-center gap-3 px-6 py-4">
+                <div style={{ width: `${depth * 24}px` }} className="shrink-0" />
+                <Building2 className="w-4 h-4 text-cyan-400 shrink-0" />
+                <div className="min-w-0">
+                  <p className="font-bold text-sm text-on-surface truncate">{company.name}</p>
+                  <p className="text-[10px] uppercase tracking-wider text-on-surface-variant">
+                    {company.type}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function orderCompanies(companies: Company[]): Array<{ company: Company; depth: number }> {
+  const children = new Map<string | null, Company[]>();
+  for (const company of companies) {
+    const siblings = children.get(company.parentId) ?? [];
+    siblings.push(company);
+    children.set(company.parentId, siblings);
+  }
+  for (const siblings of children.values()) {
+    siblings.sort((left, right) => left.name.localeCompare(right.name));
+  }
+
+  const result: Array<{ company: Company; depth: number }> = [];
+  const visited = new Set<string>();
+  const visit = (company: Company, depth: number) => {
+    if (visited.has(company.id)) return;
+    visited.add(company.id);
+    result.push({ company, depth });
+    for (const child of children.get(company.id) ?? []) visit(child, depth + 1);
+  };
+  for (const root of children.get(null) ?? []) visit(root, 0);
+  for (const company of companies) visit(company, 0);
+  return result;
+}
+
 function UsersTab() {
+  const { can } = useAuth();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
+  const canReadRoles = can('roles:read');
+  const canReadCompanies = can('companies:read');
+  const canAssignRoles = can('usuarios:update') && canReadRoles;
+  const canProvisionUsers = can('usuarios:create') && canReadRoles && canReadCompanies;
 
   const usersQuery = useQuery({ queryKey: ['rbac', 'users'], queryFn: rbacService.listUsers });
-  const rolesQuery = useQuery({ queryKey: ['rbac', 'roles'], queryFn: rbacService.listRoles });
+  const rolesQuery = useQuery({
+    queryKey: ['rbac', 'roles'],
+    queryFn: rbacService.listRoles,
+    enabled: canReadRoles,
+  });
+  const companiesQuery = useQuery({
+    queryKey: ['rbac', 'companies'],
+    queryFn: rbacService.listCompanies,
+    enabled: canReadCompanies && (canProvisionUsers || canAssignRoles),
+  });
 
   const setUserRole = useMutation({
     mutationFn: ({ username, roleId }: { username: string; roleId: string }) =>
@@ -422,17 +659,32 @@ function UsersTab() {
       setEditing(null);
     },
   });
-  const setUserAssignment = useMutation({
-    mutationFn: ({ username, companyId, roleId }: { username: string; companyId: string; roleId: string }) =>
-      rbacService.setUserAssignment(username, companyId, roleId),
-    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['rbac'] }); },
+  const updateUser = useMutation({
+    mutationFn: ({ userId, companyId, roleId }: { userId: string; companyId: string; roleId: string }) =>
+      rbacService.updateUser(userId, { companyId, roleId }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['rbac'] });
+      setEditing(null);
+    },
   });
-  const revokeAccess = useMutation({
-    mutationFn: (username: string) => rbacService.revokeUserAccess(username),
-    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['rbac'] }); },
+  const provisionUser = useMutation({
+    mutationFn: ({
+      username,
+      companyId,
+      roleId,
+    }: {
+      username: string;
+      companyId: string;
+      roleId: string;
+    }) => rbacService.provisionUser(username, { companyId, roleId }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['rbac'] });
+      setEditing(null);
+    },
   });
 
   const roles = rolesQuery.data ?? [];
+  const companies = companiesQuery.data ?? [];
   const users = useMemo(() => {
     const term = search.toLowerCase().trim();
     const all = usersQuery.data ?? [];
@@ -442,7 +694,13 @@ function UsersTab() {
     );
   }, [usersQuery.data, search]);
 
-  if (usersQuery.isLoading || rolesQuery.isLoading) return <LoadingSkeleton type="list" />;
+  if (
+    usersQuery.isLoading ||
+    (canReadRoles && rolesQuery.isLoading) ||
+    (canReadCompanies && (canProvisionUsers || canAssignRoles) && companiesQuery.isLoading)
+  ) {
+    return <LoadingSkeleton type="list" />;
+  }
   if (usersQuery.isError) {
     return (
       <EmptyState
@@ -477,12 +735,27 @@ function UsersTab() {
           {setUserRole.error instanceof Error ? setUserRole.error.message : 'No se pudo guardar.'}
         </p>
       )}
+      {updateUser.isError && (
+        <p className="text-xs text-red-300">
+          {updateUser.error instanceof Error ? updateUser.error.message : 'No se pudo actualizar el usuario.'}
+        </p>
+      )}
+      {provisionUser.isError && (
+        <p className="text-xs text-red-300">
+          {provisionUser.error instanceof Error
+            ? provisionUser.error.message
+            : 'No se pudo aprovisionar el usuario.'}
+        </p>
+      )}
 
       <div className="bg-surface-container-low border border-border/40 rounded-3xl overflow-hidden">
         <table className="w-full text-sm text-left">
           <thead className="bg-surface-container text-on-surface-variant border-b border-border/40">
             <tr>
               <th className="px-6 py-4 font-bold uppercase tracking-wider text-xs">Usuario</th>
+              <th className="px-6 py-4 font-bold uppercase tracking-wider text-xs">
+                Área o equipo
+              </th>
               <th className="px-6 py-4 font-bold uppercase tracking-wider text-xs">
                 Rol en SIG-DESK
               </th>
@@ -497,18 +770,27 @@ function UsersTab() {
                 key={user.username}
                 user={user}
                 roles={roles}
+                companies={companies}
+                canEdit={user.hasAccount ? canAssignRoles : canProvisionUsers}
                 isEditing={editing === user.username}
-                isPending={setUserRole.isPending || setUserAssignment.isPending || revokeAccess.isPending}
+                isPending={setUserRole.isPending || updateUser.isPending || provisionUser.isPending}
                 onEdit={() => setEditing(user.username)}
                 onCancel={() => setEditing(null)}
-                onSave={(roleId) => setUserRole.mutate({ username: user.username, roleId })}
-                onAssign={(companyId, roleId) => setUserAssignment.mutate({ username: user.username, companyId, roleId })}
-                onRevoke={() => revokeAccess.mutate(user.username)}
+                onSave={(companyId, roleId) => {
+                  if (user.id && companyId) {
+                    updateUser.mutate({ userId: user.id, companyId, roleId });
+                    return;
+                  }
+                  setUserRole.mutate({ username: user.username, roleId });
+                }}
+                onProvision={(companyId, roleId) =>
+                  provisionUser.mutate({ username: user.username, companyId, roleId })
+                }
               />
             ))}
             {users.length === 0 && (
               <tr>
-                <td colSpan={3} className="px-6 py-8 text-center text-on-surface-variant italic">
+                <td colSpan={4} className="px-6 py-8 text-center text-on-surface-variant italic">
                   {search
                     ? 'Ningún usuario coincide con la búsqueda.'
                     : 'Todavía nadie ha iniciado sesión en SIG-DESK.'}
@@ -525,31 +807,31 @@ function UsersTab() {
 function UserRow({
   user,
   roles,
+  companies,
+  canEdit,
   isEditing,
   isPending,
   onEdit,
   onCancel,
   onSave,
-  onAssign,
-  onRevoke,
+  onProvision,
 }: {
   user: KnownUser;
   roles: Role[];
+  companies: Company[];
+  canEdit: boolean;
   isEditing: boolean;
   isPending: boolean;
   onEdit: () => void;
   onCancel: () => void;
-  onSave: (roleId: string) => void;
-  onAssign: (companyId: string, roleId: string) => void;
-  onRevoke: () => void;
+  onSave: (companyId: string, roleId: string) => void;
+  onProvision: (companyId: string, roleId: string) => void;
 }) {
   const currentRole = roles.find((role) => role.id === user.roleId) ?? null;
+  const currentCompany = companies.find((company) => company.id === user.companyId) ?? null;
   const [draftRoleId, setDraftRoleId] = useState<string>(user.roleId ?? roles[0]?.id ?? '');
+  const [draftCompanyId, setDraftCompanyId] = useState<string>(user.companyId ?? companies[0]?.id ?? '');
 
-  // Known identity, never provisioned in SIG-DESK: PUT .../roles would 404
-  // (ADR-0017 decisión 4 — provisioning needs a company assignment this
-  // screen doesn't collect yet), so this row can only be observed, not
-  // edited, until that separate flow exists.
   if (!user.hasAccount) {
     return (
       <tr className="align-top">
@@ -567,9 +849,79 @@ function UserRow({
           </div>
         </td>
         <td className="px-6 py-4">
-          <span className="text-xs italic text-on-surface-variant">
-            identidad conocida, sin cuenta en SIG-DESK todavía — no puede operar
-          </span>
+          {isEditing ? (
+            <div className="min-w-56">
+              <select
+                aria-label="Empresa, departamento o equipo"
+                value={draftCompanyId}
+                onChange={(event) => setDraftCompanyId(event.target.value)}
+                className="bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-1.5 text-on-surface outline-none focus:border-cyan-500/50"
+              >
+                <option value="">Selecciona una unidad organizacional</option>
+                {companies.map((company) => (
+                  <option key={company.id} value={company.id}>
+                    {company.name} ({company.type})
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <span className="text-xs italic text-on-surface-variant">Sin unidad asignada</span>
+          )}
+        </td>
+        <td className="px-6 py-4">
+          {isEditing ? (
+              <select
+                aria-label="Rol inicial"
+                value={draftRoleId}
+                onChange={(event) => setDraftRoleId(event.target.value)}
+                className="bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-1.5 text-on-surface outline-none focus:border-cyan-500/50"
+              >
+                <option value="">Selecciona un rol</option>
+                {roles.map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.name}
+                  </option>
+                ))}
+              </select>
+          ) : (
+            <span className="text-xs italic text-on-surface-variant">
+              Identidad verificada; pendiente de acceso a SIG-DESK
+            </span>
+          )}
+        </td>
+        <td className="px-6 py-4 text-right whitespace-nowrap">
+          {isEditing ? (
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={onCancel}
+                className="text-xs font-bold text-on-surface-variant hover:text-on-surface"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => onProvision(draftCompanyId, draftRoleId)}
+                disabled={isPending || !draftCompanyId || !draftRoleId}
+                className="text-xs font-bold text-cyan-400 hover:text-cyan-300 disabled:opacity-50"
+              >
+                {isPending ? 'Aprovisionando…' : 'Dar acceso'}
+              </button>
+            </div>
+          ) : canEdit ? (
+            <button
+              onClick={() => {
+                setDraftCompanyId(companies[0]?.id ?? '');
+                setDraftRoleId(roles[0]?.id ?? '');
+                onEdit();
+              }}
+              disabled={companies.length === 0 || roles.length === 0}
+              className="text-xs font-bold text-cyan-500 hover:text-cyan-400 disabled:opacity-50 disabled:text-on-surface-variant"
+            >
+              Dar acceso
+            </button>
+          ) : (
+            <span className="text-xs text-on-surface-variant">Solo lectura</span>
+          )}
         </td>
         <td className="px-6 py-4 text-right">
           <button onClick={() => { const companyId = window.prompt('ID del departamento'); const roleId = window.prompt('ID del rol'); if (companyId && roleId) onAssign(companyId, roleId); }} disabled={isPending || roles.length === 0} className="text-xs font-bold text-cyan-500 disabled:opacity-50">Asignar departamento y rol</button>
@@ -594,6 +946,33 @@ function UserRow({
         </div>
       </td>
       <td className="px-6 py-4">
+        {isEditing && canEdit && companies.length > 0 ? (
+          <select
+            aria-label="Área o equipo"
+            value={draftCompanyId}
+            onChange={(event) => setDraftCompanyId(event.target.value)}
+            className="bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-1.5 text-on-surface outline-none focus:border-cyan-500/50"
+          >
+            {companies.map((company) => (
+              <option key={company.id} value={company.id}>
+                {company.name} ({company.type})
+              </option>
+            ))}
+          </select>
+        ) : currentCompany ? (
+          <div>
+            <p className="text-sm font-bold text-on-surface">{currentCompany.name}</p>
+            <p className="text-[10px] uppercase tracking-wider text-on-surface-variant">
+              {currentCompany.type}
+            </p>
+          </div>
+        ) : user.companyId ? (
+          <span className="text-xs font-mono text-on-surface-variant">{user.companyId}</span>
+        ) : (
+          <span className="text-xs italic text-on-surface-variant">Sin unidad</span>
+        )}
+      </td>
+      <td className="px-6 py-4">
         {isEditing ? (
           <select
             value={draftRoleId}
@@ -610,6 +989,8 @@ function UserRow({
           <span className="inline-flex items-center gap-1 bg-surface-container-high px-2 py-0.5 rounded-md border border-border/50 text-[10px] font-bold text-on-surface uppercase tracking-wider">
             {currentRole.name}
           </span>
+        ) : user.roleId ? (
+          <span className="text-xs font-mono text-on-surface-variant">{user.roleId}</span>
         ) : (
           <span className="text-xs italic text-on-surface-variant">
             sin rol asignado — no puede operar
@@ -626,24 +1007,24 @@ function UserRow({
               Cancelar
             </button>
             <button
-              onClick={() => onSave(draftRoleId)}
-              disabled={isPending || !draftRoleId}
+              onClick={() => onSave(draftCompanyId, draftRoleId)}
+              disabled={isPending || !draftRoleId || (companies.length > 0 && !draftCompanyId)}
               className="text-xs font-bold text-cyan-400 hover:text-cyan-300 disabled:opacity-50"
             >
               {isPending ? 'Guardando…' : 'Guardar'}
             </button>
           </div>
-        ) : (
-          <div>
+        ) : canEdit ? (
           <button
             onClick={() => {
               setDraftRoleId(user.roleId ?? roles[0]?.id ?? '');
+              setDraftCompanyId(user.companyId ?? companies[0]?.id ?? '');
               onEdit();
             }}
             disabled={roles.length === 0}
             className="text-xs font-bold text-cyan-500 hover:text-cyan-400 disabled:opacity-50 disabled:text-on-surface-variant"
           >
-            {user.roleId ? 'Cambiar rol' : 'Asignar rol'}
+            Editar acceso
           </button>
           {user.status !== 'inactivo' && (
             <button onClick={() => { if (window.confirm('¿Revocar acceso a este usuario?')) onRevoke(); }} className="ml-4 text-xs font-bold text-red-400 hover:text-red-300">
@@ -651,6 +1032,8 @@ function UserRow({
             </button>
           )}
           </div>
+        ) : (
+          <span className="text-xs text-on-surface-variant">Solo lectura</span>
         )}
       </td>
     </tr>

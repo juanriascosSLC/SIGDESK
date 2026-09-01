@@ -66,13 +66,18 @@ function activityText(entry: TicketActivityEntry): string {
       return `Ticket created${priority ? ` with priority ${priority}` : ''}${category ? ` in category ${category}` : ''}.`;
     }
     case 'status_changed': {
-      const from = activityValue(payload.from) ?? '?';
-      const to = activityValue(payload.to) ?? '?';
-      return `Status changed from ${from} to ${to}.`;
+      const from = activityValue(payload.from);
+      const to = activityValue(payload.to);
+      if (from && to) return `Status changed from ${from} to ${to}.`;
+      if (to) return `Status changed to ${to}.`;
+      return 'Ticket status changed.';
     }
     case 'assigned': {
       const assigneeName = activityValue(payload.assigneeName);
-      return assigneeName ? `Assigned to ${assigneeName}.` : 'Unassigned.';
+      const assignmentType = activityValue(payload.assignmentType);
+      if (assigneeName) return `Assigned to ${assigneeName}.`;
+      if (assignmentType) return `Assignment updated (${assignmentType}).`;
+      return 'Assignment updated.';
     }
     case 'attached': {
       const fileName = activityValue(payload.fileName) ?? 'a file';
@@ -194,6 +199,7 @@ export function ActivityWidget({ context }: { context: TicketPageContext }) {
         </div>
       )}
 
+      {activity.canComment && (
       <div className="mt-8 pt-6 border-t border-border/40">
         <div className="flex items-start gap-3">
           <div className="w-9 h-9 rounded-full bg-surface-container-high border border-border/50 flex items-center justify-center text-[10px] font-bold text-on-surface shrink-0">
@@ -209,21 +215,21 @@ export function ActivityWidget({ context }: { context: TicketPageContext }) {
             />
             {activity.commentError && <p className="mt-2 text-sm text-red-400">{activity.commentError}</p>}
             <div className="flex items-center justify-between mt-2">
-              <button
+              {attachments.canUpload ? <button
                 onClick={attachments.onTriggerPicker}
                 className="flex items-center gap-2 text-xs text-on-surface-variant hover:text-on-surface transition-colors"
               >
                 <Paperclip className="w-3.5 h-3.5" />
                 Attach file
-              </button>
+              </button> : <span />}
               <div className="flex gap-2">
-                <button
+                {activity.canAddInternalNote && <button
                   onClick={() => activity.onSubmitComment(true)}
                   disabled={activity.commentPending || !activity.commentBody.trim()}
                   className="px-4 py-2 rounded-xl bg-surface-container border border-amber-500/20 text-amber-400 text-xs font-bold hover:bg-amber-500/10 transition-colors disabled:opacity-50"
                 >
                   Internal Note
-                </button>
+                </button>}
                 <button
                   onClick={() => activity.onSubmitComment(false)}
                   disabled={activity.commentPending || !activity.commentBody.trim()}
@@ -237,6 +243,7 @@ export function ActivityWidget({ context }: { context: TicketPageContext }) {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }

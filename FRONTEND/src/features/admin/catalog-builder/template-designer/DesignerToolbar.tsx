@@ -1,4 +1,4 @@
-import { Eye, Redo2, Undo2 } from 'lucide-react';
+import { Eye, Redo2, Trash2, Undo2 } from 'lucide-react';
 import type { AudienceKey, LayoutKind } from '@/features/catalog/metamodel';
 
 const KIND_LABELS: Record<LayoutKind, string> = { create: 'Crear', edit: 'Editar', detail: 'Detalle' };
@@ -16,6 +16,7 @@ export function DesignerToolbar({
   availableVariantKeys,
   onChangeVariant,
   onAddVariant,
+  onRemoveVariant,
   canUndo,
   canRedo,
   onUndo,
@@ -28,6 +29,7 @@ export function DesignerToolbar({
   availableVariantKeys: AudienceKey[];
   onChangeVariant: (audience: AudienceKey | null) => void;
   onAddVariant: (audience: AudienceKey) => void;
+  onRemoveVariant: (audience: AudienceKey) => void;
   canUndo: boolean;
   canRedo: boolean;
   onUndo: () => void;
@@ -89,6 +91,18 @@ export function DesignerToolbar({
               </option>
             ))}
           </select>
+        )}
+        {activeVariantKey && (
+          <button
+            type="button"
+            onClick={() => onRemoveVariant(activeVariantKey)}
+            data-testid="template-designer-remove-audience"
+            title={`Eliminar la variante ${AUDIENCE_LABELS[activeVariantKey]}`}
+            aria-label={`Eliminar la variante ${AUDIENCE_LABELS[activeVariantKey]}`}
+            className="rounded-lg border border-red-500/30 p-2 text-red-300 hover:bg-red-500/10"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
         )}
       </div>
       <div className="flex items-center gap-1">

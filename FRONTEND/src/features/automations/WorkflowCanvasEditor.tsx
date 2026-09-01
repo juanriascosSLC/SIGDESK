@@ -1,0 +1,444 @@
+import { useCallback, useMemo, useState, type DragEvent } from 'react';
+import {
+  addEdge,
+  Background,
+  BackgroundVariant,
+  Controls,
+  MarkerType,
+  MiniMap,
+  ReactFlow,
+  ReactFlowProvider,
+  useEdgesState,
+  useNodesState,
+  useReactFlow,
+  type Connection,
+  type Edge,
+  type NodeMouseHandler,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Braces,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Clock3,
+  Copy,
+  GitBranch,
+  Grid3X3,
+  Info,
+  Library,
+  Rocket,
+  Search,
+  Sparkles,
+  Trash2,
+  Workflow,
+  X,
+  Zap,
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import type { PublishWorkflowInput, WorkflowDefinition } from './api';
+import AssignmentActionEditor from './AssignmentActionEditor';
+import {
+  ActionNode,
+  ApprovalNode,
+  ConditionNode,
+  DelayNode,
+  ForEachNode,
+  ParserNode,
+  TriggerNode,
+  type WorkflowNode,
+} from './CustomNodes';
+import {
+  catalogItem,
+  compileVisualWorkflow,
+  graphFromDefinition,
+  nodeFromCatalog,
+  workflowCatalog,
+  type CatalogGroup,
+  type WorkflowCatalogItem,
+} from './visual-model';
+
+const nodeTypes = {
+  trigger: TriggerNode,
+  condition: ConditionNode,
+  delay: DelayNode,
+  action: ActionNode,
+  approval: ApprovalNode,
+  foreach: ForEachNode,
+  parser: ParserNode,
+};
+
+const groups: CatalogGroup[] = ['Disparadores', 'Condiciones', 'Control', 'Acciones'];
+
+const groupIcons = {
+  Disparadores: Zap,
+  Condiciones: GitBranch,
+  Control: Clock3,
+  Acciones: Sparkles,
+};
+
+const priorityLabels = {
+  baja: 'Baja',
+  media: 'Media',
+  alta: 'Alta',
+  critica: 'Crítica',
+};
+
+function initialGraph(definition?: WorkflowDefinition) {
+  if (definition) return graphFromDefinition(definition);
+  const trigger = nodeFromCatalog(catalogItem('ticket.created')!, { x: 80, y: 190 });
+  const condition = nodeFromCatalog(catalogItem('condition.priority')!, { x: 420, y: 190 });
+  const delay = nodeFromCatalog(catalogItem('control.delay')!, { x: 760, y: 190 });
+  const action = nodeFromCatalog(catalogItem('action.notify_stakeholders')!, { x: 1100, y: 190 });
+  return {
+    nodes: [trigger, condition, delay, action],
+    edges: [
+      { id: crypto.randomUUID(), source: trigger.id, target: condition.id, animated: true },
+      { id: crypto.randomUUID(), source: condition.id, target: delay.id, sourceHandle: 'yes', animated: true },
+      { id: crypto.randomUUID(), source: delay.id, target: action.id, animated: true },
+    ] satisfies Edge[],
+  };
+}
+
+function edgeStyle(edge: Edge): Edge {
+  return {
+    ...edge,
+    animated: true,
+    markerEnd: { type: MarkerType.ArrowClosed, color: '#22d3ee' },
+    style: { stroke: '#22d3ee', strokeWidth: 2 },
+  };
+}
+
+function autoLayout(nodes: WorkflowNode[], edges: Edge[]): WorkflowNode[] {
+  const ranks = new Map(nodes.map((node) => [node.id, node.type === 'trigger' ? 0 : 1]));
+  for (let pass = 0; pass < nodes.length; pass += 1) {
+    edges.forEach((edge) => {
+      const nextRank = Math.min(nodes.length, (ranks.get(edge.source) ?? 0) + 1);
+      ranks.set(edge.target, Math.max(ranks.get(edge.target) ?? 0, nextRank));
+    });
+  }
+  const perRank = new Map<number, number>();
+  return nodes.map((node) => {
+    const rank = ranks.get(node.id) ?? 0;
+    const row = perRank.get(rank) ?? 0;
+    perRank.set(rank, row + 1);
+    return { ...node, position: { x: 80 + rank * 350, y: 80 + row * 230 } };
+  });
+}
+
+interface WorkflowCanvasEditorProps {
+  definition?: WorkflowDefinition;
+  readOnly?: boolean;
+  publishing?: boolean;
+  publishError?: string;
+  onPublish?: (payload: PublishWorkflowInput) => void;
+}
+
+function CanvasEditor({ definition, readOnly = false, publishing = false, publishError, onPublish }: WorkflowCanvasEditorProps) {
+  const navigate = useNavigate();
+  const start = useMemo(() => initialGraph(definition), [definition]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>(start.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(start.edges.map(edgeStyle));
+  const [version, setVersion] = useState(definition?.version ?? 1);
+  const [query, setQuery] = useState('');
+  const [selectedID, setSelectedID] = useState<string>();
+  const [openGroups, setOpenGroups] = useState<Set<CatalogGroup>>(new Set(groups));
+  const [showValidation, setShowValidation] = useState(false);
+  const [showJSON, setShowJSON] = useState(false);
+  const { screenToFlowPosition, fitView } = useReactFlow();
+
+  const compilation = useMemo(() => compileVisualWorkflow(nodes, edges, version), [edges, nodes, version]);
+  const selectedNode = nodes.find((node) => node.id === selectedID);
+
+  const onConnect = useCallback((connection: Connection) => {
+    if (readOnly) return;
+    setEdges((current) => addEdge(edgeStyle({ ...connection, id: crypto.randomUUID() } as Edge), current));
+  }, [readOnly, setEdges]);
+
+  const onNodeClick: NodeMouseHandler<WorkflowNode> = useCallback((_event, node) => {
+    setSelectedID(node.id);
+  }, []);
+
+  const updateSelected = (data: Record<string, unknown>) => {
+    if (!selectedID || readOnly) return;
+    setNodes((current) => current.map((node) => node.id === selectedID ? { ...node, data: { ...node.data, ...data } } : node));
+  };
+
+  const removeSelected = () => {
+    if (!selectedID || readOnly) return;
+    setNodes((current) => current.filter((node) => node.id !== selectedID));
+    setEdges((current) => current.filter((edge) => edge.source !== selectedID && edge.target !== selectedID));
+    setSelectedID(undefined);
+  };
+
+  const duplicateSelected = () => {
+    if (!selectedNode || readOnly) return;
+    const duplicate: WorkflowNode = {
+      ...selectedNode,
+      id: crypto.randomUUID(),
+      selected: false,
+      position: { x: selectedNode.position.x + 40, y: selectedNode.position.y + 40 },
+      data: { ...selectedNode.data, label: `${String(selectedNode.data.label)} copia` },
+    };
+    setNodes((current) => [...current, duplicate]);
+    setSelectedID(duplicate.id);
+  };
+
+  const dragStart = (event: DragEvent, item: WorkflowCatalogItem) => {
+    event.dataTransfer.setData('application/sigdesk-workflow', item.key);
+    event.dataTransfer.effectAllowed = 'copy';
+  };
+
+  const onDrop = (event: DragEvent) => {
+    event.preventDefault();
+    if (readOnly) return;
+    const key = event.dataTransfer.getData('application/sigdesk-workflow');
+    const item = catalogItem(key);
+    if (!item) return;
+    const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+    const created = nodeFromCatalog(item, position);
+    setNodes((current) => [...current, created]);
+    setSelectedID(created.id);
+  };
+
+  const filteredCatalog = workflowCatalog.filter((item) => {
+    const normalized = `${item.title} ${item.description}`.toLocaleLowerCase();
+    return normalized.includes(query.trim().toLocaleLowerCase());
+  });
+  const operationalCount = workflowCatalog.filter((item) => item.support === 'operational').length;
+
+  return (
+    <div className="flex h-full min-h-[700px] flex-col bg-background" data-testid="workflow-visual-editor">
+      <header className="z-20 flex min-h-[76px] flex-wrap items-center justify-between gap-3 border-b border-border/50 bg-surface-container-low px-5 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <button type="button" onClick={() => navigate('/app/automations')} className="secondary-button px-3" aria-label="Volver">
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <Workflow className="h-5 w-5 shrink-0 text-primary" />
+              <h1 className="truncate text-lg font-black text-on-surface">
+                {definition ? `Workflow ${definition.categoria_id}` : 'Diseñador de automatización'}
+              </h1>
+              {definition && <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-black uppercase text-emerald-300">Publicado</span>}
+            </div>
+            <p className="mt-0.5 truncate text-xs text-on-surface-variant">Arrastra, conecta y configura bloques. El grafo publicado se ejecuta en el runtime real.</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {!readOnly && (
+            <label className="flex items-center gap-2 rounded-xl border border-border/50 bg-on-surface/5 px-3 py-2 text-xs font-bold text-on-surface-variant">
+              Versión
+              <input className="w-14 bg-transparent text-center font-mono text-on-surface outline-none" type="number" min={1} value={version} onChange={(event) => setVersion(Math.max(1, Number(event.target.value)))} />
+            </label>
+          )}
+          <button type="button" onClick={() => setShowValidation(true)} className="secondary-button">
+            {compilation.errors.length ? <AlertTriangle className="h-4 w-4 text-amber-300" /> : <CheckCircle2 className="h-4 w-4 text-emerald-300" />}
+            Validar {compilation.errors.length ? `(${compilation.errors.length})` : ''}
+          </button>
+          <button type="button" onClick={() => setShowJSON(true)} className="secondary-button"><Braces className="h-4 w-4" /> Contrato</button>
+          {!readOnly && (
+            <button type="button" disabled={!compilation.payload || publishing} onClick={() => compilation.payload && onPublish?.(compilation.payload)} className="primary-button">
+              <Rocket className="h-4 w-4" /> {publishing ? 'Publicando…' : 'Publicar versión'}
+            </button>
+          )}
+        </div>
+      </header>
+
+      {publishError && <div className="border-b border-red-500/30 bg-red-500/10 px-5 py-2 text-sm text-red-300">{publishError}</div>}
+
+      <div className="flex min-h-0 flex-1">
+        <aside className="z-10 flex w-[290px] shrink-0 flex-col border-r border-border/50 bg-surface-container-low">
+          <div className="border-b border-border/40 p-4">
+            <div className="flex items-center gap-2 text-sm font-black text-on-surface"><Library className="h-4 w-4 text-primary" /> Biblioteca</div>
+            <label className="mt-3 flex items-center gap-2 rounded-xl border border-border/50 bg-on-surface/5 px-3 py-2">
+              <Search className="h-4 w-4 text-on-surface-variant" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar bloque…" className="min-w-0 flex-1 bg-transparent text-xs text-on-surface outline-none" />
+            </label>
+            <div className="mt-3 flex gap-2 text-[9px] font-black uppercase">
+              <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-emerald-300">{operationalCount} operativos</span>
+              <span className="rounded-full bg-slate-500/10 px-2 py-1 text-slate-300">{workflowCatalog.length - operationalCount} próximos</span>
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            {groups.map((group) => {
+              const items = filteredCatalog.filter((item) => item.group === group);
+              if (items.length === 0) return null;
+              const Icon = groupIcons[group];
+              const open = openGroups.has(group);
+              return (
+                <section key={group} className="mb-3">
+                  <button type="button" onClick={() => setOpenGroups((current) => {
+                    const next = new Set(current);
+                    if (next.has(group)) next.delete(group); else next.add(group);
+                    return next;
+                  })} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-[10px] font-black uppercase tracking-wider text-on-surface-variant hover:bg-on-surface/5">
+                    {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                    <Icon className="h-3.5 w-3.5 text-primary" /> {group}
+                    <span className="ml-auto rounded-full bg-on-surface/5 px-2 py-0.5">{items.length}</span>
+                  </button>
+                  {open && <div className="mt-1 space-y-2">
+                    {items.map((item) => (
+                      <button
+                        type="button"
+                        key={item.key}
+                        draggable={!readOnly}
+                        onDragStart={(event) => dragStart(event, item)}
+                        onClick={() => {
+                          if (readOnly) return;
+                          const created = nodeFromCatalog(item, { x: 180 + nodes.length * 30, y: 120 + nodes.length * 18 });
+                          setNodes((current) => [...current, created]);
+                          setSelectedID(created.id);
+                        }}
+                        className={`group w-full cursor-grab rounded-xl border p-3 text-left transition-all active:cursor-grabbing ${item.support === 'operational' ? 'border-border/50 bg-on-surface/5 hover:border-primary/50 hover:bg-primary/5' : 'border-dashed border-border/40 bg-on-surface/[0.025] hover:border-slate-400/50'}`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-xs font-black text-on-surface">{item.title}</span>
+                          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[7px] font-black uppercase ${item.support === 'operational' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-slate-500/10 text-slate-300'}`}>{item.support === 'operational' ? 'Listo' : 'Próximo'}</span>
+                        </div>
+                        <p className="mt-1 text-[10px] leading-relaxed text-on-surface-variant">{item.description}</p>
+                      </button>
+                    ))}
+                  </div>}
+                </section>
+              );
+            })}
+          </div>
+        </aside>
+
+        <main className="relative min-w-0 flex-1 bg-surface-container-lowest">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            onNodesChange={readOnly ? undefined : onNodesChange}
+            onEdgesChange={readOnly ? undefined : onEdgesChange}
+            onConnect={onConnect}
+            onNodeClick={onNodeClick}
+            onPaneClick={() => setSelectedID(undefined)}
+            onDrop={onDrop}
+            onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; }}
+            nodesDraggable={!readOnly}
+            nodesConnectable={!readOnly}
+            elementsSelectable
+            deleteKeyCode={readOnly ? null : ['Backspace', 'Delete']}
+            fitView
+            minZoom={0.25}
+            maxZoom={1.6}
+            defaultEdgeOptions={{ animated: true, markerEnd: { type: MarkerType.ArrowClosed } }}
+            proOptions={{ hideAttribution: true }}
+          >
+            <Background color="var(--outline-variant)" gap={24} size={1.2} variant={BackgroundVariant.Dots} />
+            <Controls position="bottom-left" />
+            <MiniMap position="bottom-right" pannable zoomable nodeColor={(node) => node.data.supportStatus === 'planned' ? '#64748b' : '#06b6d4'} maskColor="rgba(2, 6, 23, 0.72)" />
+            <div className="absolute left-4 top-4 z-10 flex gap-2">
+              <button type="button" onClick={() => { setNodes((current) => autoLayout(current, edges)); window.setTimeout(() => void fitView({ duration: 350, padding: 0.18 }), 20); }} className="secondary-button bg-surface-container-low/95 px-3"><Grid3X3 className="h-4 w-4" /> Ordenar</button>
+              <div className={`flex items-center gap-2 rounded-xl border bg-surface-container-low/95 px-3 py-2 text-xs font-bold ${compilation.errors.length ? 'border-amber-500/30 text-amber-300' : 'border-emerald-500/30 text-emerald-300'}`}>
+                {compilation.errors.length ? <AlertTriangle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                {compilation.errors.length ? 'Diseño incompleto' : 'Listo para publicar'}
+              </div>
+            </div>
+          </ReactFlow>
+        </main>
+
+        {selectedNode && (
+          <aside className="z-10 w-[320px] shrink-0 overflow-y-auto border-l border-border/50 bg-surface-container-low p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div><p className="text-[9px] font-black uppercase tracking-[0.18em] text-primary">Propiedades</p><h2 className="mt-1 font-black text-on-surface">{String(selectedNode.data.label)}</h2></div>
+              <button type="button" onClick={() => setSelectedID(undefined)} className="rounded-lg p-2 text-on-surface-variant hover:bg-on-surface/5"><X className="h-4 w-4" /></button>
+            </div>
+            <div className={`mt-4 rounded-xl border p-3 text-xs ${selectedNode.data.supportStatus === 'planned' ? 'border-amber-500/30 bg-amber-500/10 text-amber-200' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'}`}>
+              <p className="font-black">{selectedNode.data.supportStatus === 'planned' ? 'Capacidad próxima' : 'Capacidad operativa'}</p>
+              <p className="mt-1 opacity-75">{selectedNode.data.supportStatus === 'planned'
+                ? ((selectedNode.data.catalogKey === 'action.assign_user' || selectedNode.data.catalogKey === 'action.assign_team')
+                    ? 'El destino ya puede configurarse con Organization. La rama se habilitará para publicar cuando termine la ejecución real en Tickets.'
+                    : 'Puedes diseñarla, pero una rama que la use no se puede publicar hasta implementar su contrato de backend.')
+                : 'Este bloque compila a una regla que el motor ejecuta realmente.'}</p>
+            </div>
+            <label className="mt-5 block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Nombre del bloque
+              <input disabled={readOnly} value={String(selectedNode.data.label ?? '')} onChange={(event) => updateSelected({ label: event.target.value })} className="input-field mt-2 w-full normal-case" />
+            </label>
+
+            {selectedNode.data.catalogKey === 'condition.priority' && (
+              <div className="mt-5 space-y-4">
+                <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Evaluación
+                  <select disabled={readOnly} value={String(selectedNode.data.conditionMode ?? 'priority')} onChange={(event) => updateSelected({ conditionMode: event.target.value })} className="input-field mt-2 w-full normal-case">
+                    <option value="priority">Comparar prioridad</option><option value="always">Ejecutar siempre</option>
+                  </select>
+                </label>
+                {selectedNode.data.conditionMode !== 'always' && <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Prioridad
+                  <select disabled={readOnly} value={String(selectedNode.data.priority ?? 'critica')} onChange={(event) => updateSelected({ priority: event.target.value })} className="input-field mt-2 w-full normal-case">
+                    {Object.entries(priorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                </label>}
+              </div>
+            )}
+
+            {selectedNode.data.catalogKey === 'control.delay' && (
+              <div className="mt-5 grid grid-cols-[1fr_130px] gap-2">
+                <label className="text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Duración
+                  <input disabled={readOnly} type="number" min={0} value={String(selectedNode.data.delayValue ?? '0')} onChange={(event) => updateSelected({ delayValue: event.target.value })} className="input-field mt-2 w-full normal-case" />
+                </label>
+                <label className="text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Unidad
+                  <select disabled={readOnly} value={String(selectedNode.data.delayUnit ?? 'minutes')} onChange={(event) => updateSelected({ delayUnit: event.target.value })} className="input-field mt-2 w-full normal-case">
+                    <option value="seconds">Segundos</option><option value="minutes">Minutos</option><option value="hours">Horas</option><option value="days">Días</option>
+                  </select>
+                </label>
+              </div>
+            )}
+
+            {selectedNode.data.catalogKey === 'action.notify_stakeholders' && (
+              <div className="mt-5 rounded-xl border border-border/40 bg-on-surface/5 p-4 text-xs text-on-surface-variant">
+                <p className="font-black text-on-surface">Destinatarios administrados por Notificaciones</p>
+                <p className="mt-2 leading-relaxed">Solicitante, responsable y personas o áreas interesadas. Cada usuario conserva sus preferencias de canal.</p>
+              </div>
+            )}
+
+            {(selectedNode.data.catalogKey === 'action.assign_user' || selectedNode.data.catalogKey === 'action.assign_team') && (
+              <AssignmentActionEditor
+                data={selectedNode.data}
+                mode={selectedNode.data.catalogKey === 'action.assign_user' ? 'user' : 'team'}
+                readOnly={readOnly}
+                onChange={updateSelected}
+              />
+            )}
+
+            {!readOnly && <div className="mt-6 grid grid-cols-2 gap-2 border-t border-border/40 pt-5">
+              <button type="button" onClick={duplicateSelected} className="secondary-button"><Copy className="h-4 w-4" /> Duplicar</button>
+              <button type="button" onClick={removeSelected} className="secondary-button text-red-300"><Trash2 className="h-4 w-4" /> Eliminar</button>
+            </div>}
+          </aside>
+        )}
+      </div>
+
+      {(showValidation || showJSON) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onMouseDown={(event) => { if (event.currentTarget === event.target) { setShowValidation(false); setShowJSON(false); } }}>
+          <section className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-border/60 bg-surface-container-low p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-black text-on-surface">{showJSON ? <Braces className="h-5 w-5 text-primary" /> : <CheckCircle2 className="h-5 w-5 text-primary" />} {showJSON ? 'Contrato ejecutable y layout' : 'Validación previa'}</h2>
+                <p className="mt-1 text-sm text-on-surface-variant">{showJSON ? 'El runtime ejecuta reglas; el editor conserva el diseño exacto.' : 'Solo las ramas completamente operativas pueden publicarse.'}</p>
+              </div>
+              <button type="button" onClick={() => { setShowValidation(false); setShowJSON(false); }} className="rounded-lg p-2 text-on-surface-variant hover:bg-on-surface/5"><X className="h-4 w-4" /></button>
+            </div>
+            {showJSON ? (
+              <pre className="mt-5 max-h-[60vh] overflow-auto rounded-2xl bg-[#070b12] p-5 text-xs text-emerald-300">{JSON.stringify(compilation.payload ?? { errors: compilation.errors }, null, 2)}</pre>
+            ) : (
+              <div className="mt-5 space-y-3">
+                {compilation.errors.length === 0 && <div className="flex gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200"><CheckCircle2 className="h-5 w-5 shrink-0" /><div><p className="font-black">Workflow válido</p><p className="mt-1 opacity-75">La definición puede publicarse y ejecutarse.</p></div></div>}
+                {compilation.errors.map((error) => <div key={error} className="flex gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200"><AlertTriangle className="h-5 w-5 shrink-0" /><span>{error}</span></div>)}
+                {compilation.warnings.map((warning) => <div key={warning} className="flex gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200"><Info className="h-5 w-5 shrink-0" /><span>{warning}</span></div>)}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function WorkflowCanvasEditor(props: WorkflowCanvasEditorProps) {
+  return <ReactFlowProvider><CanvasEditor {...props} /></ReactFlowProvider>;
+}

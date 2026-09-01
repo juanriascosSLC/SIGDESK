@@ -92,8 +92,14 @@ export function useUpdateTicketStatus() {
   const queryClient = useQueryClient();
   const invalidate = useInvalidateTicket();
   return useMutation({
-    mutationFn: ({ id, status, actorName }: { id: string; status: TicketStatus; actorName?: string }) =>
-      updateTicketStatus(id, status, actorName),
+    mutationFn: ({ id, status, actorName, transitionKey, motivo, justificacionIncumplimientoSla }: {
+      id: string;
+      status: TicketStatus;
+      actorName?: string;
+      transitionKey?: string;
+      motivo?: string;
+      justificacionIncumplimientoSla?: string;
+    }) => updateTicketStatus(id, status, actorName, { transitionKey, motivo, justificacionIncumplimientoSla }),
     onSuccess: (ticket) => {
       invalidate(ticket);
       if (ticket.entityId) {
@@ -108,8 +114,12 @@ export function useUpdateTicketStatus() {
 export function useAssignTicket() {
   const invalidate = useInvalidateTicket();
   return useMutation({
-    mutationFn: ({ id, assigneeName, actorName }: { id: string; assigneeName: string | null; actorName?: string }) =>
-      assignTicket(id, assigneeName, actorName),
+    mutationFn: ({ id, assigneeName, actorName, transitionKey }: {
+      id: string;
+      assigneeName: string | null;
+      actorName?: string;
+      transitionKey?: string;
+    }) => assignTicket(id, assigneeName, actorName, transitionKey),
     onSuccess: invalidate,
   });
 }

@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test';
 import {
   mockAuthenticatedAdmin,
   mockAuthenticatedAgentWithoutAdminAccess,
+  mockAuthenticatedRequester,
+  mockAuthenticatedSupervisor,
 } from './support';
 
 /**
@@ -33,7 +35,7 @@ import {
 test('un admin con permisos reales sobre roles/usuarios entra a Users & Roles', async ({
   page,
 }) => {
-  await mockAuthenticatedAdmin(page);
+  await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
 
   // RolesTab (UsersManager.tsx) dispara estas dos GET incondicionalmente
   // al montar, sin importar la pestaña activa (rbac.service.ts). Se
@@ -60,10 +62,10 @@ test('un admin con permisos reales sobre roles/usuarios entra a Users & Roles', 
     }),
   );
 
-  await page.goto('/app/admin/users');
+  await page.goto('/app/admin/users', { waitUntil: 'domcontentloaded' });
 
   await expect(
-    page.getByRole('heading', { name: 'Roles y Permisos', exact: true }),
+    page.getByRole('heading', { name: 'Usuarios, roles y organización', exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Roles y permisos' }),
@@ -79,20 +81,36 @@ test('un admin con permisos reales sobre roles/usuarios entra a Users & Roles', 
 test('un usuario sin permiso sobre roles/usuarios ve exactamente eso: nada de Users & Roles', async ({
   page,
 }) => {
-  await mockAuthenticatedAgentWithoutAdminAccess(page);
+  await mockAuthenticatedAgentWithoutAdminAccess(page, { forwardUnmatched: false });
 
-  await page.goto('/app/admin/users');
+  await page.goto('/app/admin/users', { waitUntil: 'domcontentloaded' });
 
   // App.tsx: la ruta /admin/users tiene su propio ProtectedRoute
   // (requireCondition={canManageUsersAndRoles}, fallbackTo="/app") —
   // independiente del guard externo de /app/* que este fixture sí supera
-  // (permissions:['*'] alcanza para el `can()` de las rutas de
-  // tickets/changes/problems, pero canManageUsersAndRoles se calcula
-  // aparte, solo a partir de un permiso con prefijo roles:/usuarios:, que
-  // este fixture deliberadamente no tiene). El bounce debe aterrizar en
+  // (`tickets:read:global` alcanza para el guard exterior del workspace,
+  // pero no otorga lectura sobre roles/usuarios). El bounce debe aterrizar en
   // /app, nunca de vuelta en /login — la sesión es válida, el permiso no.
   await expect(page).toHaveURL(/\/app\/?$/);
   await expect(
-    page.getByRole('heading', { name: 'Roles y Permisos', exact: true }),
+    page.getByRole('heading', { name: 'Usuarios, roles y organización', exact: true }),
   ).not.toBeVisible();
+});
+
+test('un requester permanece en el portal aunque pueda leer sus propios tickets', async ({ page }) => {
+  await mockAuthenticatedRequester(page, { forwardUnmatched: false });
+  await page.goto('/app/tickets', { waitUntil: 'domcontentloaded' });
+  await expect(page).toHaveURL(/\/portal\/?$/);
+  await expect(page.getByRole('link', { name: 'Tickets & Issues' })).toHaveCount(0);
+});
+
+test('un supervisor ve operación y reportes pero no administración de roles ni catálogo', async ({ page }) => {
+  await mockAuthenticatedSupervisor(page, { forwardUnmatched: false });
+  await page.goto('/app', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('link', { name: 'Tickets & Issues' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Change Mgmt' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Problem Mgmt' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Reports' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Users & Roles' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Catalog Builder' })).toHaveCount(0);
 });

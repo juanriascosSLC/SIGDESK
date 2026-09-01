@@ -11,22 +11,22 @@ import {
   Settings,
   MessageSquare,
   Network,
+  ListChecks,
   Workflow,
-  Bell,
   BarChart3,
   SearchCode,
   Timer,
-  AlertTriangle,
-  UserCheck,
-  CheckCircle2,
   BookOpen,
   Server,
-  CalendarClock,
-  Users
+  Users,
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react';
 import UserProfilePopover from '../components/layout/UserProfilePopover';
 import { useAuth } from '../features/auth/useAuth';
 import { PERMISSIONS } from '../features/auth/permissions';
+import { useNavStore } from '../store/navStore';
+import { NotificationBell } from '../features/notifications/NotificationBell';
 
 // --- Components from App.tsx Sidebar ---
 
@@ -36,9 +36,10 @@ interface NavButtonProps {
   icon: React.ElementType;
   label: string;
   isAmber?: boolean;
+  collapsed?: boolean;
 }
 
-function NavButton({ active, to, icon: Icon, label, isAmber }: NavButtonProps) {
+function NavButton({ active, to, icon: Icon, label, isAmber, collapsed }: NavButtonProps) {
   const activeBg = isAmber ? 'from-amber-500/20' : 'from-cyan-500/20';
   const activeText = isAmber ? 'text-amber-400' : 'text-cyan-400';
   const activeShadow = isAmber ? 'shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'shadow-[0_0_15px_rgba(34,211,238,0.3)]';
@@ -49,13 +50,20 @@ function NavButton({ active, to, icon: Icon, label, isAmber }: NavButtonProps) {
   const iconBg = isAmber ? 'bg-amber-500/20' : 'bg-cyan-500/20';
   const iconBorder = isAmber ? 'border-amber-500/30' : 'border-cyan-500/30';
 
+  // Collapsed, the icon is all that identifies the destination, so the label
+  // has to survive as an accessible name and as a native tooltip — otherwise
+  // the rail is a column of unlabelled glyphs.
   return (
     <Link
       to={to}
-      className={`group flex items-center gap-4 px-4 py-2.5 rounded-xl transition-all duration-300 text-left relative overflow-hidden ${
-        active 
-          ? `bg-gradient-to-r ${activeBg} to-transparent border border-border` 
-          : 'text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[0.03] hover:translate-x-1 border border-transparent'
+      title={collapsed ? label : undefined}
+      aria-label={collapsed ? label : undefined}
+      className={`group flex items-center rounded-xl transition-all duration-300 text-left relative overflow-hidden ${
+        collapsed ? 'justify-center px-0 py-2.5' : 'gap-4 px-4 py-2.5'
+      } ${
+        active
+          ? `bg-gradient-to-r ${activeBg} to-transparent border border-border`
+          : `text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[0.03] border border-transparent ${collapsed ? '' : 'hover:translate-x-1'}`
       }`}
     >
       {active && (
@@ -70,16 +78,30 @@ function NavButton({ active, to, icon: Icon, label, isAmber }: NavButtonProps) {
         <Icon size={16} strokeWidth={active ? 2.5 : 2} />
       </div>
 
-      <span className={`text-[10px] font-black uppercase tracking-[0.15em] transition-colors duration-300 ${
-        active ? 'text-on-surface drop-shadow-[0_0_8px_rgba(255,255,255,0.4)]' : ''
-      }`}>
-        {label}
-      </span>
+      {!collapsed && (
+        <span className={`whitespace-nowrap text-[10px] font-black uppercase tracking-[0.15em] transition-colors duration-300 ${
+          active ? 'text-on-surface drop-shadow-[0_0_8px_rgba(255,255,255,0.4)]' : ''
+        }`}>
+          {label}
+        </span>
+      )}
     </Link>
   );
 }
 
-function SectionHeader({ title, isAmber }: { title: string; isAmber?: boolean }) {
+function SectionHeader({ title, isAmber, collapsed }: { title: string; isAmber?: boolean; collapsed?: boolean }) {
+  // In the rail the title has nowhere to go without wrapping into an
+  // unreadable stack, so the group is marked by a rule instead. The text stays
+  // for screen readers: the grouping is still real, only its rendering changed.
+  if (collapsed) {
+    return (
+      <div className="px-2 py-1 mb-2 mt-4 first:mt-0">
+        <span className="sr-only">{title}</span>
+        <div aria-hidden className={`h-px w-full ${isAmber ? 'bg-amber-500/30' : 'bg-border'}`} />
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-3 px-2 py-1 mb-2 mt-4 first:mt-0">
       <div className={`h-px w-4 ${isAmber ? 'bg-gradient-to-r from-amber-500/50 to-transparent' : 'bg-gradient-to-r from-cyan-500/50 to-transparent'}`} />
@@ -91,7 +113,7 @@ function SectionHeader({ title, isAmber }: { title: string; isAmber?: boolean })
   );
 }
 
-function Sidebar() {
+function Sidebar({ collapsed }: { collapsed: boolean }) {
   const location = useLocation();
   const currentPath = location.pathname;
   const { logout, canManageUsersAndRoles, canViewTickets, can } = useAuth();
@@ -104,8 +126,19 @@ function Sidebar() {
   // the section title: an "empty" heading reads as broken nav, and it only
   // went unnoticed while Tickets was equally unreachable.
   const canViewChanges = can(PERMISSIONS.changesView);
+  // Grant distinto y a proposito: se puede ejecutar trabajo de una RFC sin
+  // poder leer las RFC. Quien esta en ese caso solo ve "Mis tareas".
+  const canViewChangeTasks = can(PERMISSIONS.changeTasksView);
   const canViewProblems = can(PERMISSIONS.problemsView);
-  const showChangeAndConfig = canViewChanges || canViewProblems;
+  const canViewAssets = can(PERMISSIONS.assetsView);
+  const canViewReports = can(PERMISSIONS.reportsView);
+  const canViewCatalog = can(PERMISSIONS.catalogView);
+  const canViewKnowledge = can(PERMISSIONS.knowledgeView);
+  const canAuthorCatalog = can(PERMISSIONS.catalogAuthor);
+  const canViewAutomations = can(PERMISSIONS.automationsView);
+  const canViewSla = can(PERMISSIONS.slaView);
+  const showChangeAndConfig = canViewChanges || canViewChangeTasks || canViewProblems || canViewAssets;
+  const showAdministration = canManageUsersAndRoles || canAuthorCatalog || canViewAutomations || canViewSla;
 
   const handleLogout = async () => {
     await logout();
@@ -113,34 +146,46 @@ function Sidebar() {
   };
 
   return (
-    <nav className="fixed left-0 top-0 hidden h-screen w-64 flex-col bg-surface-container-lowest/95 backdrop-blur-2xl md:flex border-r border-border shadow-[4px_0_24px_rgba(0,0,0,0.3)] z-50">
+    <nav
+      id="app-nav"
+      className={`fixed left-0 top-0 hidden h-screen flex-col bg-surface-container-lowest/95 backdrop-blur-2xl md:flex border-r border-border shadow-[4px_0_24px_rgba(0,0,0,0.3)] z-50 transition-[width] duration-300 ease-out ${
+        collapsed ? 'w-20' : 'w-64'
+      }`}
+    >
       
       {/* Brand Header */}
-      <div className="px-6 py-8 relative mt-4">
+      <div className={`relative mt-4 py-8 ${collapsed ? 'px-0' : 'px-6'}`}>
         {/* Subtle glow behind logo */}
-        <div className="absolute top-10 left-10 w-20 h-20 bg-cyan-500/20 rounded-full blur-[40px] pointer-events-none" />
+        <div className={`absolute top-10 w-20 h-20 bg-cyan-500/20 rounded-full blur-[40px] pointer-events-none ${collapsed ? 'left-0' : 'left-10'}`} />
         
-        <div className="flex items-center gap-4 mb-2 relative z-10">
-          <div className="relative group cursor-pointer" onClick={() => navigate('/app')}>
+        <div className={`flex items-center mb-2 relative z-10 ${collapsed ? 'justify-center' : 'gap-4'}`}>
+          <div
+            className="relative group cursor-pointer"
+            onClick={() => navigate('/app')}
+            title={collapsed ? 'SIG-DESK' : undefined}
+          >
             <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200" />
             <div className="relative p-1.5 rounded-xl bg-surface-container-low border border-cyan-500/30 flex items-center justify-center">
               <img src="/logo.png" alt="SIG-DESK Logo" className="w-8 h-8 object-contain drop-shadow-[0_0_10px_rgba(34,211,238,0.5)]" />
             </div>
           </div>
-          <div>
-            <div className="text-sm font-black tracking-[0.25em] text-on-surface uppercase drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]">SIG-DESK</div>
-            <div className="text-[9px] font-mono font-bold tracking-[0.3em] text-cyan-500/80 uppercase mt-0.5">AGENT WORKSPACE</div>
-          </div>
+          {!collapsed && (
+            <div className="whitespace-nowrap">
+              <div className="text-sm font-black tracking-[0.25em] text-on-surface uppercase drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]">SIG-DESK</div>
+              <div className="text-[9px] font-mono font-bold tracking-[0.3em] text-cyan-500/80 uppercase mt-0.5">AGENT WORKSPACE</div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Navigation */}
-      <div className="flex-1 px-4 overflow-y-auto overflow-x-hidden pb-8">
+      <div className={`flex-1 overflow-y-auto overflow-x-hidden pb-8 ${collapsed ? 'px-3' : 'px-4'}`}>
         <div className="flex flex-col gap-1 py-2">
         
           <div className="mb-2">
-            <SectionHeader title="Service Desk (ITSM)" />
+            <SectionHeader collapsed={collapsed} title="Service Desk (ITSM)" />
             <NavButton
+              collapsed={collapsed}
               active={currentPath === '/app'}
               to="/app"
               icon={LayoutDashboard}
@@ -148,97 +193,111 @@ function Sidebar() {
             />
             {canViewTickets && (
               <NavButton
+                collapsed={collapsed}
                 active={currentPath.startsWith('/app/tickets')}
                 to="/app/tickets"
                 icon={TicketIcon}
                 label="Tickets & Issues"
               />
             )}
-            <NavButton
-              active={currentPath.startsWith('/app/reports')}
-              to="/app/reports"
-              icon={BarChart3}
-              label="Reports"
-            />
+            {canViewReports && (
+              <NavButton
+                collapsed={collapsed}
+                active={currentPath.startsWith('/app/reports')}
+                to="/app/reports"
+                icon={BarChart3}
+                label="Reports"
+              />
+            )}
           </div>
 
           {showChangeAndConfig && (
             <div className="mb-2">
-              <SectionHeader title="Change & Config (ITIL)" />
+              <SectionHeader collapsed={collapsed} title="Change & Config (ITIL)" />
               {canViewChanges && (
                 <NavButton
-                  active={currentPath.startsWith('/app/changes')}
+                  collapsed={collapsed}
+                  active={currentPath.startsWith('/app/changes') && currentPath !== '/app/changes/my-tasks'}
                   to="/app/changes"
                   icon={Network}
                   label="Change Mgmt"
                 />
               )}
+              {canViewChangeTasks && (
+                <NavButton
+                  collapsed={collapsed}
+                  active={currentPath === '/app/changes/my-tasks'}
+                  to="/app/changes/my-tasks"
+                  icon={ListChecks}
+                  label="Mis tareas"
+                />
+              )}
               {canViewProblems && (
                 <NavButton
+                  collapsed={collapsed}
                   active={currentPath.startsWith('/app/problems')}
                   to="/app/problems"
                   icon={SearchCode}
                   label="Problem Mgmt"
                 />
               )}
+              {canViewAssets && (
+                <NavButton
+                  collapsed={collapsed}
+                  active={currentPath.startsWith('/app/assets')}
+                  to="/app/assets"
+                  icon={Server}
+                  label="Assets / CMDB"
+                />
+              )}
             </div>
           )}
 
           <div className="mb-2">
-            <SectionHeader title="Self Service" />
-            <NavButton
-              active={currentPath.startsWith('/app/catalog')}
-              to="/app/catalog"
-              icon={FolderKanban}
-              label="Service Catalog"
-            />
-            <NavButton
-              active={currentPath.startsWith('/app/knowledge')}
-              to="/app/knowledge"
-              icon={ShieldCheck}
-              label="Knowledge Base"
-            />
+            <SectionHeader collapsed={collapsed} title="Self Service" />
+            {canViewCatalog && (
+              <NavButton
+                collapsed={collapsed}
+                active={currentPath.startsWith('/app/catalog')}
+                to="/app/catalog"
+                icon={FolderKanban}
+                label="Service Catalog"
+              />
+            )}
+            {canViewKnowledge && (
+              <NavButton
+                collapsed={collapsed}
+                active={currentPath.startsWith('/app/knowledge')}
+                to="/app/knowledge"
+                icon={ShieldCheck}
+                label="Knowledge Base"
+              />
+            )}
           </div>
 
-          {canManageUsersAndRoles && (
+          {showAdministration && (
             <div className="mb-2">
-              <SectionHeader title="Administration" />
+              <SectionHeader collapsed={collapsed} title="Administration" />
+              {canManageUsersAndRoles && <NavButton collapsed={collapsed} active={currentPath.startsWith('/app/admin/users')} to="/app/admin/users" icon={Users} label="Users & Roles" />}
+              {canAuthorCatalog && <NavButton collapsed={collapsed} active={currentPath.startsWith('/app/admin/catalog-builder')} to="/app/admin/catalog-builder" icon={FolderKanban} label="Catalog Builder" />}
+              {canViewAutomations && <NavButton collapsed={collapsed} active={currentPath.startsWith('/app/automations')} to="/app/automations" icon={Workflow} label="Automations" />}
+              {canViewSla && <NavButton collapsed={collapsed} active={currentPath.startsWith('/app/settings/sla')} to="/app/settings/sla" icon={Timer} label="SLA Policies" />}
+              {canManageUsersAndRoles && <>
               <NavButton
-                active={currentPath.startsWith('/app/admin/users')}
-                to="/app/admin/users"
-                icon={Users}
-                label="Users & Roles"
-              />
-              <NavButton
-                active={currentPath.startsWith('/app/admin/catalog-builder')}
-                to="/app/admin/catalog-builder"
-                icon={FolderKanban}
-                label="Catalog Builder"
-              />
-              <NavButton
-                active={currentPath.startsWith('/app/automations')}
-                to="/app/automations"
-                icon={Workflow}
-                label="Automations"
-              />
-              <NavButton
-                active={currentPath.startsWith('/app/settings/sla')}
-                to="/app/settings/sla"
-                icon={Timer}
-                label="SLA Policies"
-              />
-              <NavButton
+                collapsed={collapsed}
                 active={currentPath.startsWith('/app/settings/chatops')}
                 to="/app/settings/chatops"
                 icon={MessageSquare}
                 label="ChatOps"
               />
               <NavButton
+                collapsed={collapsed}
                 active={currentPath.startsWith('/app/settings/api-keys')}
                 to="/app/settings/api-keys"
                 icon={Settings}
                 label="API Keys"
               />
+              </>}
             </div>
           )}
 
@@ -246,10 +305,14 @@ function Sidebar() {
       </div>
 
       {/* Footer Info */}
-      <div className="mt-auto p-4 bg-gradient-to-b from-transparent to-surface-container-low/80 border-t border-border">
+      <div className={`mt-auto bg-gradient-to-b from-transparent to-surface-container-low/80 border-t border-border ${collapsed ? 'p-3' : 'p-4'}`}>
         <button
           onClick={handleLogout}
-          className="group relative flex items-center justify-between px-6 py-3 w-full rounded-xl overflow-hidden bg-on-surface/5 border border-border transition-all duration-300 hover:border-red-500/30 hover:bg-red-500/10 hover:shadow-[0_0_20px_rgba(239,68,68,0.15)] hover:-translate-y-0.5"
+          title={collapsed ? 'Sign out' : undefined}
+          aria-label={collapsed ? 'Sign out' : undefined}
+          className={`group relative flex items-center w-full rounded-xl overflow-hidden bg-on-surface/5 border border-border transition-all duration-300 hover:border-red-500/30 hover:bg-red-500/10 hover:shadow-[0_0_20px_rgba(239,68,68,0.15)] hover:-translate-y-0.5 ${
+            collapsed ? 'justify-center px-0 py-3' : 'justify-between px-6 py-3'
+          }`}
         >
           <div className="absolute inset-0 bg-gradient-to-r from-red-500/0 via-red-500/0 to-red-500/0 group-hover:from-red-500/10 group-hover:via-transparent transition-all duration-500" />
           
@@ -257,23 +320,17 @@ function Sidebar() {
             <div className="w-8 h-8 rounded-lg bg-surface-container-low border border-border flex items-center justify-center group-hover:border-red-500/30 group-hover:bg-red-500/20 transition-colors">
               <LogOut size={14} className="text-on-surface-variant group-hover:text-red-400 transition-colors" />
             </div>
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant group-hover:text-red-400 transition-colors">
-              Sign out
-            </span>
+            {!collapsed && (
+              <span className="whitespace-nowrap text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant group-hover:text-red-400 transition-colors">
+                Sign out
+              </span>
+            )}
           </div>
         </button>
       </div>
     </nav>
   );
 }
-
-const mockNotifications = [
-  { icon: AlertTriangle, iconClass: 'bg-red-500/10 border-red-500/20 text-red-400', title: 'SLA breach warning', desc: 'INC-202601 response SLA at 75% consumed.', time: '5 min ago', unread: true },
-  { icon: UserCheck, iconClass: 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400', title: 'Ticket assigned to you', desc: 'INC-202605 · VPN disconnects every 15 minutes.', time: '32 min ago', unread: true },
-  { icon: CalendarClock, iconClass: 'bg-amber-500/10 border-amber-500/20 text-amber-400', title: 'CAB approval pending', desc: 'CHG-002 awaits your vote before Friday\'s window.', time: '1 hour ago', unread: true },
-  { icon: MessageSquare, iconClass: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400', title: 'Laura Kim mentioned you', desc: '"@JD can you confirm the switch port logs?"', time: '2 hours ago', unread: false },
-  { icon: CheckCircle2, iconClass: 'bg-surface-container border-border/50 text-on-surface-variant', title: 'Ticket resolved', desc: 'INC-202610 · Access control panel back online.', time: 'Yesterday', unread: false },
-];
 
 const mockSearchResults = {
   tickets: [
@@ -289,17 +346,44 @@ const mockSearchResults = {
 };
 
 export default function AgentLayout({ children }: { children: React.ReactNode }) {
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
+  // La campana solo consulta cuando ya hay permisos resueltos: pedir la
+  // bandeja sin sesión útil produce un 401 que apiClient convierte en
+  // cierre de sesión, y eso rebotaría al login en cada arranque.
+  const { canViewTickets } = useAuth();
+  const collapsed = useNavStore((state) => state.collapsed);
+  const toggleNav = useNavStore((state) => state.toggle);
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans flex overflow-hidden">
-      <Sidebar />
+      <Sidebar collapsed={collapsed} />
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col bg-surface overflow-hidden md:ml-64 relative">
+      {/* Main Content — the nav is `fixed`, so the content reserves its width
+          with a margin. Both sides animate together or the layout visibly
+          tears while the rail slides. */}
+      <main
+        className={`flex-1 flex flex-col bg-surface overflow-hidden relative transition-[margin] duration-300 ease-out ${
+          collapsed ? 'md:ml-20' : 'md:ml-64'
+        }`}
+      >
         <header className="h-20 border-b border-border/40 bg-surface-container-lowest/50 backdrop-blur-xl flex items-center px-8 justify-between sticky top-0 z-10">
           <div className="flex items-center gap-4 w-full max-w-xl">
+            {/* The control lives in the header, not in the nav: it stays in
+                the same place whether the rail is open or closed, and it reads
+                as "fold the panel to my left". Hidden below `md` for the same
+                reason the nav is — there is nothing to fold there. */}
+            <button
+              type="button"
+              onClick={toggleNav}
+              aria-expanded={!collapsed}
+              aria-controls="app-nav"
+              aria-label={collapsed ? 'Mostrar la navegación' : 'Ocultar la navegación'}
+              title={collapsed ? 'Mostrar la navegación' : 'Ocultar la navegación'}
+              data-testid="app-nav-toggle"
+              className="hidden md:flex shrink-0 w-10 h-10 rounded-xl bg-surface-container-low border border-border/50 items-center justify-center text-on-surface-variant hover:text-cyan-400 hover:border-cyan-500/30 transition-colors"
+            >
+              {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+            </button>
              <div className="relative w-full">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
                 <input
@@ -352,48 +436,10 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
                New Ticket
             </Link>
 
-            {/* Notifications bell */}
-            <div className="relative">
-              <button
-                onClick={() => setNotificationsOpen(o => !o)}
-                className="relative w-10 h-10 rounded-full bg-surface-container-low border border-border/50 flex items-center justify-center text-on-surface-variant hover:text-cyan-400 hover:border-cyan-500/30 transition-colors"
-              >
-                <Bell className="w-4 h-4" />
-                <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-[#ffffff] text-[10px] font-black flex items-center justify-center border-2 border-surface shadow-[0_0_10px_rgba(239,68,68,0.5)]">
-                  3
-                </span>
-              </button>
-
-              {notificationsOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setNotificationsOpen(false)} />
-                  <div className="absolute right-0 top-12 w-96 bg-surface-container-lowest/95 backdrop-blur-2xl border border-border/50 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden z-50">
-                    <div className="flex items-center justify-between px-5 py-3 border-b border-border/40">
-                      <h4 className="text-xs font-black uppercase tracking-[0.15em] text-on-surface">Notifications</h4>
-                      <button className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 transition-colors">Mark all as read</button>
-                    </div>
-                    <div className="max-h-96 overflow-y-auto divide-y divide-border/20">
-                      {mockNotifications.map((n, i) => (
-                        <div key={i} className="flex items-start gap-3 px-5 py-4 hover:bg-on-surface/[0.04] cursor-pointer transition-colors">
-                          <div className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${n.iconClass}`}>
-                            <n.icon className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-bold text-on-surface leading-snug">{n.title}</p>
-                            <p className="text-xs text-on-surface-variant truncate mt-0.5">{n.desc}</p>
-                            <p className="text-[10px] font-mono text-on-surface-variant mt-1">{n.time}</p>
-                          </div>
-                          {n.unread && <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] shrink-0 mt-1.5" />}
-                        </div>
-                      ))}
-                    </div>
-                    <button className="w-full py-3 text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant hover:text-cyan-400 border-t border-border/40 transition-colors">
-                      View all notifications
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
+            {/* La campana real: contador de no leídas, bandeja del backend y
+                marcado de lectura. Antes era un array estático en este mismo
+                archivo — se veía idéntico con el backend caído. */}
+            <NotificationBell enabled={canViewTickets} />
 
             <UserProfilePopover />
           </div>

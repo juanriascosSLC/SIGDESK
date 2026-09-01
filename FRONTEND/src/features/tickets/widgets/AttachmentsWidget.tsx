@@ -1,11 +1,11 @@
 import { useRef } from 'react';
 import { Download, FileText, Image as ImageIcon, Paperclip, UploadCloud } from 'lucide-react';
-import { attachmentDownloadUrl } from '../api';
+import { downloadAttachment } from '../api';
 import type { TicketPageContext } from './context';
 
 export function AttachmentsWidget({ context }: { context: TicketPageContext }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { items, onUpload, uploadPending, uploadError } = context.attachments;
+  const { items, canUpload, onUpload, uploadPending, uploadError } = context.attachments;
 
   return (
     <div className="bg-surface-container-low border border-border/40 rounded-3xl p-6">
@@ -44,14 +44,14 @@ export function AttachmentsWidget({ context }: { context: TicketPageContext }) {
                     {Math.ceil(attachment.sizeBytes / 1024)} KB · {attachment.uploaderName}
                   </p>
                 </div>
-                <a
-                  href={attachmentDownloadUrl(attachment.id)}
-                  target="_blank"
-                  rel="noreferrer"
+                <button
+                  type="button"
+                  aria-label={`Descargar ${attachment.fileName}`}
+                  onClick={() => void downloadAttachment(attachment.id, attachment.fileName)}
                   className="p-2 rounded-lg text-on-surface-variant opacity-0 group-hover:opacity-100 hover:text-cyan-400 hover:bg-on-surface/5 transition-all shrink-0"
                 >
                   <Download className="w-4 h-4" />
-                </a>
+                </button>
               </div>
             );
           })}
@@ -60,21 +60,27 @@ export function AttachmentsWidget({ context }: { context: TicketPageContext }) {
       <input
         ref={fileInputRef}
         type="file"
+        disabled={!canUpload}
         className="hidden"
         onChange={(event) => onUpload(event.target.files)}
       />
       <div
-        onClick={() => fileInputRef.current?.click()}
-        onDragOver={(event) => event.preventDefault()}
+        onClick={() => canUpload && fileInputRef.current?.click()}
+        onDragOver={(event) => {
+          if (canUpload) event.preventDefault();
+        }}
         onDrop={(event) => {
           event.preventDefault();
-          onUpload(event.dataTransfer.files);
+          if (canUpload) onUpload(event.dataTransfer.files);
         }}
-        className="flex items-center justify-center gap-3 p-4 rounded-2xl border-2 border-dashed border-border/50 text-on-surface-variant hover:border-cyan-500/30 hover:text-cyan-400 transition-colors cursor-pointer"
+        aria-disabled={!canUpload}
+        className={`flex items-center justify-center gap-3 p-4 rounded-2xl border-2 border-dashed border-border/50 text-on-surface-variant transition-colors ${canUpload ? 'cursor-pointer hover:border-cyan-500/30 hover:text-cyan-400' : 'cursor-not-allowed opacity-60'}`}
       >
         <UploadCloud className="w-4 h-4" />
         <span className="text-xs font-bold">
-          {uploadPending ? (
+          {!canUpload ? (
+            'Solo lectura'
+          ) : uploadPending ? (
             'Uploading…'
           ) : (
             <>

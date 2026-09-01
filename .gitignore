@@ -12,15 +12,24 @@ FRONTEND/dist/
 FRONTEND/playwright-report/
 FRONTEND/test-results/
 
+# Backend del equipo: repositorio Git independiente, clonado localmente
+# junto al frontend para integración sin mezclar historiales.
+BACKEND/
+
 # Local analysis & IDE artifacts
 graphify-out/
 .agents/
 .claude/
+.run/
 
 # OS and editors
 .DS_Store
+desktop.ini
 Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
 !.vscode/launch.json
+
+
+.tmp

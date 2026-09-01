@@ -43,7 +43,7 @@ function initialChangeData(
     reason: `Eliminar la causa raíz documentada en ${problem.humanId}: ${rootCause}`,
     impact: problem.data.impact || data.impact || 'medium',
     urgency: data.urgency || 'medium',
-    likelihood: data.likelihood || 'medium',
+    probability: data.probability || 'medium',
   };
 }
 
