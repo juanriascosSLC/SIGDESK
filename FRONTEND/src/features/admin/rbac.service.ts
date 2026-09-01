@@ -76,7 +76,6 @@ export interface KnownUser {
    *  PUT /admin/users/:username/roles would 404 (ADR-0017 decisión 4:
    *  provisioning is a separate, manual step from role assignment). */
   hasAccount: boolean;
-  companyId: string | null;
   status: string | null;
 }
 
@@ -124,7 +123,6 @@ interface AdminUsuarioDTO {
   company_id?: string;
   ultimo_acceso?: string;
   tiene_usuario: boolean;
-  company_id?: string;
   estado?: string;
 }
 
@@ -154,7 +152,6 @@ function knownUserFromDTO(dto: AdminUsuarioDTO): KnownUser {
     roleId: dto.role_id || null,
     companyId: dto.company_id || null,
     hasAccount: dto.tiene_usuario,
-    companyId: dto.company_id ?? null,
     status: dto.estado ?? null,
   };
 }

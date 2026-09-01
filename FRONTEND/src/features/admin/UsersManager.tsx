@@ -923,9 +923,6 @@ function UserRow({
             <span className="text-xs text-on-surface-variant">Solo lectura</span>
           )}
         </td>
-        <td className="px-6 py-4 text-right">
-          <button onClick={() => { const companyId = window.prompt('ID del departamento'); const roleId = window.prompt('ID del rol'); if (companyId && roleId) onAssign(companyId, roleId); }} disabled={isPending || roles.length === 0} className="text-xs font-bold text-cyan-500 disabled:opacity-50">Asignar departamento y rol</button>
-        </td>
       </tr>
     );
   }
@@ -1015,22 +1012,18 @@ function UserRow({
             </button>
           </div>
         ) : canEdit ? (
-          <button
-            onClick={() => {
-              setDraftRoleId(user.roleId ?? roles[0]?.id ?? '');
-              setDraftCompanyId(user.companyId ?? companies[0]?.id ?? '');
-              onEdit();
-            }}
-            disabled={roles.length === 0}
-            className="text-xs font-bold text-cyan-500 hover:text-cyan-400 disabled:opacity-50 disabled:text-on-surface-variant"
-          >
-            Editar acceso
-          </button>
-          {user.status !== 'inactivo' && (
-            <button onClick={() => { if (window.confirm('¿Revocar acceso a este usuario?')) onRevoke(); }} className="ml-4 text-xs font-bold text-red-400 hover:text-red-300">
-              Quitar acceso
+          <div className="flex items-center justify-end">
+            <button
+              onClick={() => {
+                setDraftRoleId(user.roleId ?? roles[0]?.id ?? '');
+                setDraftCompanyId(user.companyId ?? companies[0]?.id ?? '');
+                onEdit();
+              }}
+              disabled={roles.length === 0}
+              className="text-xs font-bold text-cyan-500 hover:text-cyan-400 disabled:opacity-50 disabled:text-on-surface-variant"
+            >
+              Editar acceso
             </button>
-          )}
           </div>
         ) : (
           <span className="text-xs text-on-surface-variant">Solo lectura</span>
