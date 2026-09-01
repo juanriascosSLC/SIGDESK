@@ -1,25 +1,59 @@
-import type { LayoutDefinition, LayoutDocument, LayoutSection, Placement } from '@/features/catalog/metamodel';
+import type {
+  AudienceKey,
+  LayoutDefinition,
+  LayoutDocument,
+  LayoutSection,
+  Placement,
+} from '@/features/catalog/metamodel';
 
+// La variante se resuelve por `audienceKey`, NUNCA por `variant.key`.
+//
+// `LayoutVariant.key` es un uuid opaco generado al crearla; `audienceKey` es
+// la audiencia real ('requester' | 'agent' | 'supervisor'). El diseñador
+// selecciona por audiencia — es lo único que el usuario elige — así que
+// comparar contra `key` no coincidía jamás: la lectura caía al `default` y la
+// escritura recorría `variants` sin encontrar nada, con lo que
+// `commitDocumentChange` terminaba guardando sobre el layout por defecto.
+// Editar la variante "Técnico" reescribía en silencio la predeterminada. El
+// diseñador de la página de Detalle (PageDesigner) siempre resolvió por
+// `audienceKey`; esto alinea el de formularios con él.
 export function getDocument(
   definition: LayoutDefinition | undefined,
-  variantKey: string | null,
+  audienceKey: AudienceKey | null,
 ): LayoutDocument {
   if (!definition) return { sections: [] };
-  if (!variantKey) return definition.default;
-  return definition.variants?.find((variant) => variant.key === variantKey)?.document ?? definition.default;
+  if (!audienceKey) return definition.default;
+  return (
+    definition.variants?.find((variant) => variant.audienceKey === audienceKey)?.document ??
+    definition.default
+  );
 }
 
 export function setDocument(
   definition: LayoutDefinition | undefined,
-  variantKey: string | null,
+  audienceKey: AudienceKey | null,
   document: LayoutDocument,
 ): LayoutDefinition {
   const base = definition ?? { default: { sections: [] } };
-  if (!variantKey) return { ...base, default: document };
+  if (!audienceKey) return { ...base, default: document };
   const variants = base.variants ?? [];
   return {
     ...base,
-    variants: variants.map((variant) => (variant.key === variantKey ? { ...variant, document } : variant)),
+    variants: variants.map((variant) =>
+      variant.audienceKey === audienceKey ? { ...variant, document } : variant,
+    ),
+  };
+}
+
+/** Quita la variante de una audiencia. El layout por defecto no se toca. */
+export function removeVariant(
+  definition: LayoutDefinition | undefined,
+  audienceKey: AudienceKey,
+): LayoutDefinition {
+  const base = definition ?? { default: { sections: [] } };
+  return {
+    ...base,
+    variants: (base.variants ?? []).filter((variant) => variant.audienceKey !== audienceKey),
   };
 }
 

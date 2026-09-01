@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import {
   FileText,
   History,
@@ -11,9 +10,11 @@ import {
   SlidersHorizontal,
   Timer,
   UserRound,
-  type LucideIcon,
+  Users,
+  ListChecks,
 } from 'lucide-react';
-import type { PagePlacement, RegionName, WidgetKey } from '@/features/catalog/metamodel';
+import type { RegionName, TicketWidgetKey, WidgetKey } from '@/features/catalog/metamodel';
+import type { PageWidgetDefinition } from '@/features/catalog/runtime/widget-registry';
 import { ActivityWidget } from './ActivityWidget';
 import { AssetDetailsWidget } from './AssetDetailsWidget';
 import { AttachmentsWidget } from './AttachmentsWidget';
@@ -27,26 +28,23 @@ import { StatusHistoryWidget } from './StatusHistoryWidget';
 import { SuggestedSolutionsWidget } from './SuggestedSolutionsWidget';
 import { TicketActionsWidget } from './TicketActionsWidget';
 import { TicketHeaderWidget } from './TicketHeaderWidget';
+import { ChangeTasksWidget } from './ChangeTasksWidget';
+import { StakeholdersWidget } from './StakeholdersWidget';
 
-export interface TicketWidgetDefinition {
-  key: WidgetKey;
-  label: string;
-  icon: LucideIcon;
-  ownerModule: string;
-  allowedRegions: RegionName[];
-  minColumnSpan: number;
-  allowMultiple: boolean;
-  required: boolean;
-  RuntimeComponent: (props: { placement: PagePlacement; context: TicketPageContext }) => ReactNode;
-}
+// The ticket page's specialization of the shared registry shape. Kept as a
+// named alias because a dozen modules already import this name.
+export type TicketWidgetDefinition = PageWidgetDefinition<TicketPageContext>;
 
-// The single source of truth for the widget catalog — the palette, the
-// runtime/preview dispatcher in TicketPageLayout, and page-document-ops (drop
-// validation) all read from this registry instead of hardcoding widget
-// knowledge in more than one place. Mirrors BACKEND's pageWidgetRules
-// (definition.go) for allowedRegions/allowMultiple/required — keep both in
-// sync when adding a widget.
-export const TICKET_WIDGETS: Record<WidgetKey, TicketWidgetDefinition> = {
+// The single source of truth for the DETAIL page's widget catalog — the
+// palette, the runtime/preview dispatcher in TicketPageLayout, and
+// page-document-ops (drop validation) all read from this registry instead of
+// hardcoding widget knowledge in more than one place. Mirrors BACKEND's
+// detailPageWidgetRules (validar_page_layout.go) for
+// allowedRegions/allowMultiple/required — keep both in sync when adding a
+// widget. The create/edit form pages have their own registry
+// (catalog/form-widgets/FormWidgetRegistry.tsx); a widget is admitted on a
+// page only if it is in THAT page's registry.
+export const TICKET_WIDGETS: Record<TicketWidgetKey, TicketWidgetDefinition> = {
   ticketHeader: {
     key: 'ticketHeader',
     label: 'Encabezado del ticket',
@@ -56,6 +54,7 @@ export const TICKET_WIDGETS: Record<WidgetKey, TicketWidgetDefinition> = {
     minColumnSpan: 12,
     allowMultiple: false,
     required: true,
+    supportedEntityKeys: ['INC', 'PRB', 'RFC'],
     RuntimeComponent: ({ context }) => <TicketHeaderWidget context={context} />,
   },
   ticketActions: {
@@ -67,6 +66,7 @@ export const TICKET_WIDGETS: Record<WidgetKey, TicketWidgetDefinition> = {
     minColumnSpan: 12,
     allowMultiple: false,
     required: true,
+    supportedEntityKeys: ['INC', 'PRB', 'RFC'],
     RuntimeComponent: ({ context }) => <TicketActionsWidget context={context} />,
   },
   sla: {
@@ -78,6 +78,7 @@ export const TICKET_WIDGETS: Record<WidgetKey, TicketWidgetDefinition> = {
     minColumnSpan: 4,
     allowMultiple: false,
     required: false,
+    supportedEntityKeys: ['INC'],
     RuntimeComponent: ({ context }) => <SlaWidget context={context} />,
   },
   attachments: {
@@ -89,6 +90,7 @@ export const TICKET_WIDGETS: Record<WidgetKey, TicketWidgetDefinition> = {
     minColumnSpan: 4,
     allowMultiple: false,
     required: false,
+    supportedEntityKeys: ['INC'],
     RuntimeComponent: ({ context }) => <AttachmentsWidget context={context} />,
   },
   activity: {
@@ -100,6 +102,7 @@ export const TICKET_WIDGETS: Record<WidgetKey, TicketWidgetDefinition> = {
     minColumnSpan: 6,
     allowMultiple: false,
     required: false,
+    supportedEntityKeys: ['INC'],
     RuntimeComponent: ({ context }) => <ActivityWidget context={context} />,
   },
   mergedTickets: {
@@ -111,6 +114,7 @@ export const TICKET_WIDGETS: Record<WidgetKey, TicketWidgetDefinition> = {
     minColumnSpan: 6,
     allowMultiple: false,
     required: false,
+    supportedEntityKeys: ['INC'],
     RuntimeComponent: ({ context }) => <MergedTicketsWidget context={context} />,
   },
   itsmRelations: {
@@ -122,6 +126,7 @@ export const TICKET_WIDGETS: Record<WidgetKey, TicketWidgetDefinition> = {
     minColumnSpan: 6,
     allowMultiple: false,
     required: false,
+    supportedEntityKeys: ['INC', 'PRB', 'RFC'],
     RuntimeComponent: ({ context }) => <RelationsWidget context={context} />,
   },
   assetDetails: {
@@ -133,6 +138,7 @@ export const TICKET_WIDGETS: Record<WidgetKey, TicketWidgetDefinition> = {
     minColumnSpan: 4,
     allowMultiple: false,
     required: false,
+    supportedEntityKeys: ['INC'],
     RuntimeComponent: ({ context }) => <AssetDetailsWidget context={context} />,
   },
   description: {
@@ -144,6 +150,7 @@ export const TICKET_WIDGETS: Record<WidgetKey, TicketWidgetDefinition> = {
     minColumnSpan: 6,
     allowMultiple: false,
     required: false,
+    supportedEntityKeys: ['INC', 'PRB', 'RFC'],
     RuntimeComponent: ({ context }) => <DescriptionWidget context={context} />,
   },
   suggestedSolutions: {
@@ -155,6 +162,7 @@ export const TICKET_WIDGETS: Record<WidgetKey, TicketWidgetDefinition> = {
     minColumnSpan: 4,
     allowMultiple: false,
     required: false,
+    supportedEntityKeys: ['INC'],
     RuntimeComponent: ({ context }) => <SuggestedSolutionsWidget context={context} />,
   },
   requesterDetails: {
@@ -166,6 +174,7 @@ export const TICKET_WIDGETS: Record<WidgetKey, TicketWidgetDefinition> = {
     minColumnSpan: 3,
     allowMultiple: false,
     required: false,
+    supportedEntityKeys: ['INC'],
     RuntimeComponent: ({ context }) => <RequesterDetailsWidget context={context} />,
   },
   statusHistory: {
@@ -177,7 +186,32 @@ export const TICKET_WIDGETS: Record<WidgetKey, TicketWidgetDefinition> = {
     minColumnSpan: 4,
     allowMultiple: false,
     required: false,
+    supportedEntityKeys: ['INC'],
     RuntimeComponent: ({ context }) => <StatusHistoryWidget context={context} />,
+  },
+  changeTasks: {
+    key: 'changeTasks',
+    label: 'Plan de trabajo',
+    icon: ListChecks,
+    ownerModule: 'Change Management',
+    allowedRegions: ['main', 'sidebar', 'footer'],
+    minColumnSpan: 6,
+    allowMultiple: false,
+    required: false,
+    supportedEntityKeys: ['RFC'],
+    RuntimeComponent: ({ context }) => <ChangeTasksWidget context={context} />,
+  },
+  stakeholders: {
+    key: 'stakeholders',
+    label: 'Personas y áreas interesadas',
+    icon: Users,
+    ownerModule: 'Organization / Notificaciones',
+    allowedRegions: ['main', 'sidebar', 'footer'],
+    minColumnSpan: 4,
+    allowMultiple: false,
+    required: false,
+    supportedEntityKeys: ['INC', 'PRB', 'RFC'],
+    RuntimeComponent: ({ context }) => <StakeholdersWidget context={context} />,
   },
 };
 

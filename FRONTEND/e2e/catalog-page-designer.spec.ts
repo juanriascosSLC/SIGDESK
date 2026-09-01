@@ -20,7 +20,7 @@ async function jsonOrFailure<T>(response: APIResponse | Response, operation: str
 
 async function getPublishedIncDefinition(request: APIRequestContext): Promise<Definition> {
   return jsonOrFailure<Definition>(
-    await request.get(`${apiBaseURL}/entities/INC/presentation`),
+    await request.get(`${apiBaseURL}/catalog/definitions/INC`),
     'get published INC definition',
   );
 }
@@ -223,10 +223,9 @@ test('resizing a placement reflows its row without overlaps and the published pa
   await saveDraftAndPublish(page, baseline.version + 1);
 });
 
-// Presentation follows the currently published definition; data stays pinned
-// to the manifest captured at creation. A redesign therefore reaches tickets
-// that already existed, without rewriting what those tickets mean.
-test('a ticket created before the page redesign adopts the new layout but keeps its historical data', async ({
+// Schema and page composition are both pinned to the immutable executable
+// definition captured at creation. A redesign only affects new records.
+test('a ticket created before the page redesign keeps its historical data and layout', async ({
   page,
   request,
 }) => {
@@ -261,11 +260,10 @@ test('a ticket created before the page redesign adopts the new layout but keeps 
   await expect(page.getByTestId('ticket-detail')).toBeVisible();
   // Data is unchanged...
   await expect(page.getByText(historicalTitle, { exact: true })).toBeVisible();
-  // ...but the layout published after this ticket existed now governs it.
-  await expect(page.getByTestId('page-layout-region-footer').getByText('Historial de estado')).toBeVisible();
+  // ...and the widget published afterwards must not silently appear.
+  await expect(page.getByTestId('page-layout-region-footer').getByText('Historial de estado')).toHaveCount(0);
 
-  // The ticket is still pinned to its original manifest — only presentation
-  // moved forward, never the schema.
+  // The ticket remains pinned to its original executable manifest.
   const historicalManifest = await jsonOrFailure<{ version: number }>(
     await request.get(`${apiBaseURL}/entities/INC/${historical.id}/manifest`),
     'get historical INC manifest',

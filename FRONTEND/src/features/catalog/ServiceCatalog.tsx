@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, Braces, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { listDefinitions } from './metamodel';
+import { listDefinitions, type CatalogDefinition } from './metamodel';
 
 export function ServiceCatalog() {
   const navigate = useNavigate();
@@ -12,9 +12,20 @@ export function ServiceCatalog() {
     queryFn: () => listDefinitions(true),
   });
   const definitions = useMemo(() => {
+    // Defensa para despliegues graduales: el backend nuevo ya responde solo
+    // activas, pero una instancia anterior puede ignorar `active=true` y
+    // devolver el historial. Nunca mostramos más de una opción por entidad.
+    const byEntityKey = new Map<string, CatalogDefinition>();
+    for (const definition of definitionsQuery.data ?? []) {
+      const current = byEntityKey.get(definition.entityKey);
+      if (!current || (definition.version ?? 0) > (current.version ?? 0)) {
+        byEntityKey.set(definition.entityKey, definition);
+      }
+    }
+    const operationalDefinitions = [...byEntityKey.values()];
     const term = search.toLowerCase().trim();
-    if (!term) return definitionsQuery.data ?? [];
-    return (definitionsQuery.data ?? []).filter((definition) =>
+    if (!term) return operationalDefinitions;
+    return operationalDefinitions.filter((definition) =>
       `${definition.entityKey} ${definition.name} ${definition.specification.description}`
         .toLowerCase()
         .includes(term),
@@ -49,6 +60,7 @@ export function ServiceCatalog() {
         {definitions.map((definition) => (
           <button
             key={definition.id}
+            data-testid={`catalog-option-${definition.entityKey}`}
             onClick={() => navigate(`../catalog/${definition.entityKey}`)}
             className="group text-left bg-surface-container-low border border-border rounded-3xl p-6 hover:border-cyan-500/40 hover:bg-on-surface/[0.03] transition-all"
           >

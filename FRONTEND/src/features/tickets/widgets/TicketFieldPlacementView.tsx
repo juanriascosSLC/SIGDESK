@@ -1,3 +1,4 @@
+import { bindingList } from '@/features/catalog/metamodel';
 import type { PagePlacement } from '@/features/catalog/metamodel';
 import type { TicketPageContext } from './context';
 import { ticketFieldLabels } from './ticket-field-labels';
@@ -15,7 +16,14 @@ function formatCatalogValue(
   if (field?.type === 'select') {
     return field.options?.find((option) => option.value === value)?.label ?? String(value);
   }
-  if (Array.isArray(value)) return value.map(String).join(', ');
+  // Un valor de campo `bindsTo` es un BindingValue, o una lista de ellos si
+  // el campo acepta varios dispositivos. Sin esta rama caería en el
+  // JSON.stringify de abajo (un objeto) o en el `map(String)` (una lista),
+  // que renderiza "[object Object]". Es alcanzable hoy desde la vista previa
+  // del diseñador de detalle, que alimenta este widget con datos de muestra.
+  const bound = bindingList(value);
+  if (bound.length) return bound.map((item) => item.displayName).join(', ');
+  if (Array.isArray(value)) return value.length ? value.map(String).join(', ') : '—';
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
 }

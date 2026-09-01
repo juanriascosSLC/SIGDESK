@@ -6,8 +6,8 @@
  * Separate from auth.service.ts on purpose: that module authenticates
  * against SIGTools (identity), this one authorizes against organization_service
  * (role/permissions) once SIGTools has already confirmed who the person is.
- * Correlated by email — never a username or internal SIGTools id (ADR-0017
- * decisión 3; see Docs/howto/bootstrap-primer-admin.md, "El email exacto").
+ * Correlated by the email returned by SIGTools — never an email declared by
+ * this client, username, or internal SIGTools id (ADR-0017 decisión 3).
  *
  * A rejection here (404 USUARIO_NO_ENCONTRADO for an identity SIGTools
  * confirmed but organization_service hasn't provisioned yet, or any other
@@ -29,15 +29,23 @@ export interface SesionDTO {
   expires_in: number;
   role_id: string | null;
   permissions: string[] | null;
+  usuario?: {
+    id: string;
+    nombre: string;
+    email: string;
+    company_id: string;
+    role_id: string;
+    estado: string;
+  };
 }
 
 export const sessionService = {
   /**
-   * Exchanges a SIGTools-confirmed email for SIG-DESK's own short-lived JWT.
-   * The corporate bearer is forwarded explicitly: the SIG-DESK token cannot
-   * prove the identity during the initial exchange.
+   * Exchanges the corporate bearer for SIG-DESK's own short-lived JWT.
+   * organization_service validates it against SIGTools /me and obtains the
+   * authorized email there; this request deliberately sends no identity body.
    */
-  emitir: (email: string): Promise<SesionDTO> => {
+  emitir: (): Promise<SesionDTO> => {
     const sigtoolsToken = getAccessToken();
     return apiRequest<SesionDTO>('/v1/session', {
       method: 'POST',
@@ -45,7 +53,6 @@ export const sessionService = {
       headers: sigtoolsToken
         ? { Authorization: `Bearer ${sigtoolsToken}` }
         : undefined,
-      body: JSON.stringify({ email }),
     });
   },
 };

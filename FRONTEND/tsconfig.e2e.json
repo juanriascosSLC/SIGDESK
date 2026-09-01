@@ -2,9 +2,12 @@
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.e2e.tsbuildinfo",
     "target": "es2023",
-    "lib": ["ES2023"],
     "module": "esnext",
-    "types": ["node"],
+    // `vite/client` porque los specs de logica pura arrastran modulos de
+    // `src` que leen `import.meta.env`. Es el entorno que esos modulos
+    // asumen; sin declararlo, el chequeo falla por un tipo que en la
+    // aplicacion real existe.
+    "types": ["node", "vite/client"],
     "skipLibCheck": true,
 
     /* Bundler mode */
@@ -12,13 +15,24 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
+    "jsx": "react-jsx",
     "noEmit": true,
 
     /* Linting */
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "ignoreDeprecations": "6.0",
+
+    // Los specs de logica pura importan modulos de `src` (ver
+    // catalog-field-operations.spec.ts), que a su vez usan el alias `@/` y
+    // tipos del DOM. Sin esto, TS no puede chequear esos imports.
+    "lib": ["ES2023", "DOM"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
   },
   "include": ["e2e"]
 }

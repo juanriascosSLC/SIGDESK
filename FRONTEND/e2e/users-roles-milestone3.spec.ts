@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test';
 import {
   mockAuthenticatedAdmin,
   mockAuthenticatedAgentWithoutAdminAccess,
+  mockAuthenticatedRequester,
+  mockAuthenticatedSupervisor,
 } from './support';
 
 /**
@@ -63,7 +65,7 @@ test('un admin con permisos reales sobre roles/usuarios entra a Users & Roles', 
   await page.goto('/app/admin/users', { waitUntil: 'domcontentloaded' });
 
   await expect(
-    page.getByRole('heading', { name: 'Roles y Permisos', exact: true }),
+    page.getByRole('heading', { name: 'Usuarios, roles y organización', exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Roles y permisos' }),
@@ -91,6 +93,24 @@ test('un usuario sin permiso sobre roles/usuarios ve exactamente eso: nada de Us
   // /app, nunca de vuelta en /login — la sesión es válida, el permiso no.
   await expect(page).toHaveURL(/\/app\/?$/);
   await expect(
-    page.getByRole('heading', { name: 'Roles y Permisos', exact: true }),
+    page.getByRole('heading', { name: 'Usuarios, roles y organización', exact: true }),
   ).not.toBeVisible();
+});
+
+test('un requester permanece en el portal aunque pueda leer sus propios tickets', async ({ page }) => {
+  await mockAuthenticatedRequester(page, { forwardUnmatched: false });
+  await page.goto('/app/tickets', { waitUntil: 'domcontentloaded' });
+  await expect(page).toHaveURL(/\/portal\/?$/);
+  await expect(page.getByRole('link', { name: 'Tickets & Issues' })).toHaveCount(0);
+});
+
+test('un supervisor ve operación y reportes pero no administración de roles ni catálogo', async ({ page }) => {
+  await mockAuthenticatedSupervisor(page, { forwardUnmatched: false });
+  await page.goto('/app', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('link', { name: 'Tickets & Issues' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Change Mgmt' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Problem Mgmt' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Reports' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Users & Roles' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Catalog Builder' })).toHaveCount(0);
 });

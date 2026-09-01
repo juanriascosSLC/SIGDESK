@@ -2,7 +2,7 @@
 
 > Fuente de verdad para el equipo que implementará el nuevo backend.
 >
-> Estado del documento: 29 de agosto de 2026. Este repositorio solo contiene el frontend. Los commits del equipo integran clientes para servicios externos, pero el código de `organization_service`, `tickets_service`, `resource_service` y Kong vive en otro repositorio que no está enlazado ni disponible aquí. Los contratos descritos abajo se obtienen de esos clientes y de las ADR citadas en los commits; no demuestran por sí solos que una API esté desplegada.
+> Estado del documento: 29 de agosto de 2026. El frontend vive en este repositorio raíz y el backend integrado vive en `../BACKEND` como repositorio Git independiente. Los contratos de esta guía están implementados en `tickets_service`, `problem_service`, `change_service`, `organization_service` y Kong; desplegarlos requiere reiniciar los procesos/containers con la versión actual del código.
 
 ## 1. Qué es esta entrega
 
@@ -228,26 +228,20 @@ registra identidad conocida y asignaciones locales. El envelope de error es
 | POST | `/catalog/definitions/:key/versions/:version/publish` | Publicación inmutable |
 | GET | `/catalog/definitions/:key/versions/:version/manifest` | Manifiesto compilado |
 | GET | `/catalog/resources` | Recursos versionados de módulos especializados |
-| GET/POST | `/entities/:entityKey` | Listar/crear registros genéricos |
-| GET/PATCH | `/entities/:entityKey/:entityId` | Leer/actualizar registro |
-| POST | `/entities/:key/:id/transitions/:transitionKey` | Ejecutar transición |
+| GET/POST | `/entities/INC` | Listar/crear INC sobre el runtime de Tickets |
+| GET/PATCH | `/entities/INC/:entityId` | Leer/actualizar INC |
+| POST | `/entities/INC/:id/transitions/:transitionKey` | Ejecutar transición INC |
 | GET | `/entities/:key/:id/manifest` | Manifiesto histórico fijado |
 | GET | `/entities/:key/:id/resolved-definition` | Definición y layout históricos resueltos |
-| GET | `/entities/:entityKey/presentation` | Presentación publicada para intake |
-| GET/POST | `/entities/:key/:id/relations` | Listar/crear relación ITSM |
-| DELETE | `/entities/:key/:id/relations/:relationId` | Eliminar relación |
+| GET | `/entities/:entityKey/presentation` | Presentación publicada para consumidores internos |
+| GET | `/relationships/:entityKey/:id` | Proyección de relaciones propiedad de Problem |
+| GET | `/change-relationships/:entityKey/:id` | Proyección de relaciones directas propiedad de Change |
 
-Crear una entidad envía `{ data }`; actualizar envía `{ data, expectedUpdatedAt }`. Una relación envía `{ relationKey, targetEntityKey, targetEntityId }`.
+Crear un INC envía `{ data }`; actualizar envía `{ data, expectedUpdatedAt }`. PRB y RFC usan sus servicios propietarios, aunque todos consumen el mismo metamodelo publicado.
 
-### Versiones separadas de layout
+### Layout como parte de la definición
 
-| Método | Ruta | Uso |
-|---|---|---|
-| GET/POST/PUT | `/catalog/layouts/:entityKey/draft` | Leer/crear/actualizar draft |
-| POST | `/catalog/layouts/:entityKey/publish` | Publicar layout |
-| GET | `/catalog/layouts/:entityKey/versions` | Historial |
-| GET | `/catalog/layouts/:entityKey/active` | Versión activa |
-| POST | `/catalog/layouts/:key/versions/:version/activate` | Activar una compatible |
+No existe una familia `/catalog/layouts/*`. El formulario y la página WYSIWYG se guardan dentro de `specification.layouts` y `specification.detailPage`; por eso se validan, publican, versionan y conservan históricamente junto con el resto de la definición.
 
 ### Tickets / INC
 
@@ -256,20 +250,15 @@ obtienen desde `/entities/INC` y el intake crea con `POST /entities/INC`. El
 identificador para volver a consultar una entidad es el `id` interno; el
 `humanId` (`INC-000123`) es solo presentación.
 
-La tabla siguiente describe el contrato que todavía necesita el módulo
-Tickets para completar sus widgets y comandos. En la integración recibida el
-nuevo `tickets_service` **no implementa aún** status, assign, merge/unmerge,
-comments, attachments, watchers ni activity. Esas llamadas permanecen en el
-cliente como compatibilidad histórica y fallarán hasta que el backend publique
-una fachada o comandos equivalentes sobre el runtime.
+Los comandos y widgets de colaboración ya están implementados. Estado y asignación ejecutan transiciones de la definición histórica; merge, comentarios, adjuntos, observadores y actividad persisten en Tickets y producen actividad/outbox transaccional.
 
 | Método | Ruta | Uso |
 |---|---|---|
 | GET | `/entities/INC` | Lista paginada del runtime; la UI proyecta el registro a Ticket |
 | GET | `/entities/INC/:id` | Entidad INC y proyección de ticket |
 | POST | `/entities/INC` | Intake nuevo dirigido por definición publicada |
-| PATCH | `/tickets/:id/status` | Compatibilidad de estado |
-| POST | `/tickets/:id/assign` | Asignación |
+| POST | `/entities/INC/:id/transitions/:transitionKey` | Estado/asignación según lifecycle histórico |
+| PATCH | `/entities/INC/:id` | Actualizar campos dinámicos con concurrencia optimista |
 | POST | `/tickets/:primaryId/merge` | Combinar `{ mergedIds, actorName? }` |
 | POST | `/tickets/:primaryId/unmerge/:mergedId` | Separar ticket |
 | GET/POST | `/tickets/:id/comments` | Comentarios |
@@ -279,7 +268,7 @@ una fachada o comandos equivalentes sobre el runtime.
 | DELETE | `/tickets/:id/watchers/:watcherName` | Quitar observador |
 | GET | `/tickets/:id/activity` | Actividad versionada |
 
-Filtros objetivo: `status`, `priority`, `category`, `site`, `assignee`, `unassigned`, `q`, `cursor`, `limit`, `mergedInto`. Hoy la UI aplica varios filtros después de descargar una sola página; el backend debe soportarlos antes de paginar para que búsqueda, conteos y kanban sean correctos globalmente.
+El backend aplica `status`, `priority`, `assignee`, `unassigned`, `q`, `cursor`, `limit` y `mergedInto` antes de paginar. `category` es el propio `entityKey`; `site` sigue siendo metadata opcional de la definición/recurso.
 
 La proyección de ticket debe exponer como mínimo `id`, `entityId`, `title`, `description`, `status`, `priority`, `category`, `requesterName`, `assigneeName`, `createdAt`, `assetId`, `site`, `mergedCount` y `mergedIntoId`.
 
@@ -292,12 +281,17 @@ La proyección de ticket debe exponer como mínimo `id`, `entityId`, `title`, `d
 | GET/PATCH | `/changes/:id` | Leer/actualizar |
 | GET | `/changes/:id/manifest` | Manifiesto histórico |
 | POST | `/changes/:id/transitions/:transitionKey` | Transición |
+| POST | `/changes/from-incident` | Crear RFC y relación INC→RFC atómicamente |
+| GET/POST | `/changes/:id/tasks` | Plan de trabajo multiárea |
+| PATCH | `/changes/:id/tasks/:taskId` | Editar tarea |
+| POST | `/changes/:id/tasks/:taskId/transitions/:key` | Ejecutar tarea/dependencias |
+| GET | `/change-relationships/:entityKey/:id` | Relaciones directas de Change |
 
-Crear envía `{ data }`; actualizar envía `{ data, expectedUpdatedAt }`. El módulo es una fachada del runtime genérico RFC, no otro modelo con reglas duplicadas.
+Crear envía `{ data }`; actualizar envía `{ data, expectedUpdatedAt }`. `POST /changes/from-incident` recibe `{ data, incidentId }` y guarda RFC, relación y dos eventos outbox en una sola transacción. Change conserva el snapshot ejecutable publicado y es propietario de RFC/Tasks, sin apropiarse del metamodelo.
 
 ### Problem Management / PRB
 
-Problem Management usa directamente las rutas genéricas con `entityKey=PRB` y las relaciones. La UI consulta también `INC` y RFC/changes para asociarlos. El backend debe soportar causa raíz, known error, incidentes asociados y cambios relacionados dentro de los campos/metadatos publicados, no mezclarlos en la tabla de tickets.
+`problem_service` es propietario de PRB, causa raíz, known error y relaciones PRB→INC/RFC. Usa `/problems`, `/entities/PRB` y `/relationships`; valida y conserva snapshots de ambos extremos y ejecuta la definición histórica exacta. No mezcla PRB en la tabla ni el lifecycle de INC.
 
 ### SLA
 
@@ -344,8 +338,65 @@ Hay dos niveles compatibles:
 
 - **Metamodelo 1.4:** layouts de formularios `create`, `edit` y detalle por secciones/columnas/audiencias.
 - **Metamodelo 1.5:** `detailPage`, diseñador de la página completa del ticket.
+- **Metamodelo 1.6:** `createPage` y `editPage`. Las tres vistas usan el mismo diseñador, el mismo modelo de página y el mismo esqueleto de regiones. Una definición sin estas páginas sigue funcionando: `resolveFormPageLayout` sintetiza una equivalente desde el documento 1.4.
+- **Metamodelo 1.7:** tipos de campo y restricciones (ver abajo).
+
+`metamodelVersion` es **informativo**: el backend lo reporta en
+`resolved-definition` pero no ramifica por él. La compatibilidad la da que todo
+lo nuevo sea aditivo.
 
 El detalle 1.5 usa regiones fijas `header`, `actions`, `main`, `sidebar` y `footer`. Cada región posee una grilla; un placement define fila, columna, spans, orden móvil, condición y si está bloqueado. Los placements pueden ser campos, widgets o contenido estructural.
+
+### Campos: tipos y restricciones (1.7)
+
+Once tipos, agrupados en el selector del builder:
+
+| Grupo | Tipos |
+|---|---|
+| Texto | `text`, `textarea` |
+| Opciones | `select`, `radio`, `multiselect`, `boolean` |
+| Números y fechas | `number`, `date`, `datetime` |
+| Contacto | `email`, `phone`, `url` |
+
+`radio` y `multiselect` comparten `options` con `select`. Un `multiselect`
+guarda una **lista** en `data[key]`, no una cadena — quien consuma esos datos
+tiene que contar con las dos formas.
+
+`email`/`phone`/`url` son tipos y no un `format` sobre `text` porque cambian el
+control que se dibuja. `format` existe aparte para exigir un formato sobre un
+campo de texto **ya publicado** sin cambiarle el tipo.
+
+Restricciones de `FieldDefinition`, todas opcionales y todas validadas por el
+servidor en `tickets_service/application/validar_datos_catalogo.go`
+(`validarRestriccionesCampo`):
+
+| Clave | Aplica a | Nota |
+|---|---|---|
+| `minLength` / `maxLength` | texto | ya existían |
+| `min` / `max` / `step` | `number` | el paso solo se exige cuando es entero |
+| `format` | texto | `email`, `phone`, `url` |
+| `pattern` / `patternMessage` | texto | expresión propia; el mensaje es lo que ve la persona |
+| `minDate` / `maxDate` | `date`, `datetime` | fecha ISO **o** el literal `today` |
+| `minItems` / `maxItems` | `multiselect` | conteo de opciones |
+| `helpText` | todos | ayuda persistente bajo el campo, distinta de `placeholder` |
+| `readOnly` | todos | presentación: **no** impide que el valor llegue por API |
+| `defaultValue` | todos | ya existía en el modelo; ahora hay control en el builder |
+
+Dos decisiones que importan al consumir esto:
+
+- **`today` lo resuelve el servidor**, con su reloj. El navegador lo traduce a
+  un atributo `min`/`max` como ayuda de captura, pero la regla no depende del
+  reloj del cliente. Es lo que permite que «no puede estar en el pasado» siga
+  siendo cierto mañana, donde una fecha fija caduca.
+- **Una `pattern` que no compila se ignora**, no bloquea el registro. El error
+  es de la definición, y castigar a quien llena el formulario por una regex mal
+  escrita convierte un error de configuración en una caída de servicio.
+
+La visibilidad de un campo **no** se decide en el editor de campos: se decide
+colocándolo o quitándolo en el diseñador de página. Los interruptores «Mostrar
+al crear» / «Mostrar en resumen» se retiraron porque escribían `views.*`, que
+con 1.6 solo se lee cuando no existe `createPage`. `views` sigue escribiéndose
+para los consumidores anteriores a 1.4.
 
 Widgets registrados:
 
@@ -354,6 +405,7 @@ Widgets registrados:
 - `mergedTickets`, `itsmRelations`, `assetDetails`
 - `description`, `suggestedSolutions`
 - `requesterDetails`, `statusHistory`
+- `changeTasks` (solo RFC)
 
 Catalog Builder guarda posición y configuración, pero no implementa la lógica de negocio del widget. La vista previa usa datos simulados; la página real usa `PageLayoutRenderer` y `TicketWidgetRegistry`. El backend debe devolver el layout histórico resuelto, no HTML ni coordenadas absolutas.
 
@@ -365,11 +417,11 @@ La resolución declara uno de estos modos: `latest-compatible`, `previous-compat
 |---|---|---|
 | Auth | SIGTools + intercambio `POST /v1/session` | Validar el bearer SIGTools; no aceptar intercambio basado solo en email |
 | Users & Roles | Cliente real, guards de lectura y mutación | Persistencia RBAC, aprovisionamiento y enforcement |
-| Catalog Builder | Cliente, editor, validación/publicación y diseñadores reales | Definiciones, recursos, manifiestos y versiones |
+| Catalog Builder | Editor, validación/publicación, formularios y Page Designer WYSIWYG reales | Operativo sobre definiciones/manifiestos; valida layouts, widgets por dominio y relaciones versionadas |
 | Service Catalog | Render dinámico real | Definiciones publicadas y runtime de entidades |
-| Tickets / INC | Lista, detalle e intake conectados a `/entities/INC`; UI de comandos/widgets existente | Filtros server-side y comandos de status, assign, merge, comentarios, adjuntos, watchers y actividad |
-| Problems / PRB | UI y cliente preparados | Runtime PRB y relaciones; el servicio recibido solo declara INC |
-| Changes / RFC | Board, detalle, edición y transición preparados | Fachada RFC/runtime genérico; el servicio recibido solo declara INC |
+| Tickets / INC | Intake, lista, detalle histórico, campos, lifecycle, merge, comentarios, adjuntos, observadores, actividad, SLA y relaciones conectados | Operativo; almacenamiento de adjuntos es BYTEA en esta etapa y debe migrar a object storage antes de alto volumen |
+| Problems / PRB | Runtime propio, layout histórico, causa raíz y relaciones tipadas | Operativo en `problem_service` |
+| Changes / RFC | Runtime propio, layout histórico, aprobación/implementación, Tasks y relaciones | Operativo en `change_service`; INC→RFC es transaccional |
 | SLA Policies | CRUD de draft, publish, preview y assessments conectado | Motor de calendarios y evaluación |
 | Automations | Diseñador visual principalmente demostrativo/local | CRUD, publicación, ejecución, delays, logs y retries |
 | Knowledge Base | Datos locales/demostrativos | Artículos, categorías, búsqueda, permisos y publicación |
@@ -378,7 +430,7 @@ La resolución declara uno de estos modos: `latest-compatible`, `previous-compat
 | End-user dashboard / My Tickets | Parcialmente demostrativo | Consultas acotadas al solicitante |
 | ChatOps | Demostrativo | Conectores, secretos y pruebas de canal |
 | API Keys | Demostrativo | Emisión, scopes, hash, revocación y auditoría |
-| Assets/CMDB | Solo referencias/widgets | API de sitios/activos e integración SIGInventory |
+| Assets/CMDB | Módulo de sitios/activos, selector Site → Device, snapshots, widget técnico e historial INC/PRB/RFC conectados | Credencial productiva de SIGInventory y mapping de alcance por Company/site |
 | Notificaciones | Sin módulo funcional completo | Canales, templates, preferencias, cola y entregas |
 
 No confundir una pantalla visualmente completa con una integración terminada. La tabla anterior debe usarse para priorizar.
@@ -405,6 +457,8 @@ El backend debe ser la autoridad. El caché del navegador y los guards son optim
 | `catalog-page-designer.spec.ts` | Diseñador WYSIWYG del detalle |
 | `catalog-template-designer.spec.ts` | Formularios y drag-and-drop |
 | `users-roles-milestone3.spec.ts` | Guards RBAC con permisos `entidad:acción:alcance` |
+| `configured-record-detail.spec.ts` | PRB/RFC renderizan su layout histórico con widgets reales |
+| `incident-change-atomic.spec.ts` | INC→RFC usa una sola operación transaccional |
 
 `npm run test:e2e` necesita un frontend y una API compatibles. La base SIG-DESK se puede sobrescribir con `PLAYWRIGHT_API_URL`; las llamadas directas del runner aceptan `PLAYWRIGHT_SIGDESK_TOKEN`. Los fixtures interceptan SIGTools y el intercambio `/v1/session`, pero los recorridos de catálogo/tickets requieren los servicios reales. Hasta que el repositorio backend y su entorno reproducible estén disponibles, CI debe ejecutar typecheck, lint y build y activar cada E2E integrado al disponer de sus dependencias.
 

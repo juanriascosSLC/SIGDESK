@@ -193,7 +193,7 @@ test.describe('Ticket detail provenance badge', () => {
     // zero-database-write legacy-synthesized fallback — this is the one
     // provenance value that is always true for INC without this spec ever
     // needing to publish a (permanent, irreversible) layout for it.
-    const definitionResponse = await request.get(`${apiBaseURL}/entities/INC/presentation`);
+    const definitionResponse = await request.get(`${apiBaseURL}/catalog/definitions/INC`);
     const definition = await json<Definition>(definitionResponse, 'get published INC definition');
 
     const createResponse = await request.post(`${apiBaseURL}/entities/INC`, {

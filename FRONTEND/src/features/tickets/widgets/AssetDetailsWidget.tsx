@@ -1,47 +1,58 @@
-import { Server, ShieldCheck } from 'lucide-react';
+import { Building2, CircleDot, Network, Server, ShieldCheck } from 'lucide-react';
 import type { TicketPageContext } from './context';
 
-// Projection from SIGInventory — Tickets only positions/renders it; the real
-// technical data (when the SIGInventory connector exists) will come from
-// there, not from Catalog Builder.
-//
-// TODO-103: this is a DIFFERENT concept from a FieldDefinition.bindsTo ===
-// 'recursoId' field (real reference to resource_service, via BindingPicker
-// in CatalogForm.tsx). `assetId` here is the legacy free-text projection from
-// SIGInventory — no relation between the two today. A ticket's detail page
-// can legitimately show both blocks side by side (this widget + the
-// resourceId field's own placement); do not assume they describe the same
-// asset, and do not merge them without a deliberate product decision — see
-// the plan at C:\Users\hcruz.SIG\.claude\plans\todo-103-recurso-agente-catalog-builder.md.
+function text(snapshot: Record<string, unknown>, key: string): string {
+  const value = snapshot[key];
+  return typeof value === 'string' ? value : '';
+}
+
 export function AssetDetailsWidget({ context }: { context: TicketPageContext }) {
-  const assetId = (context.entityData.assetId as string | undefined) || context.ticket.assetId;
+  const links = context.assets.links;
   return (
-    <div className="rounded-3xl border border-border/40 bg-surface-container-low overflow-hidden">
-      <div className="p-6 border-b border-border/40">
-        <h2 className="font-black tracking-wide text-on-surface flex items-center gap-2">
-          <Server className="w-5 h-5 text-primary" />
-          Asset Details
+    <div className="overflow-hidden rounded-3xl border border-border/40 bg-surface-container-low">
+      <div className="border-b border-border/40 p-6">
+        <h2 className="flex items-center gap-2 font-black tracking-wide text-on-surface">
+          <Server className="h-5 w-5 text-primary" /> Activos relacionados
         </h2>
-        <p className="text-xs text-on-surface-variant mt-1">Synced live from SIGInventory</p>
+        <p className="mt-1 text-xs text-on-surface-variant">
+          Snapshot histórico capturado desde Assets / CMDB al crear el registro
+        </p>
       </div>
-      {assetId ? (
-        <div className="p-6 space-y-6">
-          <div className="flex flex-col items-center justify-center p-6 bg-surface-container border border-border/40 rounded-3xl text-center">
-            <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(34,211,238,0.15)]">
-              <ShieldCheck className="w-8 h-8 text-primary" />
-            </div>
-            <h3 className="font-bold text-lg text-on-surface">{assetId}</h3>
-            <p className="mt-2 text-xs text-on-surface-variant">Activo vinculado desde la definición INC.</p>
-          </div>
-          <p className="rounded-xl border border-border/40 bg-surface-container p-3 text-xs text-on-surface-variant">
-            Los datos técnicos aparecerán aquí cuando el conector de SIGInventory entregue una
-            proyección real. No se muestran valores de demostración.
-          </p>
+      {links.length ? (
+        <div className="space-y-3 p-4">
+          {links.map((link) => {
+            const snapshot = link.snapshot ?? {};
+            const isSite = link.role === 'site' || text(snapshot, 'kind') === 'site';
+            const name = text(snapshot, 'displayName') || link.assetId;
+            const type = text(snapshot, 'assetType') || text(snapshot, 'kind') || 'asset';
+            const status = text(snapshot, 'status') || text(snapshot, 'lifecycle');
+            return (
+              <article key={`${link.assetId}:${link.role ?? ''}`} className="rounded-2xl border border-border/40 bg-surface-container p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
+                    {isSite ? <Building2 className="h-5 w-5 text-primary" /> : <ShieldCheck className="h-5 w-5 text-primary" />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="truncate font-bold text-on-surface">{name}</h3>
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">{link.role || 'related'}</span>
+                    </div>
+                    <p className="mt-1 text-xs text-on-surface-variant">{type}</p>
+                  </div>
+                  {status && <span className="inline-flex items-center gap-1 text-xs text-emerald-300"><CircleDot className="h-3 w-3" />{status}</span>}
+                </div>
+                <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                  {text(snapshot, 'manufacturer') && <div><dt className="text-on-surface-variant">Fabricante</dt><dd className="font-semibold text-on-surface">{text(snapshot, 'manufacturer')}</dd></div>}
+                  {text(snapshot, 'model') && <div><dt className="text-on-surface-variant">Modelo</dt><dd className="font-semibold text-on-surface">{text(snapshot, 'model')}</dd></div>}
+                  {text(snapshot, 'serial') && <div><dt className="text-on-surface-variant">Serial</dt><dd className="font-mono text-on-surface">{text(snapshot, 'serial')}</dd></div>}
+                  {text(snapshot, 'ipAddress') && <div><dt className="flex items-center gap-1 text-on-surface-variant"><Network className="h-3 w-3" />IP</dt><dd className="font-mono text-on-surface">{text(snapshot, 'ipAddress')}</dd></div>}
+                </dl>
+              </article>
+            );
+          })}
         </div>
       ) : (
-        <div className="p-6 text-center text-on-surface-variant italic text-sm">
-          No asset linked to this ticket.
-        </div>
+        <div className="p-6 text-center text-sm italic text-on-surface-variant">No hay activos vinculados a este registro.</div>
       )}
     </div>
   );

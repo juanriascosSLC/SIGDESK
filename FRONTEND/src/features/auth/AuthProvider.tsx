@@ -52,17 +52,24 @@ const LEGACY_PERMISSION_CAPABILITIES: Record<string, Capability> = {
   'sigdesk.catalog.view': { entity: 'catalog', action: 'read' },
   'sigdesk.catalog.author': { entity: 'catalog', action: 'update' },
   'sigdesk.catalog.publish': { entity: 'catalog', action: 'update' },
-  'sigdesk.sla.view': { entity: 'sla', action: 'read' },
-  'sigdesk.sla.manage': { entity: 'sla', action: 'update' },
+  'sigdesk.sla.view': { entity: 'sla_policies', action: 'read' },
+  'sigdesk.sla.manage': { entity: 'sla_policies', action: 'update' },
   'sigdesk.changes.view': { entity: 'changes', action: 'read' },
   'sigdesk.changes.create': { entity: 'changes', action: 'create' },
   'sigdesk.changes.edit': { entity: 'changes', action: 'update' },
-  'sigdesk.changes.approve': { entity: 'changes', action: 'update' },
-  'sigdesk.changes.implement': { entity: 'changes', action: 'update' },
+  'sigdesk.changes.approve': { entity: 'change_approvals', action: 'update' },
+  'sigdesk.changes.implement': { entity: 'change_implementation', action: 'update' },
+  'sigdesk.change-tasks.view': { entity: 'change_tasks', action: 'read' },
+  'sigdesk.change-tasks.execute': { entity: 'change_tasks', action: 'update' },
   'sigdesk.problems.view': { entity: 'problems', action: 'read' },
   'sigdesk.problems.create': { entity: 'problems', action: 'create' },
   'sigdesk.problems.edit': { entity: 'problems', action: 'update' },
-  'sigdesk.problems.resolve': { entity: 'problems', action: 'update' },
+  'sigdesk.problems.resolve': { entity: 'problem_resolution', action: 'update' },
+  'sigdesk.assets.view': { entity: 'assets', action: 'read' },
+  'sigdesk.knowledge.view': { entity: 'knowledge', action: 'read' },
+  'sigdesk.reports.view': { entity: 'reports', action: 'read' },
+  'sigdesk.automations.view': { entity: 'workflows', action: 'read' },
+  'sigdesk.automations.manage': { entity: 'workflows', action: 'update' },
 };
 
 function hasCapability(
@@ -80,16 +87,56 @@ function hasCapability(
   });
 }
 
+/**
+ * Capacidad real de buscar activos en el inventario, para el picker de sitios
+ * y dispositivos del Catalog Builder.
+ *
+ * Excluye `propio` deliberadamente, igual que `hasOperationalTicketRead`
+ * excluye el suyo, pero por un motivo distinto y concreto: `assets:read:propio`
+ * filtra por `attributes.assignedUserId`, y NADA en el sistema escribe hoy ese
+ * atributo (resource_service/application/assets.go), así que ese alcance
+ * devuelve lista vacía garantizada. Habilitar el picker con él mostraría un
+ * buscador que nunca encuentra nada, que es peor que decir que no hay acceso.
+ *
+ * Esto NO es la mitigación de seguridad: el backend ya exige el permiso y
+ * filtra por alcance en la propia consulta. Es para no dibujar un control
+ * inútil.
+ */
+function hasAssetSearch(permissions: string[]): boolean {
+  if (permissions.includes(WILDCARD_GRANT)) return true;
+  return permissions.some((permission) => {
+    const [entity, action, scope] = permission.split(':');
+    return (
+      (entity === 'assets' || entity === WILDCARD_GRANT) &&
+      (action === 'read' || action === WILDCARD_GRANT) &&
+      scope !== 'propio'
+    );
+  });
+}
+
+function hasOperationalTicketRead(permissions: string[]): boolean {
+  if (permissions.includes(WILDCARD_GRANT)) return true;
+  return permissions.some((permission) => {
+    const [entity, action, scope] = permission.split(':');
+    return (
+      (entity === TICKETS_SURFACE_ENTITY || entity === WILDCARD_GRANT) &&
+      (action === 'read' || action === WILDCARD_GRANT) &&
+      scope !== 'propio'
+    );
+  });
+}
+
 const CLEARED_STATE: AuthState = {
   user: null,
   accessLevel: null,
   roleId: null,
+  deskUserId: null,
   permissions: [],
   isLoading: false,
   isAuthenticated: false,
 };
 
-/** Exchanges the SIGTools-confirmed email for SIG-DESK's own session
+/** Exchanges the SIGTools bearer for SIG-DESK's own session
  *  (`POST /v1/session`, ADR-0017 decisión 3) and stores its JWT for
  *  subsequent calls to organization_service. A failure here (404 — identity
  *  known to SIGTools but not yet provisioned as a `Usuario`, or any other
@@ -98,17 +145,18 @@ const CLEARED_STATE: AuthState = {
  *  and `Docs/howto/bootstrap-primer-admin.md` is the documented way to
  *  close that gap, not an error this screen should surface as a login
  *  failure. */
-async function getAuthorization(email: string): Promise<{
+async function getAuthorization(): Promise<{
   roleId: string | null;
+  deskUserId: string | null;
   permissions: string[];
 }> {
   try {
-    const sesion = await sessionService.emitir(email);
+    const sesion = await sessionService.emitir();
     setSigDeskToken(sesion.access_token);
-    return { roleId: sesion.role_id || null, permissions: sesion.permissions ?? [] };
+    return { roleId: sesion.role_id || null, deskUserId: sesion.usuario?.id ?? null, permissions: sesion.permissions ?? [] };
   } catch {
     setSigDeskToken(null);
-    return { roleId: null, permissions: [] };
+    return { roleId: null, deskUserId: null, permissions: [] };
   }
 }
 
@@ -138,11 +186,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setState(CLEARED_STATE);
       return;
     }
-    const authorization = await getAuthorization(user.email);
+    const authorization = await getAuthorization();
     setState({
       user,
       accessLevel: savedLevel ? parseInt(savedLevel, 10) : null,
       roleId: authorization.roleId,
+      deskUserId: authorization.deskUserId,
       permissions: authorization.permissions,
       isLoading: false,
       isAuthenticated: true,
@@ -190,11 +239,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // the bare '*' wildcard, because `can()` already treats that as a blanket
   // grant and the ticket routes used to be reachable that way. 'tickets:*'
   // needs no special case — its entity prefix already matches.
-  const canViewTickets = hasCapability(
-    state.permissions,
-    TICKETS_SURFACE_ENTITY,
-    'read',
-  );
+  // `tickets:read:propio` belongs to the requester portal. The agent
+  // workspace requires visibility beyond the actor's own records; otherwise
+  // a requester would be redirected to /app/tickets immediately after login.
+  const canViewTickets = hasOperationalTicketRead(state.permissions);
+  // Gobierna el picker de sitios/dispositivos en cualquier audiencia, portal
+  // incluido: la restricción ya no depende de la ruta sino del permiso real.
+  const canSearchAssets = hasAssetSearch(state.permissions);
 
   const value = useMemo(() => {
     // FRONTEND-HANDOFF.md §6: a bare "*" or a "<module>.*" wildcard is a
@@ -234,11 +285,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       can,
       canManageUsersAndRoles,
       canViewTickets,
+      canSearchAssets,
       displayName,
     };
   }, [
     canManageUsersAndRoles,
     canViewTickets,
+    canSearchAssets,
     login,
     logout,
     logoutAll,

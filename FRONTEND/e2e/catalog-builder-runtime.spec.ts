@@ -45,7 +45,7 @@ async function getPublishedDefinition(
   request: APIRequestContext,
 ): Promise<Definition> {
   return jsonOrFailure<Definition>(
-    await request.get(`${apiBaseURL}/entities/INC/presentation`),
+    await request.get(`${apiBaseURL}/catalog/definitions/INC`),
     'get published INC definition',
   );
 }
@@ -55,6 +55,12 @@ async function createIncident(
   definition: Definition,
   title: string,
 ): Promise<Entity> {
+  const sites = await jsonOrFailure<{ items: Array<{ id: string }> }>(
+    await request.get(`${apiBaseURL}/assets/sites?limit=1`),
+    'load one CMDB site',
+  );
+  const siteId = sites.items[0]?.id;
+  expect(siteId).toBeTruthy();
   return jsonOrFailure<Entity>(
     await request.post(`${apiBaseURL}/entities/INC`, {
       headers: { 'Idempotency-Key': `catalog-builder-e2e-${randomUUID()}` },
@@ -68,6 +74,8 @@ async function createIncident(
           assetId: 'CAM-CATALOG-HISTORY-001',
           site: 'E2E-CATALOG-SITE',
         }),
+        recursoId: siteId,
+        assetContext: { siteAssetId: siteId, links: [] },
       },
     }),
     'create historical INC',
@@ -76,19 +84,19 @@ async function createIncident(
 
 async function waitForTicketProjection(
   request: APIRequestContext,
-  humanId: string,
+  id: string,
 ) {
   await expect
     .poll(
       async () =>
         (
           await request.get(
-            `${apiBaseURL}/tickets/${encodeURIComponent(humanId)}`,
+            `${apiBaseURL}/tickets/${encodeURIComponent(id)}`,
           )
         ).status(),
       {
         timeout: 15_000,
-        message: `Tickets did not project ${humanId}.`,
+        message: `Tickets did not project ${id}.`,
       },
     )
     .toBe(200);
@@ -111,6 +119,16 @@ async function fillCatalogForm(
       continue;
     }
     const value = data[field.key];
+    if (field.bindsTo) {
+      const kind = field.bindsTo === 'agenteItId' ? 'agenteIt' : field.bindsTo === 'siteAssetId' ? 'site' : field.bindsTo === 'assetId' ? 'asset' : 'recurso';
+      const picker = page.getByTestId(`binding-picker-${kind}`);
+      await expect(picker, `Missing binding picker for ${field.key}`).toBeVisible();
+      const option = picker.getByTestId(new RegExp(`^binding-picker-option-${kind}-`)).first();
+      if (kind === 'asset' && await option.count() === 0 && !field.required) continue;
+      await expect(option, `No binding option available for ${field.key}`).toBeVisible();
+      await option.click();
+      continue;
+    }
     if (value === undefined || value === null || value === '') continue;
 
     const input = page.getByTestId(`catalog-input-${field.key}`);
@@ -136,7 +154,7 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
   const baseline = await getPublishedDefinition(request);
   const historicalTitle = `Historical INC on definition v${baseline.version}`;
   const historical = await createIncident(request, baseline, historicalTitle);
-  await waitForTicketProjection(request, historical.humanId);
+  await waitForTicketProjection(request, historical.id);
 
   const triggerField =
     baseline.specification.fields.find((field) => field.key === 'title') ??
@@ -224,7 +242,7 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
   );
   expect(savedDraft.version).toBeGreaterThan(0);
   await expect(page.getByTestId('catalog-notice')).toContainText(
-    'Borrador guardado',
+    /Borrador.*guardado/,
   );
 
   await expect(page.getByTestId('catalog-publish')).toBeVisible();
@@ -340,10 +358,10 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
   await expect(
     page.getByText(runtimeEntity.humanId, { exact: true }),
   ).toBeVisible();
-  await waitForTicketProjection(request, runtimeEntity.humanId);
+  await waitForTicketProjection(request, runtimeEntity.id);
 
   await page.goto(
-    `/app/tickets/${encodeURIComponent(runtimeEntity.humanId)}`,
+    `/app/tickets/${encodeURIComponent(runtimeEntity.id)}`,
   );
   await expect(page.getByTestId('ticket-detail')).toBeVisible();
   const runtimeDetailField = page.getByTestId(
@@ -367,7 +385,7 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
   ).toBeTruthy();
 
   await page.goto(
-    `/app/tickets/${encodeURIComponent(historical.humanId)}`,
+    `/app/tickets/${encodeURIComponent(historical.id)}`,
   );
   await expect(page.getByTestId('ticket-detail')).toBeVisible();
   await expect(

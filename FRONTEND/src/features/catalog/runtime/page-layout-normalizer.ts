@@ -13,7 +13,7 @@ function emptyRegion(): LayoutRegion {
   return { columns: 12, placements: [] };
 }
 
-function legacyColumnSpanToPageColumnSpan(columnSpan: number, sectionColumns: number): number {
+export function legacyColumnSpanToPageColumnSpan(columnSpan: number, sectionColumns: number): number {
   const ratio = columnSpan / Math.max(1, sectionColumns);
   return Math.min(12, Math.max(1, Math.round(ratio * 12)));
 }
@@ -23,7 +23,10 @@ function legacyColumnSpanToPageColumnSpan(columnSpan: number, sectionColumns: nu
 // relations, and — only when the legacy booleans allow it — sla, attachments,
 // activity), so no 1.0–1.4 ticket changes appearance until an admin actually
 // opens the new page designer for that entity.
-export function synthesizePageLayoutFromLegacy(specification: CatalogSpecification): PageLayout {
+export function synthesizePageLayoutFromLegacy(
+  specification: CatalogSpecification,
+  entityKey = 'INC',
+): PageLayout {
   const legacyDocument = resolveLayoutDocument(specification, 'detail', 'agent');
 
   const main = emptyRegion();
@@ -46,10 +49,11 @@ export function synthesizePageLayoutFromLegacy(specification: CatalogSpecificati
   }
 
   const detailLayout = specification.detailLayout;
+  const isIncident = entityKey === 'INC';
   const mergedConfigured = detailLayout?.fields?.some(
     (placement) => placement.source === 'ticket' && placement.fieldKey === 'mergedCount',
   );
-  if (mergedConfigured) {
+  if (isIncident && mergedConfigured) {
     main.placements.push({
       id: 'legacy-page-widget-mergedTickets',
       kind: 'widget',
@@ -67,7 +71,7 @@ export function synthesizePageLayoutFromLegacy(specification: CatalogSpecificati
     columnSpan: 12,
     row: row++,
   });
-  if (detailLayout?.showSla ?? true) {
+  if (isIncident && (detailLayout?.showSla ?? true)) {
     main.placements.push({
       id: 'legacy-page-widget-sla',
       kind: 'widget',
@@ -77,7 +81,7 @@ export function synthesizePageLayoutFromLegacy(specification: CatalogSpecificati
       row: row++,
     });
   }
-  if (detailLayout?.showAttachments ?? true) {
+  if (isIncident && (detailLayout?.showAttachments ?? true)) {
     main.placements.push({
       id: 'legacy-page-widget-attachments',
       kind: 'widget',
@@ -87,7 +91,7 @@ export function synthesizePageLayoutFromLegacy(specification: CatalogSpecificati
       row: row++,
     });
   }
-  if (detailLayout?.showActivity ?? true) {
+  if (isIncident && (detailLayout?.showActivity ?? true)) {
     main.placements.push({
       id: 'legacy-page-widget-activity',
       kind: 'widget',
@@ -98,15 +102,28 @@ export function synthesizePageLayoutFromLegacy(specification: CatalogSpecificati
     });
   }
 
+  if (entityKey === 'RFC') {
+    main.placements.push({
+      id: 'legacy-page-widget-changeTasks',
+      kind: 'widget',
+      widgetKey: 'changeTasks',
+      column: 0,
+      columnSpan: 12,
+      row,
+    });
+  }
+
   const sidebar = emptyRegion();
-  sidebar.placements.push({
-    id: 'legacy-page-widget-assetDetails',
-    kind: 'widget',
-    widgetKey: 'assetDetails',
-    column: 0,
-    columnSpan: 12,
-    row: 0,
-  });
+  if (isIncident) {
+    sidebar.placements.push({
+      id: 'legacy-page-widget-assetDetails',
+      kind: 'widget',
+      widgetKey: 'assetDetails',
+      column: 0,
+      columnSpan: 12,
+      row: 0,
+    });
+  }
 
   const header: LayoutRegion = {
     columns: 12,
@@ -153,31 +170,99 @@ export function synthesizePageLayoutFromLegacy(specification: CatalogSpecificati
 export function resolvePageLayout(
   specification: CatalogSpecification,
   audienceKey: AudienceKey,
+  entityKey = 'INC',
 ): PageLayout {
   const definition = specification.detailPage;
   if (!definition) {
-    return synthesizePageLayoutFromLegacy(specification);
+    return synthesizePageLayoutFromLegacy(specification, entityKey);
   }
   const variant = definition.variants?.find((candidate) => candidate.audienceKey === audienceKey);
   return variant ? variant.page : definition.default;
 }
 
-const REGION_NAMES: RegionName[] = ['header', 'actions', 'main', 'sidebar', 'footer'];
+const PAGE_PLACEMENT_KINDS = new Set(['field', 'widget', 'content']);
 
-// Drops catalog-field placements whose field is absent from `fields`, then
-// closes the horizontal gap that removal leaves behind — but only in the rows
-// that actually lost a placement, so a layout with deliberate gaps (possible
-// via the Advanced JSON editor) is never silently recompacted.
-function pruneRegionToSchema(region: LayoutRegion, knownFieldKeys: Set<string>): LayoutRegion {
-  const kept = region.placements.filter(
-    (placement) =>
-      !(
-        placement.kind === 'field' &&
-        placement.source === 'catalog' &&
-        placement.fieldKey &&
-        !knownFieldKeys.has(placement.fieldKey)
-      ),
-  );
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isGridInteger(value: unknown, minimum: number, maximum: number): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= minimum && value <= maximum;
+}
+
+function parseRegion(value: unknown): LayoutRegion | null {
+  if (!isRecord(value) || !isGridInteger(value.columns, 1, 12) || !Array.isArray(value.placements)) {
+    return null;
+  }
+  const placements: PagePlacement[] = [];
+  const ids = new Set<string>();
+  for (const candidate of value.placements) {
+    if (!isRecord(candidate)) return null;
+    const { id, kind, column, columnSpan, row, rowSpan } = candidate;
+    if (
+      typeof id !== 'string' || !id.trim() || ids.has(id) ||
+      typeof kind !== 'string' || !PAGE_PLACEMENT_KINDS.has(kind) ||
+      !isGridInteger(column, 0, value.columns - 1) ||
+      !isGridInteger(columnSpan, 1, value.columns) || column + columnSpan > value.columns ||
+      !isGridInteger(row, 0, Number.MAX_SAFE_INTEGER) ||
+      (rowSpan !== undefined && !isGridInteger(rowSpan, 1, Number.MAX_SAFE_INTEGER))
+    ) {
+      return null;
+    }
+    if (kind === 'field' && (typeof candidate.fieldKey !== 'string' || !candidate.fieldKey.trim())) {
+      return null;
+    }
+    if (kind === 'widget' && (typeof candidate.widgetKey !== 'string' || !candidate.widgetKey.trim())) {
+      return null;
+    }
+    if (
+      kind === 'content' &&
+      !['section', 'text', 'divider', 'spacer'].includes(String(candidate.contentKind ?? ''))
+    ) {
+      return null;
+    }
+    ids.add(id);
+    placements.push(candidate as unknown as PagePlacement);
+  }
+  return { columns: value.columns, placements };
+}
+
+// Runtime trust boundary for definitions persisted before strict publication
+// validation existed. A malformed historical document must never crash a
+// record detail page; callers can use the deterministic legacy synthesis.
+export function parseResolvedPageLayout(rawLayouts: unknown): PageLayout | null {
+  if (!isRecord(rawLayouts)) return null;
+  const detailCandidate = rawLayouts.detailPage ?? rawLayouts.detail ?? rawLayouts;
+  if (!isRecord(detailCandidate)) return null;
+  const candidate = isRecord(detailCandidate.default) ? detailCandidate.default : detailCandidate;
+  if (!isRecord(candidate) || !isGridInteger(candidate.sidebarColumns, 3, 5)) return null;
+
+  const header = parseRegion(candidate.header);
+  const actions = parseRegion(candidate.actions);
+  const main = parseRegion(candidate.main);
+  const sidebar = parseRegion(candidate.sidebar);
+  const footer = parseRegion(candidate.footer);
+  if (!header || !actions || !main || !sidebar || !footer) return null;
+  return { sidebarColumns: candidate.sidebarColumns, header, actions, main, sidebar, footer };
+}
+
+export const REGION_NAMES: RegionName[] = ['header', 'actions', 'main', 'sidebar', 'footer'];
+
+// Drops the placements `keep` rejects, then closes the horizontal gap the
+// removal leaves behind — but only in the rows that actually lost a placement,
+// so a layout with deliberate gaps (possible via the Advanced JSON editor) is
+// never silently recompacted.
+//
+// Two policies share this one implementation of the grid arithmetic: dropping
+// fields absent from the schema (pruneRegionToSchema, below) and dropping
+// fields hidden right now by a condition (filterPageByFieldVisibility, in
+// form-page-normalizer.ts). Writing the recompaction twice is how the two
+// would drift.
+export function pruneRegionBy(
+  region: LayoutRegion,
+  keep: (placement: PagePlacement) => boolean,
+): LayoutRegion {
+  const kept = region.placements.filter(keep);
   if (kept.length === region.placements.length) return region;
 
   const affectedRows = new Set(
@@ -205,10 +290,23 @@ function pruneRegionToSchema(region: LayoutRegion, knownFieldKeys: Set<string>):
   };
 }
 
-// Resolution for the ticket detail page. Presentation follows the CURRENT
-// published definition, so an admin redesign applies to every ticket
-// immediately; the ticket's data, field definitions and validation keep
-// coming from its own historical manifest (see TicketDetail.tsx).
+function pruneRegionToSchema(region: LayoutRegion, knownFieldKeys: Set<string>): LayoutRegion {
+  return pruneRegionBy(
+    region,
+    (placement) =>
+      !(
+        placement.kind === 'field' &&
+        placement.source === 'catalog' &&
+        placement.fieldKey &&
+        !knownFieldKeys.has(placement.fieldKey)
+      ),
+  );
+}
+
+// Compatibility helper for callers that explicitly opt into resolving a
+// current layout against an older schema. The real ticket runtime does not
+// use this policy: TicketDetail renders the exact immutable layout returned
+// by the record's historical resolved-definition endpoint.
 //
 // When the two disagree — the published layout places a catalog field that
 // did not exist in the schema this ticket was created under — the placement
@@ -224,10 +322,10 @@ export function resolveTicketPageLayout(
     return resolvePageLayout(historicalSpecification, audienceKey);
   }
   const page = resolvePageLayout(publishedSpecification, audienceKey);
-  return pruneTicketPageToSchema(page, historicalSpecification.fields);
+  return prunePageToSchema(page, historicalSpecification.fields);
 }
 
-export function pruneTicketPageToSchema(page: PageLayout, fields: FieldDefinition[]): PageLayout {
+export function prunePageToSchema(page: PageLayout, fields: FieldDefinition[]): PageLayout {
   const knownFieldKeys = new Set(fields.map((field) => field.key));
   const pruned: PageLayout = { ...page };
   for (const regionName of REGION_NAMES) {
@@ -241,11 +339,12 @@ export function pruneTicketPageToSchema(page: PageLayout, fields: FieldDefinitio
 // layouts/detailLayout/views (legacy consumers keep reading those).
 export function upgradeSpecificationToPageLayout(
   specification: CatalogSpecification,
+  entityKey = 'INC',
 ): CatalogSpecification {
   if (specification.detailPage) return specification;
   return {
     ...specification,
-    detailPage: { default: synthesizePageLayoutFromLegacy(specification) },
+    detailPage: { default: synthesizePageLayoutFromLegacy(specification, entityKey) },
   };
 }
 

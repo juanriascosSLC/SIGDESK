@@ -27,10 +27,17 @@ export const PERMISSIONS = {
   changesEdit: 'sigdesk.changes.edit',
   changesApprove: 'sigdesk.changes.approve',
   changesImplement: 'sigdesk.changes.implement',
+  changeTasksView: 'sigdesk.change-tasks.view',
+  changeTasksExecute: 'sigdesk.change-tasks.execute',
   problemsView: 'sigdesk.problems.view',
   problemsCreate: 'sigdesk.problems.create',
   problemsEdit: 'sigdesk.problems.edit',
   problemsResolve: 'sigdesk.problems.resolve',
+  assetsView: 'sigdesk.assets.view',
+  knowledgeView: 'sigdesk.knowledge.view',
+  reportsView: 'sigdesk.reports.view',
+  automationsView: 'sigdesk.automations.view',
+  automationsManage: 'sigdesk.automations.manage',
 } as const;
 
 /** The app prefix used to tell SIG-DESK's permissions apart from the other

@@ -1,13 +1,12 @@
 import { X } from 'lucide-react';
 import type {
   CatalogSpecification,
-  ConditionExpression,
   LayoutDocument,
   LayoutSection,
   Placement,
 } from '@/features/catalog/metamodel';
-import { conditionOperators, defaultConditionValue, parseConditionValue } from '../config';
 import { Toggle } from '../ui';
+import { ConditionRule } from '../ConditionEditor';
 import { widgetLibraryItems } from './library-fields';
 
 export type SelectedElement = { type: 'section'; id: string } | { type: 'placement'; id: string } | null;
@@ -84,10 +83,11 @@ export function PropertiesPanel({
           }
           label="Colapsable"
         />
-        <ConditionEditor
+        <ConditionRule
           label="Visible solo cuando…"
+          compact
           condition={section.visibleWhen}
-          specification={specification}
+          sources={specification.fields}
           onChange={(condition) =>
             onUpdateSection(section.id, (current) => ({ ...current, visibleWhen: condition }))
           }
@@ -155,10 +155,11 @@ export function PropertiesPanel({
             }
             label="Solo lectura (presentacional; aún no se aplica en el backend)"
           />
-          <ConditionEditor
+          <ConditionRule
             label="Visible solo cuando…"
+            compact
             condition={placement.visibleWhen}
-            specification={specification}
+            sources={specification.fields}
             onChange={(condition) =>
               onUpdatePlacement(placement.id, (current) => ({ ...current, visibleWhen: condition }))
             }
@@ -176,79 +177,6 @@ export function PropertiesPanel({
         </p>
       )}
     </aside>
-  );
-}
-
-function ConditionEditor({
-  label,
-  condition,
-  specification,
-  onChange,
-}: {
-  label: string;
-  condition: ConditionExpression | undefined;
-  specification: CatalogSpecification;
-  onChange: (next: ConditionExpression | undefined) => void;
-}) {
-  const enabled = Boolean(condition);
-  const field = specification.fields.find((candidate) => candidate.key === condition?.field) ?? specification.fields[0];
-  return (
-    <div className="rounded-xl border border-border/40 bg-surface-container-low p-3">
-      <Toggle
-        checked={enabled}
-        onChange={(checked) =>
-          onChange(
-            checked
-              ? { field: field?.key ?? '', operator: 'equals', value: defaultConditionValue(field) }
-              : undefined,
-          )
-        }
-        label={label}
-      />
-      {enabled && condition && (
-        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-          <select
-            value={condition.field ?? ''}
-            onChange={(event) => {
-              const nextField = specification.fields.find((candidate) => candidate.key === event.target.value);
-              onChange({ ...condition, field: event.target.value, value: defaultConditionValue(nextField) });
-            }}
-            className="rounded-lg border border-border/40 bg-surface-container-high px-2 py-1.5 text-xs text-on-surface"
-            style={{ colorScheme: 'dark' }}
-          >
-            {specification.fields.map((candidate) => (
-              <option key={candidate.key} value={candidate.key} className="bg-[#191c22] text-[#e1e2eb]">
-                {candidate.label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={condition.operator ?? 'equals'}
-            onChange={(event) =>
-              onChange({ ...condition, operator: event.target.value as ConditionExpression['operator'] })
-            }
-            className="rounded-lg border border-border/40 bg-surface-container-high px-2 py-1.5 text-xs text-on-surface"
-            style={{ colorScheme: 'dark' }}
-          >
-            {conditionOperators.map((operator) => (
-              <option key={operator.value} value={operator.value} className="bg-[#191c22] text-[#e1e2eb]">
-                {operator.label}
-              </option>
-            ))}
-          </select>
-          {condition.operator !== 'exists' && condition.operator !== 'notExists' && (
-            <input
-              value={String(condition.value ?? '')}
-              onChange={(event) =>
-                onChange({ ...condition, value: field ? parseConditionValue(field, event.target.value) : event.target.value })
-              }
-              className="rounded-lg border border-border/40 bg-surface-container-high px-2 py-1.5 text-xs text-on-surface"
-              placeholder="Valor"
-            />
-          )}
-        </div>
-      )}
-    </div>
   );
 }
 

@@ -278,6 +278,7 @@ export function RelationsEditor({
         inverseKey: `relatedFrom${number}`,
         inverseLabel: `Relacionado desde ${number}`,
         cardinality: 'many',
+        contractVersion: '1',
       });
       return current;
     });
@@ -359,6 +360,15 @@ export function RelationsEditor({
                   <option value="many">Varios registros</option>
                   <option value="one">Un solo registro</option>
                 </select>
+              </FriendlyField>
+              <FriendlyField label="Versión del contrato" help="Permite evolucionar el vínculo sin romper registros históricos.">
+                <input
+                  value={relation.contractVersion ?? '1'}
+                  onChange={(event) => updateRelation(index, { contractVersion: event.target.value })}
+                  className="friendly-input"
+                  inputMode="numeric"
+                  placeholder="1"
+                />
               </FriendlyField>
             </div>
             <div className="mt-4 flex items-center justify-between gap-4 text-[11px] text-on-surface-variant">

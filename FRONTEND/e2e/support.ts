@@ -48,6 +48,72 @@ const agentWithoutAdminAccessIdentity = {
   permissions: ['tickets:read:global'],
 };
 
+const requesterIdentity = {
+  username: 'playwright-requester',
+  displayName: 'Playwright Requester',
+  roleId: 'e2e-requester-role',
+  permissions: [
+    'tickets:create:propio',
+    'tickets:read:propio',
+    'tickets:update:propio',
+    'catalog:read:global',
+    'knowledge:read:global',
+    'recursos:read:global',
+  ],
+};
+
+/**
+ * Un solicitante CON acceso al inventario de su área.
+ *
+ * Es el fixture que distingue las dos mitades de la restricción del portal:
+ * el picker de dispositivos ya no depende de la ruta sino del permiso real,
+ * así que hace falta un solicitante entitled y otro sin `assets:read:*` para
+ * comprobar que uno ve el buscador y el otro el mensaje.
+ *
+ * El alcance es `depto` y no `propio` a propósito: `assets:read:propio` filtra
+ * por `attributes.assignedUserId`, que hoy nadie escribe, así que devolvería
+ * lista vacía siempre.
+ */
+const entitledRequesterIdentity = {
+  ...requesterIdentity,
+  username: 'playwright-requester-assets',
+  displayName: 'Playwright Requester con activos',
+  roleId: 'e2e-requester-assets-role',
+  permissions: [...requesterIdentity.permissions, 'assets:read:depto'],
+};
+
+const supervisorIdentity = {
+  username: 'playwright-supervisor',
+  displayName: 'Playwright Supervisor',
+  roleId: 'e2e-supervisor-role',
+  permissions: [
+    'tickets:create:depto', 'tickets:read:depto', 'tickets:update:depto',
+    'catalog:read:global', 'knowledge:read:global', 'assets:read:global',
+    'problems:create:depto', 'problems:read:depto', 'problems:update:depto',
+    'problem_resolution:update:depto', 'changes:create:depto', 'changes:read:depto',
+    'changes:update:depto', 'change_approvals:update:depto',
+    'change_implementation:update:depto', 'reports:read:depto',
+    'workflows:read:global', 'sla_policies:read:global',
+  ],
+};
+
+/**
+ * Quien SOLO ejecuta trabajo dirigido a su equipo: un operario de Warehouse
+ * que recibe una Task de una RFC abierta por otro departamento.
+ *
+ * Deliberadamente NO tiene `changes:read`. Es el caso que la vertical de
+ * Organization tenia que resolver: antes, este usuario no pasaba ni el gate
+ * externo de /app/* — su trabajo existia en el sistema y no habia pantalla
+ * desde la que verlo. Tampoco debe poder abrir el tablero de RFC: ver la
+ * tarea que te asignaron no es leer las RFC de Services.
+ */
+const taskExecutorIdentity = {
+  username: 'playwright-warehouse',
+  displayName: 'Playwright Warehouse',
+  roleId: 'e2e-warehouse-role',
+  permissions: ['change_tasks:read:propio', 'change_tasks:update:propio'],
+};
+
 /** SIG-DESK's own API, behind Kong — bare paths, no /api/v1 (see
  *  apiClient.ts). Override via PLAYWRIGHT_API_URL if the dev server under
  *  test was started with a different VITE_API_URL than this fixture. */
@@ -55,7 +121,7 @@ export const SIG_DESK_API_BASE = (process.env.PLAYWRIGHT_API_URL ?? 'http://127.
   /\/$/,
   '',
 );
-const SIG_DESK_API_PORT = new URL(SIG_DESK_API_BASE).port;
+export const SIG_DESK_API_PORT = new URL(SIG_DESK_API_BASE).port;
 
 type MockIdentity = {
   username: string;
@@ -168,4 +234,22 @@ export async function mockAuthenticatedAgentWithoutAdminAccess(
   options?: AuthMockOptions,
 ) {
   await mockAuthenticatedIdentity(page, agentWithoutAdminAccessIdentity, options);
+}
+
+export async function mockAuthenticatedRequester(page: Page, options?: AuthMockOptions) {
+  await mockAuthenticatedIdentity(page, requesterIdentity, options);
+}
+
+/** Solicitante con `assets:read:depto` — ve los equipos de su área. */
+export async function mockAuthenticatedRequesterWithAssets(page: Page, options?: AuthMockOptions) {
+  await mockAuthenticatedIdentity(page, entitledRequesterIdentity, options);
+}
+
+export async function mockAuthenticatedSupervisor(page: Page, options?: AuthMockOptions) {
+  await mockAuthenticatedIdentity(page, supervisorIdentity, options);
+}
+
+/** See taskExecutorIdentity — only `change_tasks`, no `changes`. */
+export async function mockAuthenticatedTaskExecutor(page: Page, options?: AuthMockOptions) {
+  await mockAuthenticatedIdentity(page, taskExecutorIdentity, options);
 }

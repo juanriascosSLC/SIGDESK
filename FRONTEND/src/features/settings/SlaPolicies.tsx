@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Clock3,
   Plus,
+  RefreshCw,
   Rocket,
   Save,
   ShieldAlert,
@@ -105,6 +106,7 @@ export default function SlaPolicies() {
     onSuccess: async (policy) => {
       await queryClient.invalidateQueries({ queryKey: ['sla-policies'] });
       await queryClient.invalidateQueries({ queryKey: ['catalog-definitions'] });
+      await queryClient.invalidateQueries({ queryKey: ['catalog-resources'] });
       setSelected(structuredClone(policy));
       setNotice(`${policy.name} v${policy.version} está activa y disponible en Catalog Builder.`);
     },
@@ -453,8 +455,13 @@ export default function SlaPolicies() {
             </div>
           )}
           {mutationError && (
-            <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
-              {mutationError.message}
+            <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300" role="alert">
+              <p>{mutationError.message}</p>
+              {policiesQuery.isError && (
+                <button type="button" onClick={() => void policiesQuery.refetch()} className="secondary-button mt-3" data-testid="sla-policies-retry">
+                  <RefreshCw className="h-4 w-4" /> Reintentar
+                </button>
+              )}
             </div>
           )}
           {notice && (

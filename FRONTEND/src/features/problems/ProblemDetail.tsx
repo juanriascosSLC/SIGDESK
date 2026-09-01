@@ -33,6 +33,7 @@ import { useAuth } from '@/features/auth/useAuth';
 import { PERMISSIONS } from '@/features/auth/permissions';
 import { listChanges } from '@/features/changes/api';
 import { ProblemChangeDialog } from './ProblemChangeDialog';
+import { ConfiguredRecordDetail } from '@/features/tickets/ConfiguredRecordDetail';
 
 const stateLabels: Record<string, string> = {
   under_investigation: 'En investigación',
@@ -208,6 +209,112 @@ export default function ProblemDetail() {
     transitionMutation.error ??
     createRelationMutation.error ??
     deleteRelationMutation.error;
+
+  const configuredEditPanel = editing ? (
+    <form onSubmit={submitEdit} className="rounded-3xl border border-primary/30 bg-surface-container-low">
+      <div className="flex items-center justify-between border-b border-border/40 p-6">
+        <h2 className="text-lg font-black text-on-surface">Actualizar análisis</h2>
+        <button type="button" onClick={() => setEditing(false)} className="p-2 text-on-surface-variant" aria-label="Cancelar edición">
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+      <div className="grid gap-5 p-6 md:grid-cols-2">
+        {editableFields.map((field) => (
+          <div key={field.key} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>
+            <DynamicField
+              field={field}
+              value={editData[field.key]}
+              required={isFieldRequired(field, editData)}
+              onChange={(value) => setEditData((current) => ({ ...current, [field.key]: value }))}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-end gap-3 border-t border-border/40 p-6">
+        <button type="button" onClick={() => setEditing(false)} className="secondary-button">Cancelar</button>
+        <button type="submit" disabled={updateMutation.isPending} className="primary-button disabled:opacity-50">
+          <Save className="h-4 w-4" /> Guardar
+        </button>
+      </div>
+    </form>
+  ) : null;
+
+  const relationManagement = can(PERMISSIONS.problemsEdit) ? (
+    <div className="grid gap-4 md:grid-cols-2">
+      {(specification.relations ?? []).map((relation) => {
+        const query = relation.targetEntityKey === 'INC' ? incidentsQuery : changesQuery;
+        const excludedIds = new Set(
+          relations
+            .filter((existing) => existing.sourceEntityId === problem.id && existing.relationKey === relation.key)
+            .map((existing) => existing.targetEntityId),
+        );
+        return (
+          <SearchableEntityPicker
+            key={relation.key}
+            label={relation.label}
+            entityKey={relation.targetEntityKey}
+            items={query.data ?? []}
+            excludedIds={excludedIds}
+            loading={query.isLoading}
+            pending={createRelationMutation.isPending}
+            onSelect={(target) => createRelationMutation.mutate({
+              relationKey: relation.key,
+              targetEntityKey: relation.targetEntityKey,
+              targetEntityId: target.id,
+            })}
+          />
+        );
+      })}
+    </div>
+  ) : undefined;
+
+  if (specification.detailPage) {
+    return (
+      <>
+        <ConfiguredRecordDetail
+          record={problem}
+          specification={specification}
+          currentUserName={displayName}
+          relations={relations}
+          transitions={availableTransitions}
+          onTransition={(transition) => transitionMutation.mutate(transition.key)}
+          transitionPending={transitionMutation.isPending}
+          transitionError={transitionMutation.error?.message}
+          canEdit={can(PERMISSIONS.problemsEdit)}
+          onEdit={() => {
+            setEditData(structuredClone(problem.data));
+            setEditing(true);
+            setNotice('');
+          }}
+          isEditing={editing}
+          relationManagement={relationManagement}
+          canDeleteRelation={() => can(PERMISSIONS.problemsEdit)}
+          onDeleteRelation={(relationId) => deleteRelationMutation.mutate(relationId)}
+          beforeLayout={
+            <>
+              {can(PERMISSIONS.problemsEdit) && can(PERMISSIONS.changesView) && can(PERMISSIONS.changesCreate) && (
+                <button onClick={() => setShowChangeDialog(true)} className="primary-button">
+                  <Plus className="h-4 w-4" /> Crear RFC para resolver
+                </button>
+              )}
+              {configuredEditPanel}
+            </>
+          }
+          notice={notice}
+          error={actionError?.message}
+          onBack={() => navigate('/app/problems')}
+          onNavigate={navigate}
+        />
+        <ProblemChangeDialog
+          open={showChangeDialog}
+          problem={problem}
+          currentUserName={displayName}
+          onClose={() => setShowChangeDialog(false)}
+          onLinked={() => void queryClient.invalidateQueries({ queryKey: ['problems', id, 'relations'] })}
+        />
+      </>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-surface-container-lowest p-6 lg:p-8">

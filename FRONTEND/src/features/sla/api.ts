@@ -123,3 +123,37 @@ export async function listSlaAssessments() {
   const response = await apiRequest<{ items: SlaAssessment[] }>('/sla/assessments');
   return response.items;
 }
+
+/**
+ * What the published definition's SLA policy would promise for a record that
+ * does not exist yet — the create form's "SLA esperado" widget.
+ *
+ * `applies: false` is a normal answer, not a failure: most entity keys bind no
+ * SLA policy, and a policy that has no target for the chosen priority is the
+ * same situation. The user can still create the record either way, so the
+ * backend answers 200 and the widget shows why rather than an error.
+ *
+ * Only `priority` is accepted because only priority can change the answer:
+ * ObjetivoSLA is indexed by priority alone (domain/politica_sla.go). Sending a
+ * category would build a UI that implies the category moves the SLA, which it
+ * does not.
+ */
+export interface SlaEntityPreview {
+  entityKey: string;
+  applies: boolean;
+  reason?: string;
+  policyId?: string;
+  policyVersion?: number;
+  priority?: string;
+  responseTargetMinutes?: number;
+  resolutionTargetMinutes?: number;
+  startedAt?: string;
+  responseDueAt?: string;
+  resolutionDueAt?: string;
+}
+
+export function previewSlaForEntity(entityKey: string, priority: string) {
+  return apiRequest<SlaEntityPreview>(
+    `/sla/preview?entityKey=${encodeURIComponent(entityKey)}&priority=${encodeURIComponent(priority)}`,
+  );
+}

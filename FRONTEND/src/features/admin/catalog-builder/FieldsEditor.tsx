@@ -1,31 +1,70 @@
+import { useMemo, useState } from 'react';
 import {
-  ArrowDown,
-  ArrowUp,
+  Calendar,
+  ChevronDown,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Hash,
   ListChecks,
+  ListFilter,
+  Mail,
   Plus,
-  Trash2,
+  Search,
+  Server,
+  Sparkles,
+  ToggleLeft,
   Type,
+  X,
 } from 'lucide-react';
 import type {
   CatalogSpecification,
   FieldDefinition,
   FieldType,
 } from '@/features/catalog/metamodel';
+import { fieldTypeUsesOptions } from '@/features/catalog/metamodel';
 import {
-  bindsToOptions,
-  conditionReferences,
-  fieldTypes,
-  replaceConditionField,
-  resourceTypeOptions,
-  technicalKey,
-} from './config';
-import { ConditionalRulesEditor } from './ConditionalRulesEditor';
+  appendCatalogFieldRow,
+  mapPageDefinition,
+} from '@/features/catalog/runtime/form-page-normalizer';
+import { upgradeSpecificationToPageLayout } from '@/features/catalog/runtime/page-layout-normalizer';
+import { removeFieldEverywhere, renameFieldEverywhere } from './field-references';
+import { SectionHeading } from './ui';
+import { FieldCard } from './field-editor/FieldCard';
 import {
-  FriendlyField,
-  IconButton,
-  SectionHeading,
-  Toggle,
-} from './ui';
+  duplicateField,
+  fieldForType,
+  reorder,
+  uniqueFieldKey,
+} from './field-editor/field-operations';
+import { technicalKey } from './config';
+
+type CategoryFilter = 'all' | 'text' | 'options' | 'numbers_dates' | 'contact' | 'bindings' | 'conditional';
+
+const QUICK_FIELD_TEMPLATES: Array<{
+  label: string;
+  type: FieldType;
+  icon: typeof Type;
+  color: string;
+  options?: Array<{ label: string; value: string }>;
+  bindsTo?: FieldDefinition['bindsTo'];
+}> = [
+  { label: 'Texto corto', type: 'text', icon: Type, color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' },
+  {
+    label: 'Lista desplegable',
+    type: 'select',
+    icon: ListFilter,
+    color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+    options: [
+      { label: 'Opción 1', value: 'opcion1' },
+      { label: 'Opción 2', value: 'opcion2' },
+    ],
+  },
+  { label: 'Fecha', type: 'date', icon: Calendar, color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
+  { label: 'Número', type: 'number', icon: Hash, color: 'text-violet-400 bg-violet-500/10 border-violet-500/20' },
+  { label: 'Dispositivo CMDB', type: 'text', icon: Server, color: 'text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20', bindsTo: 'assetId' },
+  { label: 'Sí / No', type: 'boolean', icon: ToggleLeft, color: 'text-teal-400 bg-teal-500/10 border-teal-500/20' },
+  { label: 'Correo', type: 'email', icon: Mail, color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+];
 
 export function FieldsEditor({
   specification,
@@ -36,401 +75,526 @@ export function FieldsEditor({
   updateSpecification: (updater: (current: CatalogSpecification) => CatalogSpecification) => void;
   guided?: boolean;
 }) {
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
+  const [showQuickMenu, setShowQuickMenu] = useState(false);
+
+  const trimmedQuery = query.trim().toLowerCase();
+
+  // Estadísticas del formulario
+  const metrics = useMemo(() => {
+    const total = specification.fields.length;
+    const required = specification.fields.filter((f) => f.required).length;
+    const withOptions = specification.fields.filter((f) => fieldTypeUsesOptions(f.type)).length;
+    const bound = specification.fields.filter((f) => f.bindsTo).length;
+    const conditional = specification.fields.filter((f) => f.visibleWhen || f.requiredWhen).length;
+    return { total, required, withOptions, bound, conditional };
+  }, [specification.fields]);
+
+  const visible = useMemo(() => {
+    return specification.fields
+      .map((field, index) => ({ field, index }))
+      .filter(({ field }) => {
+        // Filtro por texto
+        const matchesQuery =
+          trimmedQuery === ''
+            ? true
+            : `${field.label} ${field.key} ${field.type}`.toLowerCase().includes(trimmedQuery);
+
+        if (!matchesQuery) return false;
+
+        // Filtro por categoría
+        if (categoryFilter === 'text') return field.type === 'text' || field.type === 'textarea';
+        if (categoryFilter === 'options') return fieldTypeUsesOptions(field.type);
+        if (categoryFilter === 'numbers_dates') return field.type === 'number' || field.type === 'date' || field.type === 'datetime';
+        if (categoryFilter === 'contact') return field.type === 'email' || field.type === 'phone' || field.type === 'url';
+        if (categoryFilter === 'bindings') return Boolean(field.bindsTo);
+        if (categoryFilter === 'conditional') return Boolean(field.visibleWhen || field.requiredWhen);
+
+        return true;
+      });
+  }, [specification.fields, trimmedQuery, categoryFilter]);
+
+  const canReorder = trimmedQuery === '' && categoryFilter === 'all';
+
   function updateField(index: number, changes: Partial<FieldDefinition>) {
     updateSpecification((current) => {
       const previous = current.fields[index];
       const next = { ...previous, ...changes };
       current.fields[index] = next;
       if (changes.key && changes.key !== previous.key) {
-        current.fields = current.fields.map((candidate) => ({
-          ...candidate,
-          visibleWhen: replaceConditionField(candidate.visibleWhen, previous.key, changes.key!),
-          requiredWhen: replaceConditionField(candidate.requiredWhen, previous.key, changes.key!),
-        }));
-        Object.keys(current.views ?? {}).forEach((view) => {
-          current.views![view] = current.views![view].map((key) =>
-            key === previous.key ? changes.key! : key,
-          );
-        });
-        if (current.detailLayout) {
-          current.detailLayout.fields = current.detailLayout.fields.map((placement) =>
-            placement.source === 'catalog' && placement.fieldKey === previous.key
-              ? { ...placement, fieldKey: changes.key! }
-              : placement,
-          );
-        }
+        const others = current.fields.filter((_, position) => position !== index).map((field) => field.key);
+        const safeKey = uniqueFieldKey(others, changes.key);
+        next.key = safeKey;
+        renameFieldEverywhere(current, previous.key, safeKey);
+        setExpandedKey((currentKey) => (currentKey === previous.key ? safeKey : currentKey));
       }
-      // TODO-103 (T19) — un campo recién vinculado a recurso/agente IT se
-      // marca readOnly en el layout de EDICIÓN si ya tiene un placement ahí
-      // (no se crea uno nuevo — reasignar recurso/agente IT es un flujo de
-      // negocio propio, AsignarTicketUseCase/EscalarAITUseCase, no un campo
-      // de formulario genérico editable).
-      if (changes.bindsTo && current.layouts?.edit) {
-        const markReadOnly = (document: { sections: { placements: { fieldKey?: string; readOnly?: boolean }[] }[] }) => {
-          for (const section of document.sections) {
-            for (const placement of section.placements) {
-              if (placement.fieldKey === next.key) placement.readOnly = true;
+      if (changes.bindsTo) {
+        if (current.layouts?.edit) {
+          const markReadOnly = (document: { sections: { placements: { fieldKey?: string; readOnly?: boolean }[] }[] }) => {
+            for (const section of document.sections) {
+              for (const placement of section.placements) {
+                if (placement.fieldKey === next.key) placement.readOnly = true;
+              }
             }
-          }
-        };
-        markReadOnly(current.layouts.edit.default);
-        current.layouts.edit.variants?.forEach((variant) => markReadOnly(variant.document));
+          };
+          markReadOnly(current.layouts.edit.default);
+          current.layouts.edit.variants?.forEach((variant) => markReadOnly(variant.document));
+        }
+        if (current.editPage) {
+          current.editPage = mapPageDefinition(current.editPage, (page) => ({
+            ...page,
+            main: {
+              ...page.main,
+              placements: page.main.placements.map((placement) =>
+                placement.fieldKey === next.key ? { ...placement, readOnly: true } : placement,
+              ),
+            },
+          }));
+        }
       }
       return current;
     });
   }
 
-  function addField() {
-    updateSpecification((current) => {
-      const number = current.fields.length + 1;
-      const key = `field${number}`;
-      current.fields.push({
-        key,
-        label: `Nuevo campo ${number}`,
-        type: 'text',
-        required: false,
-      });
-      current.views = current.views ?? {};
-      current.views.create = [...(current.views.create ?? []), key];
-      // TODO-103 (T20) — addField() antes solo tocaba `views.create`
-      // (mecanismo legado, Metamodel ≤1.3) sin sincronizar
-      // `layouts.create.default` (mecanismo 1.4 real que CatalogForm.tsx
-      // renderiza) — un campo nuevo podía quedar sin placement visible hasta
-      // que un admin lo arrastrara manualmente en el Diseñador de plantilla.
-      // Ahora crítico para bindsTo: tickets_service (T11) rechaza publicar
-      // una definición con un campo bindsTo sin placement en layouts.create.
-      // Arreglado de raíz para CUALQUIER tipo de campo nuevo, no solo bindsTo.
-      if (current.layouts?.create) {
-        const section = current.layouts.create.default.sections[0];
-        if (section) {
-          section.placements.push({
-            id: `placement-create-${key}`,
-            kind: 'field',
-            source: 'catalog',
-            fieldKey: key,
-            columnSpan: 1,
-          });
-        } else {
-          current.layouts.create.default.sections.push({
-            id: 'section-create-main',
-            columns: 1,
-            placements: [
-              { id: `placement-create-${key}`, kind: 'field', source: 'catalog', fieldKey: key, columnSpan: 1 },
-            ],
-          });
-        }
+  function placeNewField(current: CatalogSpecification, key: string) {
+    current.views = current.views ?? {};
+    current.views.create = [...new Set([...(current.views.create ?? []), key])];
+    if (current.layouts?.create) {
+      const section = current.layouts.create.default.sections[0];
+      const placement = {
+        id: `placement-create-${key}`,
+        kind: 'field' as const,
+        source: 'catalog' as const,
+        fieldKey: key,
+        columnSpan: 1 as const,
+      };
+      if (section) {
+        section.placements.push(placement);
+      } else {
+        current.layouts.create.default.sections.push({
+          id: 'section-create-main',
+          columns: 1,
+          placements: [placement],
+        });
       }
+    }
+    if (current.createPage) {
+      current.createPage = mapPageDefinition(current.createPage, (page) => appendCatalogFieldRow(page, key));
+    }
+    if (current.editPage) {
+      current.editPage = mapPageDefinition(current.editPage, (page) => appendCatalogFieldRow(page, key));
+    }
+    const detailReady = upgradeSpecificationToPageLayout(current);
+    current.detailPage = mapPageDefinition(detailReady.detailPage!, (page) =>
+      appendCatalogFieldRow(page, key),
+    );
+    if (current.detailLayout) {
+      const alreadyPlaced = current.detailLayout.fields.some(
+        (placement) => placement.source === 'catalog' && placement.fieldKey === key,
+      );
+      if (!alreadyPlaced) {
+        current.detailLayout.fields.push({ source: 'catalog', fieldKey: key, width: 'full' });
+      }
+    }
+  }
+
+  function addField(
+    type: FieldType = 'text',
+    labelPreset?: string,
+    optionsPreset?: Array<{ label: string; value: string }>,
+    bindsToPreset?: FieldDefinition['bindsTo'],
+  ) {
+    const label = labelPreset ?? `Nuevo campo ${specification.fields.length + 1}`;
+    const key = uniqueFieldKey(
+      specification.fields.map((field) => field.key),
+      labelPreset ? technicalKey(labelPreset) : `field${specification.fields.length + 1}`,
+    );
+    updateSpecification((current) => {
+      const newField: FieldDefinition = {
+        key,
+        label,
+        type,
+        required: false,
+        ...(optionsPreset ? { options: optionsPreset } : {}),
+        ...(bindsToPreset ? { bindsTo: bindsToPreset } : {}),
+      };
+      current.fields.push(newField);
+      placeNewField(current, key);
       return current;
     });
+    setExpandedKey(key);
+    setQuery('');
+    setCategoryFilter('all');
+    setShowQuickMenu(false);
+  }
+
+  function duplicate(index: number) {
+    const source = specification.fields[index];
+    const copy = duplicateField(
+      source,
+      specification.fields.map((field) => field.key),
+    );
+    updateSpecification((current) => {
+      current.fields.splice(index + 1, 0, copy);
+      placeNewField(current, copy.key);
+      return current;
+    });
+    setExpandedKey(copy.key);
+    setQuery('');
   }
 
   function removeField(index: number) {
+    const removedKey = specification.fields[index].key;
     updateSpecification((current) => {
-      const [removed] = current.fields.splice(index, 1);
-      Object.keys(current.views ?? {}).forEach((view) => {
-        current.views![view] = current.views![view].filter((key) => key !== removed.key);
-      });
-      if (current.detailLayout) {
-        current.detailLayout.fields = current.detailLayout.fields.filter(
-          (placement) =>
-            placement.source !== 'catalog' || placement.fieldKey !== removed.key,
-        );
-      }
-      current.fields = current.fields.map((field) => ({
-        ...field,
-        visibleWhen: conditionReferences(field.visibleWhen, removed.key)
-          ? undefined
-          : field.visibleWhen,
-        requiredWhen: conditionReferences(field.requiredWhen, removed.key)
-          ? undefined
-          : field.requiredWhen,
-      }));
+      current.fields.splice(index, 1);
+      removeFieldEverywhere(current, removedKey);
+      return current;
+    });
+    setExpandedKey((current) => (current === removedKey ? null : current));
+  }
+
+  function move(from: number, to: number) {
+    if (to < 0 || to >= specification.fields.length) return;
+    updateSpecification((current) => {
+      current.fields = reorder(current.fields, from, to);
       return current;
     });
   }
 
-  function moveField(index: number, direction: -1 | 1) {
+  function changeType(index: number, type: FieldType) {
     updateSpecification((current) => {
-      const target = index + direction;
-      if (target < 0 || target >= current.fields.length) return current;
-      [current.fields[index], current.fields[target]] = [current.fields[target], current.fields[index]];
-      return current;
-    });
-  }
-
-  function toggleView(fieldKey: string, view: 'create' | 'summary', checked: boolean) {
-    updateSpecification((current) => {
-      current.views = current.views ?? {};
-      const values = current.views[view] ?? [];
-      current.views[view] = checked
-        ? [...new Set([...values, fieldKey])]
-        : values.filter((key) => key !== fieldKey);
+      current.fields[index] = fieldForType(current.fields[index], type);
       return current;
     });
   }
 
   return (
-    <section className="panel-card p-6 lg:p-8">
+    <section className="panel-card p-6 lg:p-8 space-y-6">
+      {/* Cabecera Principal */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <SectionHeading
           icon={<ListChecks className="w-5 h-5" />}
           title="Campos y presentación"
-          description="Define la información que las personas deben completar."
+          description="Define la estructura, tipos de datos y reglas que las personas deben completar."
         />
-        <button
-          data-testid="catalog-add-field"
-          onClick={addField}
-          className="primary-button"
-        >
-          <Plus className="w-4 h-4" /> Agregar campo
-        </button>
+
+        <div className="flex items-center gap-2 relative">
+          <button
+            data-testid="catalog-add-field"
+            onClick={() => addField('text')}
+            className="primary-button shadow-md"
+          >
+            <Plus className="w-4 h-4" /> Agregar campo
+          </button>
+          <button
+            type="button"
+            title="Crear tipo específico"
+            onClick={() => setShowQuickMenu((prev) => !prev)}
+            className="rounded-xl border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary p-2.5 transition-colors"
+          >
+            <ChevronDown className="w-4 h-4" />
+          </button>
+
+          {showQuickMenu && (
+            <div className="absolute right-0 top-full mt-2 w-64 rounded-2xl border border-border/60 bg-surface-container shadow-2xl p-2 z-30 animate-in fade-in zoom-in-95 duration-150">
+              <div className="px-3 py-2 text-[10px] font-black uppercase tracking-wider text-on-surface-variant flex items-center gap-1.5">
+                <Sparkles className="w-3 h-3 text-amber-400" /> Crear tipo predefinido
+              </div>
+              <div className="space-y-1">
+                {QUICK_FIELD_TEMPLATES.map((tmpl) => {
+                  const Icon = tmpl.icon;
+                  return (
+                    <button
+                      key={tmpl.label}
+                      type="button"
+                      onClick={() => addField(tmpl.type, tmpl.label, tmpl.options, tmpl.bindsTo)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs font-medium hover:bg-surface-container-high text-on-surface transition-colors"
+                    >
+                      <span className={`w-6 h-6 rounded-lg flex items-center justify-center border ${tmpl.color}`}>
+                        <Icon className="w-3.5 h-3.5" />
+                      </span>
+                      <span>{tmpl.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="space-y-4 mt-7">
-        {specification.fields.map((field, index) => (
-          <div
-            key={`${field.key}-${index}`}
-            data-testid={`catalog-field-editor-${field.key}`}
-            className="rounded-2xl border border-border/50 bg-surface-container p-5"
-          >
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-300 flex items-center justify-center shrink-0">
-                <Type className="w-5 h-5" />
-              </div>
-              <div className="grid lg:grid-cols-[minmax(0,1fr)_220px] gap-4 flex-1">
-                <FriendlyField label={`Campo ${index + 1}`}>
-                  <input
-                    value={field.label}
-                    onChange={(event) => {
-                      const label = event.target.value;
-                      const previousGeneratedKey = technicalKey(field.label);
-                      updateField(index, {
-                        label,
-                        key: field.key === previousGeneratedKey ? technicalKey(label) : field.key,
-                      });
-                    }}
-                    className="friendly-input"
-                    placeholder="Ej. Prioridad"
-                  />
-                </FriendlyField>
-                <FriendlyField label="Tipo de respuesta">
-                  <select
-                    value={field.type}
-                    onChange={(event) => updateField(index, { type: event.target.value as FieldType })}
-                    className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
-                    style={{ colorScheme: 'dark' }}
-                  >
-                    {fieldTypes.map((type) => (
-                      <option key={type.value} value={type.value} className="bg-[#191c22] text-[#e1e2eb]">
-                        {type.label}
-                      </option>
-                    ))}
-                  </select>
-                </FriendlyField>
-              </div>
-              <div className="flex gap-1">
-                <IconButton
-                  label="Subir campo"
-                  disabled={index === 0}
-                  onClick={() => moveField(index, -1)}
-                >
-                  <ArrowUp className="w-4 h-4" />
-                </IconButton>
-                <IconButton
-                  label="Bajar campo"
-                  disabled={index === specification.fields.length - 1}
-                  onClick={() => moveField(index, 1)}
-                >
-                  <ArrowDown className="w-4 h-4" />
-                </IconButton>
-                <IconButton
-                  label="Eliminar campo"
-                  disabled={specification.fields.length === 1}
-                  danger
-                  onClick={() => removeField(index)}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </IconButton>
-              </div>
+      {/* KPI Cards / Métricas del Formulario */}
+      {specification.fields.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-1">
+          <div className="rounded-xl border border-border/40 bg-surface-container/50 p-2.5 flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center font-bold text-xs border border-cyan-500/20 shrink-0">
+              {metrics.total}
             </div>
-
-            <div className="grid md:grid-cols-2 gap-4 mt-4 ml-0 lg:ml-14">
-              {field.type !== 'boolean' && (
-                <FriendlyField label="Texto de ayuda" help="Ejemplo que aparece dentro del campo.">
-                  <input
-                    value={field.placeholder ?? ''}
-                    onChange={(event) => updateField(index, { placeholder: event.target.value })}
-                    className="friendly-input"
-                    placeholder="Ej. Describe brevemente…"
-                  />
-                </FriendlyField>
-              )}
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-3 pt-6">
-                <Toggle
-                  checked={field.required}
-                  onChange={(checked) => updateField(index, { required: checked })}
-                  label="Obligatorio"
-                />
-                <Toggle
-                  checked={(specification.views?.create ?? []).includes(field.key)}
-                  onChange={(checked) => toggleView(field.key, 'create', checked)}
-                  label="Mostrar al crear"
-                />
-                <Toggle
-                  checked={(specification.views?.summary ?? []).includes(field.key)}
-                  onChange={(checked) => toggleView(field.key, 'summary', checked)}
-                  label="Mostrar en resumen"
-                />
-              </div>
+            <div className="min-w-0">
+              <span className="text-[10px] uppercase tracking-wider font-bold text-on-surface-variant block">Total</span>
+              <span className="text-xs font-bold text-on-surface truncate block">Campos</span>
             </div>
-
-            {/* TODO-103 — control separado de bindsTo, no conflated con el
-                select de `type` de arriba (ver metamodel.ts para el porqué:
-                bindsTo es ortogonal al FieldType nominal, el picker real
-                reemplaza el renderer de DynamicField sin importar `type`). */}
-            <div className="grid md:grid-cols-2 gap-4 mt-4 ml-0 lg:ml-14">
-              <FriendlyField label="Vincular a" help="Referencia real a un recurso/agente IT en vez de un valor de texto.">
-                <select
-                  data-testid={`catalog-field-bindsto-${field.key}`}
-                  value={field.bindsTo ?? ''}
-                  onChange={(event) => {
-                    const value = event.target.value as FieldDefinition['bindsTo'] | '';
-                    updateField(index, {
-                      bindsTo: value || undefined,
-                      resourceType: value === 'recursoId' ? field.resourceType : undefined,
-                    });
-                  }}
-                  className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
-                  style={{ colorScheme: 'dark' }}
-                >
-                  {bindsToOptions.map((option) => (
-                    <option key={option.value || 'none'} value={option.value ?? ''} className="bg-[#191c22] text-[#e1e2eb]">
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </FriendlyField>
-              {field.bindsTo === 'recursoId' && (
-                <FriendlyField label="Tipo de activo permitido">
-                  <select
-                    value={field.resourceType ?? ''}
-                    onChange={(event) =>
-                      updateField(index, {
-                        resourceType: (event.target.value || undefined) as FieldDefinition['resourceType'],
-                      })
-                    }
-                    className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
-                    style={{ colorScheme: 'dark' }}
-                  >
-                    {resourceTypeOptions.map((option) => (
-                      <option key={option.value || 'any'} value={option.value} className="bg-[#191c22] text-[#e1e2eb]">
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </FriendlyField>
-              )}
-            </div>
-
-            {(field.type === 'text' || field.type === 'textarea') && (
-              <div className="grid sm:grid-cols-2 gap-4 mt-4 ml-0 lg:ml-14">
-                <FriendlyField label="Mínimo de caracteres">
-                  <input
-                    type="number"
-                    min={0}
-                    value={field.minLength ?? ''}
-                    onChange={(event) =>
-                      updateField(index, {
-                        minLength: event.target.value ? Number(event.target.value) : undefined,
-                      })
-                    }
-                    className="friendly-input"
-                  />
-                </FriendlyField>
-                <FriendlyField label="Máximo de caracteres">
-                  <input
-                    type="number"
-                    min={1}
-                    value={field.maxLength ?? ''}
-                    onChange={(event) =>
-                      updateField(index, {
-                        maxLength: event.target.value ? Number(event.target.value) : undefined,
-                      })
-                    }
-                    className="friendly-input"
-                  />
-                </FriendlyField>
-              </div>
-            )}
-
-            {field.type === 'select' && (
-              <div className="mt-5 ml-0 lg:ml-14">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-bold text-on-surface">Opciones disponibles</span>
-                  <button
-                    onClick={() =>
-                      updateField(index, {
-                        options: [
-                          ...(field.options ?? []),
-                          {
-                            value: `option${(field.options?.length ?? 0) + 1}`,
-                            label: `Opción ${(field.options?.length ?? 0) + 1}`,
-                          },
-                        ],
-                      })
-                    }
-                    className="text-xs font-bold text-primary flex items-center gap-1"
-                  >
-                    <Plus className="w-3 h-3" /> Agregar opción
-                  </button>
-                </div>
-                <div className="grid md:grid-cols-2 gap-2">
-                  {(field.options ?? []).map((option, optionIndex) => (
-                    <div key={`${option.value}-${optionIndex}`} className="flex items-center gap-2">
-                      <input
-                        value={option.label}
-                        onChange={(event) => {
-                          const options = [...(field.options ?? [])];
-                          const label = event.target.value;
-                          options[optionIndex] = {
-                            label,
-                            value:
-                              option.value === technicalKey(option.label)
-                                ? technicalKey(label)
-                                : option.value,
-                          };
-                          updateField(index, { options });
-                        }}
-                        className="friendly-input"
-                      />
-                      <IconButton
-                        label="Eliminar opción"
-                        danger
-                        onClick={() =>
-                          updateField(index, {
-                            options: field.options?.filter((_, current) => current !== optionIndex),
-                          })
-                        }
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </IconButton>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <ConditionalRulesEditor
-              field={field}
-              fields={specification.fields}
-              onChange={(changes) => updateField(index, changes)}
-            />
-
-            {!guided && <div className="mt-4 ml-0 lg:ml-14 text-[11px] text-on-surface-variant">
-              Identificador interno: <span className="font-mono text-on-surface">{field.key}</span>
-            </div>}
           </div>
-        ))}
+
+          <div className="rounded-xl border border-border/40 bg-surface-container/50 p-2.5 flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center font-bold text-xs border border-rose-500/20 shrink-0">
+              {metrics.required}
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] uppercase tracking-wider font-bold text-on-surface-variant block">Obligatorios</span>
+              <span className="text-xs font-bold text-on-surface truncate block">Requeridos</span>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border/40 bg-surface-container/50 p-2.5 flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold text-xs border border-emerald-500/20 shrink-0">
+              {metrics.withOptions}
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] uppercase tracking-wider font-bold text-on-surface-variant block">Opciones</span>
+              <span className="text-xs font-bold text-on-surface truncate block">Listas / Select</span>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border/40 bg-surface-container/50 p-2.5 flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-fuchsia-500/10 text-fuchsia-400 flex items-center justify-center font-bold text-xs border border-fuchsia-500/20 shrink-0">
+              {metrics.bound}
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] uppercase tracking-wider font-bold text-on-surface-variant block">CMDB</span>
+              <span className="text-xs font-bold text-on-surface truncate block">Activos / Sitios</span>
+            </div>
+          </div>
+
+          <div className="col-span-2 sm:col-span-1 rounded-xl border border-border/40 bg-surface-container/50 p-2.5 flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-violet-500/10 text-violet-400 flex items-center justify-center font-bold text-xs border border-violet-500/20 shrink-0">
+              {metrics.conditional}
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] uppercase tracking-wider font-bold text-on-surface-variant block">Lógica</span>
+              <span className="text-xs font-bold text-on-surface truncate block">Condicionales</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Barra de Filtros y Búsqueda */}
+      <div className="space-y-3 pt-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[240px]">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
+            <input
+              data-testid="catalog-field-search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={`Buscar entre ${specification.fields.length} campos (nombre, clave, tipo)…`}
+              aria-label="Buscar campos"
+              className="friendly-input w-full !pl-10 pr-9 bg-surface-container-low"
+            />
+            {query && (
+              <button
+                type="button"
+                aria-label="Limpiar la búsqueda"
+                onClick={() => setQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (expandedKey) {
+                  setExpandedKey(null);
+                } else if (specification.fields.length > 0) {
+                  setExpandedKey(specification.fields[0].key);
+                }
+              }}
+              className="secondary-button !px-3 !py-2 text-xs"
+              title={expandedKey ? 'Colapsar tarjeta activa' : 'Expandir primer campo'}
+            >
+              {expandedKey ? (
+                <>
+                  <ChevronsDownUp className="w-3.5 h-3.5" /> Colapsar
+                </>
+              ) : (
+                <>
+                  <ChevronsUpDown className="w-3.5 h-3.5" /> Expandir
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Pestañas de Categoría */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 pb-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('all')}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                categoryFilter === 'all'
+                  ? 'bg-primary/20 text-primary border border-primary/40'
+                  : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
+              }`}
+            >
+              Todos ({specification.fields.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('text')}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                categoryFilter === 'text'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                  : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
+              }`}
+            >
+              Texto
+            </button>
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('options')}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                categoryFilter === 'options'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                  : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
+              }`}
+            >
+              Opciones
+            </button>
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('numbers_dates')}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                categoryFilter === 'numbers_dates'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                  : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
+              }`}
+            >
+              Números y Fechas
+            </button>
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('contact')}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                categoryFilter === 'contact'
+                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                  : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
+              }`}
+            >
+              Contacto
+            </button>
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('bindings')}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                categoryFilter === 'bindings'
+                  ? 'bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/40'
+                  : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
+              }`}
+            >
+              CMDB
+            </button>
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('conditional')}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                categoryFilter === 'conditional'
+                  ? 'bg-violet-500/20 text-violet-300 border border-violet-500/40'
+                  : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
+              }`}
+            >
+              Condicionales
+            </button>
+          </div>
+
+          <span className="text-xs text-on-surface-variant">
+            {trimmedQuery
+              ? `${visible.length} de ${specification.fields.length} · el orden no se puede cambiar mientras filtras`
+              : categoryFilter !== 'all'
+                ? `Mostrando ${visible.length} de ${specification.fields.length}`
+                : 'Arrastra por el asa para reordenar'}
+          </span>
+        </div>
+      </div>
+
+      {/* Lista de Campos */}
+      <div className="space-y-2.5 mt-2">
+        {specification.fields.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border/60 p-10 text-center bg-surface-container/20">
+            <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto mb-3">
+              <Sparkles className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-on-surface">Formulario sin campos</h3>
+            <p className="text-xs text-on-surface-variant max-w-md mx-auto mt-1 mb-5">
+              Empieza agregando los campos que los solicitantes o técnicos deben completar para este ticket.
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {QUICK_FIELD_TEMPLATES.slice(0, 4).map((tmpl) => {
+                const Icon = tmpl.icon;
+                return (
+                  <button
+                    key={tmpl.label}
+                    type="button"
+                    onClick={() => addField(tmpl.type, tmpl.label, tmpl.options, tmpl.bindsTo)}
+                    className="secondary-button !py-2 !px-3 text-xs"
+                  >
+                    <Icon className="w-3.5 h-3.5 text-primary" /> + {tmpl.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : visible.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border/60 p-8 text-center bg-surface-container/20">
+            <p className="text-sm text-on-surface-variant">
+              Ningún campo coincide con «{query}».
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setQuery('');
+                setCategoryFilter('all');
+              }}
+              className="mt-3 text-xs font-semibold text-primary hover:underline"
+            >
+              Restablecer filtros de búsqueda
+            </button>
+          </div>
+        ) : (
+          visible.map(({ field, index }) => (
+            <FieldCard
+              key={`${field.key}-${index}`}
+              field={field}
+              index={index}
+              total={specification.fields.length}
+              specification={specification}
+              expanded={expandedKey === field.key}
+              draggable={canReorder}
+              guided={guided}
+              dragging={dragFrom === index}
+              onToggle={() => setExpandedKey((current) => (current === field.key ? null : field.key))}
+              onChange={(changes) => updateField(index, changes)}
+              onChangeType={(type) => changeType(index, type)}
+              onDuplicate={() => duplicate(index)}
+              onRemove={() => removeField(index)}
+              onMove={(direction) => move(index, index + direction)}
+              onDragStart={() => setDragFrom(index)}
+              onDragOver={() => undefined}
+              onDrop={() => {
+                if (dragFrom !== null) move(dragFrom, index);
+                setDragFrom(null);
+              }}
+              onDragEnd={() => setDragFrom(null)}
+            />
+          ))
+        )}
       </div>
     </section>
   );

@@ -7,14 +7,29 @@ export type DefinitionStatus =
   | 'deprecated'
   | 'retired'
   | 'archived';
-export type FieldType =
-  | 'text'
-  | 'textarea'
-  | 'select'
-  | 'boolean'
-  | 'number'
-  | 'date'
-  | 'datetime';
+// Los tipos de campo y sus predicados puros viven en `field-types.ts`: este
+// archivo importa `apiRequest`, y con el todo el cliente HTTP, lo que hace
+// imposible importar el modelo desde Node. Se reexportan para que nada mas
+// tuviera que cambiar de import.
+export {
+  ASSETS_BY_FIELD_KEY,
+  FIELD_TYPES_WITH_OPTIONS,
+  assetConditionData,
+  bindingCountIssue,
+  bindingEmptyValue,
+  bindingIsMultiple,
+  bindingList,
+  bindingPrincipal,
+  fieldTypeIsText,
+  fieldTypeUsesOptions,
+  technicalKey,
+  type BindingFieldValue,
+  type BindingValue,
+  type FieldFormat,
+  type FieldType,
+} from './field-types';
+import { ASSETS_BY_FIELD_KEY } from './field-types';
+import type { BindingValue, FieldFormat, FieldType } from './field-types';
 
 export interface FieldOption {
   value: string;
@@ -33,11 +48,31 @@ export type ConditionOperator =
   | 'lessThan'
   | 'lessThanOrEqual';
 
+/**
+ * Cómo se aplica una condición sobre un campo que puede tener VARIOS
+ * dispositivos (`bindsTo: 'assetId'` con `multiple`).
+ *
+ * Existe para que la regla no dependa del orden en que la persona hizo clic:
+ * sin un cuantificador explícito, «el dispositivo del campo» sería
+ * ambiguo en cuanto hay más de uno.
+ *
+ *  - `principal` (por defecto): evalúa el dispositivo principal, que la
+ *    persona designa explícitamente en el picker. Es exactamente el
+ *    comportamiento de un campo de un solo dispositivo, así que ninguna
+ *    regla ya publicada cambia de resultado.
+ *  - `any`: se cumple si ALGÚN dispositivo del campo la cumple.
+ *  - `all`: exige que TODOS la cumplan. Sobre una lista vacía es verdadero
+ *    (vacuo), igual que `Array.prototype.every`.
+ */
+export type ConditionQuantifier = 'principal' | 'any' | 'all';
+
 export interface ConditionExpression {
   field?: string;
   operator?: ConditionOperator;
   value?: unknown;
   values?: unknown[];
+  /** Solo tiene efecto sobre campos multi-dispositivo. Por defecto `principal`. */
+  quantifier?: ConditionQuantifier;
   all?: ConditionExpression[];
   any?: ConditionExpression[];
 }
@@ -52,7 +87,22 @@ export interface ConditionExpression {
 // necesita. `resourceType` solo aplica cuando bindsTo === 'recursoId' (filtra
 // qué tipo de recurso es válido para este campo — enum cerrado contra lo que
 // resource_service realmente modela, domain.TipoRecurso).
-export type ResourceTypeFilter = 'hardware' | 'software_licencia' | 'infraestructura_red';
+export type ResourceTypeFilter =
+  | 'hardware'
+  | 'software_licencia'
+  | 'infraestructura_red'
+  | 'camera'
+  | 'nvr'
+  | 'server'
+  | 'switch'
+  | 'router'
+  | 'pdu'
+  | 'access-point'
+  | 'access-control'
+  | 'radio'
+  | 'speaker'
+  | 'software'
+  | 'site';
 
 export interface FieldDefinition {
   key: string;
@@ -64,21 +114,88 @@ export interface FieldDefinition {
   minLength?: number;
   maxLength?: number;
   placeholder?: string;
+  /**
+   * Ayuda PERSISTENTE bajo el campo, distinta de `placeholder`: el
+   * placeholder desaparece en cuanto la persona escribe, así que no puede
+   * llevar la instrucción que necesita mientras llena el campo.
+   */
+  helpText?: string;
+  /**
+   * Presentación, NO seguridad. Un campo de solo lectura sigue viajando en
+   * `data` si alguien lo manda; lo que garantiza que un valor no se toque es
+   * que no sea un campo de formulario. Se usa para mostrar algo que otro
+   * flujo calcula.
+   */
+  readOnly?: boolean;
   defaultValue?: unknown;
   options?: FieldOption[];
-  validation?: Record<string, unknown>;
-  bindsTo?: 'recursoId' | 'agenteItId';
+  // ── Restricciones. Cada una la valida el servidor en
+  //    tickets_service/application/validar_datos_catalogo.go. Agregar una
+  //    aquí sin agregarla allá deja la UI prometiendo algo que no se cumple.
+  /** Solo `number`. */
+  min?: number;
+  /** Solo `number`. */
+  max?: number;
+  /** Solo `number`. El servidor solo exige el paso cuando es entero. */
+  step?: number;
+  /** Formato con nombre sobre un campo de texto. */
+  format?: FieldFormat;
+  /** Expresión propia del administrador. Si no compila, el servidor la ignora. */
+  pattern?: string;
+  /** Mensaje que ve la persona cuando `pattern` no coincide. */
+  patternMessage?: string;
+  /** `date`/`datetime`. Fecha ISO o el literal `today`, que no caduca. */
+  minDate?: string;
+  /** `date`/`datetime`. Fecha ISO o el literal `today`. */
+  maxDate?: string;
+  /** `multiselect` (opciones) o un campo `bindsTo:'assetId'` con `multiple`
+   *  (dispositivos). El servidor verifica ambos casos. */
+  minItems?: number;
+  /** Ver `minItems`. */
+  maxItems?: number;
+  bindsTo?: 'recursoId' | 'agenteItId' | 'siteAssetId' | 'assetId';
+  /**
+   * Solo `bindsTo: 'assetId'`. Convierte el campo en 1..N dispositivos; el
+   * valor pasa a ser `BindingValue[]` y cada dispositivo produce su propia
+   * entrada en `assetContext.links`.
+   *
+   * Es una propiedad aparte y NO un `FieldType` nuevo por dos razones. La
+   * primera es la ya documentada arriba para `bindsTo`. La segunda es dura:
+   * `tiposCampoEjecutables` (tickets_service/application/validar_campos_definicion.go)
+   * solo acepta text/textarea/select/boolean/number/date/datetime al
+   * publicar, así que un campo `type: 'multiselect'` no se puede publicar —
+   * el campo de dispositivos conserva `type: 'text'` y la multiplicidad vive
+   * acá.
+   */
+  multiple?: boolean;
   resourceType?: ResourceTypeFilter;
+  assetRole?: string;
 }
 
-// Valor guardado en `data[field.key]` para un campo con `bindsTo` — un objeto
-// enriquecido, NUNCA el id plano (decisión de la review de Diseño de esta
-// sesión): permite mostrar el recurso/agente elegido en detalle sin refetch,
-// y condicionar otros campos por `tipo` vía `visibleWhen` en el futuro.
-export interface BindingValue {
-  id: string;
-  displayName: string;
-  tipo?: string;
+// `BindingValue` y los helpers que lo leen viven en `field-types.ts` (módulo
+// sin dependencias, verificable desde Node) y se reexportan arriba.
+
+const FIELD_LABELS: Record<string, string> = {
+  title: 'Título',
+  titulo: 'Título',
+  description: 'Descripción',
+  descripcion: 'Descripción',
+  priority: 'Prioridad',
+  requester: 'Solicitante',
+  assignee: 'Asignado a',
+  site: 'Sitio',
+};
+
+export function fieldDisplayLabel(field: Pick<FieldDefinition, 'key' | 'label'>): string {
+  const configured = typeof field.label === 'string' ? field.label.trim() : '';
+  if (configured) return configured;
+  const known = FIELD_LABELS[field.key.toLowerCase()];
+  if (known) return known;
+  const readable = field.key
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .trim();
+  return readable ? readable.charAt(0).toUpperCase() + readable.slice(1) : 'Campo';
 }
 
 export type DetailFieldSource = 'catalog' | 'ticket';
@@ -103,6 +220,10 @@ export interface DetailLayoutDefinition {
 // entirely; runtime/layout-normalizer.ts synthesizes an equivalent document
 // from `views`/`detailLayout` in that case.
 export type LayoutKind = 'create' | 'edit' | 'detail';
+
+// The two kinds that render an editable form. Metamodel 1.6 gives each of them
+// a full PageLayout of its own, exactly like `detail` got one in 1.5.
+export type FormPageKind = Extract<LayoutKind, 'create' | 'edit'>;
 
 export type AudienceKey = 'requester' | 'agent' | 'supervisor';
 
@@ -172,10 +293,11 @@ export type PagePlacementKind = 'field' | 'widget' | 'content';
 
 export type ContentKind = 'section' | 'text' | 'divider' | 'spacer';
 
-// The full widget catalog (see TicketWidgetRegistry.tsx for the runtime
-// component behind each key). `field` placements (source catalog/ticket) are
-// not part of this catalog — they use the generic field mechanism instead.
-export type WidgetKey =
+// The widget catalog of the ticket page (see TicketWidgetRegistry.tsx for the
+// runtime component behind each key). `field` placements (source
+// catalog/ticket) are not part of this catalog — they use the generic field
+// mechanism instead.
+export type TicketWidgetKey =
   | 'ticketHeader'
   | 'ticketActions'
   | 'sla'
@@ -187,7 +309,27 @@ export type WidgetKey =
   | 'description'
   | 'suggestedSolutions'
   | 'requesterDetails'
-  | 'statusHistory';
+  | 'statusHistory'
+  | 'changeTasks'
+  | 'stakeholders';
+
+// Metamodel 1.6 — the widget catalog of the create/edit FORM pages (see
+// form-widgets/FormWidgetRegistry.tsx). Deliberately a member of the same flat
+// `WidgetKey` space rather than a parallel one: `PagePlacement.widgetKey` is
+// shared by every page, and the backend models widget rules as one flat map
+// too (validar_page_layout.go). Which keys a given page may actually host is
+// decided by the surface's registry, not by the type.
+export type FormWidgetKey =
+  | 'formHeader'
+  | 'formActions'
+  | 'formRequesterDetails'
+  | 'formSlaPreview'
+  | 'formAttachments'
+  | 'formRecordSummary'
+  | 'formAssetSummary'
+  | 'formStakeholders';
+
+export type WidgetKey = TicketWidgetKey | FormWidgetKey;
 
 export interface PagePlacement {
   id: string;
@@ -278,6 +420,34 @@ function valuesEqual(left: unknown, right: unknown): boolean {
   return Object.is(left, right);
 }
 
+/**
+ * Resuelve una ruta relativa DENTRO de un dispositivo ya elegido. Una ruta
+ * vacía devuelve el dispositivo entero, que es lo que necesita un
+ * `equals` sobre el campo a secas.
+ */
+function conditionValueWithin(item: unknown, path: string): { value: unknown; exists: boolean } {
+  if (path === '') return { value: item, exists: item !== undefined };
+  if (typeof item !== 'object' || item === null) return { value: undefined, exists: false };
+  return conditionValue(item as Record<string, unknown>, path);
+}
+
+/**
+ * La colección de dispositivos a la que apunta una condición cuantificada, y
+ * el resto de la ruta que hay que resolver dentro de cada uno. `null` cuando
+ * el campo no es multi-dispositivo o no hay colección en el contexto.
+ */
+function quantifiedCollection(
+  data: Record<string, unknown>,
+  path: string,
+): { items: unknown[]; rest: string } | null {
+  const [head, ...rest] = path.split('.');
+  const byField = data[ASSETS_BY_FIELD_KEY];
+  if (!head || typeof byField !== 'object' || byField === null) return null;
+  const items = (byField as Record<string, unknown>)[head];
+  if (!Array.isArray(items)) return null;
+  return { items, rest: rest.join('.') };
+}
+
 export function evaluateCondition(
   condition: ConditionExpression,
   data: Record<string, unknown>,
@@ -288,7 +458,24 @@ export function evaluateCondition(
   if (condition.any?.length) {
     return condition.any.some((child) => evaluateCondition(child, data));
   }
-  const { value, exists } = conditionValue(data, condition.field ?? '');
+  const quantifier = condition.quantifier ?? 'principal';
+  if (quantifier !== 'principal') {
+    const collection = quantifiedCollection(data, condition.field ?? '');
+    // Sin colección no hay nada que cuantificar: `all` es vacuamente cierto y
+    // `any` es falso, la misma convención que every/some sobre [].
+    if (!collection) return quantifier === 'all';
+    const matches = (item: unknown) =>
+      evaluateConditionLeaf(condition, conditionValueWithin(item, collection.rest));
+    return quantifier === 'all' ? collection.items.every(matches) : collection.items.some(matches);
+  }
+  return evaluateConditionLeaf(condition, conditionValue(data, condition.field ?? ''));
+}
+
+function evaluateConditionLeaf(
+  condition: ConditionExpression,
+  resolved: { value: unknown; exists: boolean },
+): boolean {
+  const { value, exists } = resolved;
   const present = isPresent(value, exists);
   switch (condition.operator) {
     case 'exists':
@@ -347,6 +534,12 @@ export interface CatalogSpecification {
   detailLayout?: DetailLayoutDefinition;
   layouts?: FormLayouts;
   detailPage?: PageLayoutDefinition;
+  // Metamodel 1.6 — the create/edit forms rendered as full pages, on the
+  // same region/grid model as `detailPage`. Absent on every definition
+  // published before 1.6; runtime/form-page-normalizer.ts synthesizes an
+  // equivalent page from `layouts.create`/`layouts.edit` in that case.
+  createPage?: PageLayoutDefinition;
+  editPage?: PageLayoutDefinition;
   relations?: RelationDefinition[];
   events?: Array<{ key: string; trigger: string }>;
   actions?: Array<{ key: string; label: string; binding?: string }>;
@@ -360,6 +553,23 @@ export interface RelationDefinition {
   inverseKey: string;
   inverseLabel: string;
   cardinality?: 'one' | 'many';
+  contractVersion?: string;
+}
+
+export interface AssetContextInput {
+  siteAssetId?: string;
+  siteFieldKey?: string;
+  links: Array<{
+    assetId: string;
+    role?: string;
+    /** Qué campo del formulario aportó este dispositivo. El servidor lo
+     *  persiste, para poder reconstruir la agrupación en un ticket histórico. */
+    fieldKey?: string;
+    /** El dispositivo que gobierna `recursoId` y las condiciones con
+     *  cuantificador `principal`. Viaja explícito para que el servidor no
+     *  tenga que deducirlo de la posición en el arreglo. */
+    principal?: boolean;
+  }>;
 }
 
 export interface TransitionDefinition {
@@ -430,6 +640,9 @@ export interface CatalogDefinition {
   manifest?: ExecutableDefinitionManifest;
   checksum?: string;
   createdAt?: string;
+  /** Testigo de concurrencia optimista del borrador (RFC3339Nano). Se
+   *  devuelve tal cual como `expectedUpdatedAt` al editarlo o descartarlo. */
+  updatedAt?: string;
   publishedAt?: string;
 }
 
@@ -446,6 +659,27 @@ export interface EntityRecord {
   data: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+  recursoId?: string;
+  organizationUnitId?: string;
+  stakeholders?: StakeholdersInput;
+  assetContext?: {
+    siteAssetId?: string;
+    links: Array<{ assetId: string; role?: string; snapshot: Record<string, unknown> }>;
+  };
+}
+
+export interface StakeholdersInput {
+  userIds: string[];
+  unitIds: string[];
+}
+
+export interface StakeholderDirectory {
+  units: Array<{ id: string; name: string; departmentId: string }>;
+  users: Array<{ id: string; name: string; email: string; unitId: string }>;
+}
+
+export function getStakeholderDirectory() {
+  return apiRequest<StakeholderDirectory>('/organization/stakeholder-directory');
 }
 
 export interface EntityRelation {
@@ -470,7 +704,11 @@ export interface EntityRelation {
 export const emptyDefinition = (): CatalogDefinition => ({
   entityKey: '',
   name: '',
-  metamodelVersion: '1.4',
+  // `metamodelVersion` es informativo: el backend lo reporta pero no ramifica
+  // por el (metamodelVersion() en entidades_controller.go). Decia 1.4 mientras
+  // el builder ya emitia paginas 1.6; se pone al dia porque una definicion que
+  // declara un nivel que no usa desorienta a quien la lee.
+  metamodelVersion: '1.7',
   specification: {
     description: '',
     identity: { prefix: '' },
@@ -546,14 +784,58 @@ const legacyBindingOwners: Record<string, { module: string; resourceType: string
   reportMetric: { module: 'reports', resourceType: 'metric' },
 };
 
-function normalizeDefinition(definition: CatalogDefinition): CatalogDefinition {
+/**
+ * Catalog definitions are immutable, so old published versions may legally
+ * predate properties that the current editor knows how to display. Normalize
+ * only at the client boundary: this keeps the stored manifest untouched while
+ * ensuring every editor receives a complete, render-safe specification.
+ */
+export function normalizeDefinition(definition: CatalogDefinition): CatalogDefinition {
+  const raw = (definition.specification ?? {}) as Partial<CatalogSpecification>;
+  const fields = Array.isArray(raw.fields)
+    ? raw.fields.map((field) => ({ ...field, label: fieldDisplayLabel(field) }))
+    : [];
+  const states = Array.isArray(raw.lifecycle?.states) ? raw.lifecycle.states : [];
+  const transitions = Array.isArray(raw.lifecycle?.transitions)
+    ? raw.lifecycle.transitions
+    : [];
+  const bindings = Array.isArray(raw.bindings) ? raw.bindings : [];
+  const relations = Array.isArray(raw.relations)
+    ? raw.relations.map((relation) => {
+        const legacy = relation as RelationDefinition & { fromEntity?: string; toEntity?: string };
+        const normalized = { ...legacy };
+        delete normalized.fromEntity;
+        delete normalized.toEntity;
+        return {
+          ...normalized,
+          targetEntityKey: relation.targetEntityKey || legacy.toEntity || '',
+          inverseKey: relation.inverseKey || `relatedFrom${relation.key || 'Relation'}`,
+          inverseLabel: relation.inverseLabel || `Relacionado desde ${definition.entityKey}`,
+          contractVersion: relation.contractVersion || '1',
+        };
+      })
+    : [];
+
   return {
     ...definition,
     metamodelVersion: definition.metamodelVersion || '1.1',
     specification: {
-      ...definition.specification,
-      relations: definition.specification.relations ?? [],
-      bindings: definition.specification.bindings?.map((binding) => {
+      ...raw,
+      description: typeof raw.description === 'string' ? raw.description : '',
+      identity: {
+        prefix:
+          typeof raw.identity?.prefix === 'string' && raw.identity.prefix.trim()
+            ? raw.identity.prefix
+            : definition.entityKey,
+      },
+      fields,
+      lifecycle: { states, transitions },
+      views: raw.views ?? {
+        create: fields.map((field) => field.key),
+        summary: fields.slice(0, 4).map((field) => field.key),
+      },
+      relations,
+      bindings: bindings.map((binding) => {
         const legacy = binding.kind ? legacyBindingOwners[binding.kind] : undefined;
         return {
           ...binding,
@@ -568,11 +850,11 @@ function normalizeDefinition(definition: CatalogDefinition): CatalogDefinition {
 }
 
 export async function listDefinitions(publishedOnly = false) {
-  const query = publishedOnly ? '?status=published' : '';
+  const query = publishedOnly ? '?status=published&active=true' : '';
   const response = await apiRequest<{ items: CatalogDefinition[] }>(
     `/catalog/definitions${query}`,
   );
-  return response.items.map(normalizeDefinition);
+  return (Array.isArray(response.items) ? response.items : []).map(normalizeDefinition);
 }
 
 export async function listAvailableResources() {
@@ -634,6 +916,38 @@ export async function createDefinitionDraft(definition: CatalogDefinition) {
   return normalizeDefinition(created);
 }
 
+// Edita EL borrador abierto de la entidad, en su sitio. Guardar dejó de
+// crear una versión por pulsación: solo publicar produce una versión, que a
+// partir de ahí es inmutable. `expectedUpdatedAt` es obligatorio — el backend
+// rechaza la escritura si el borrador cambió desde que se leyó (409).
+export async function updateDefinitionDraft(definition: CatalogDefinition) {
+  if (!definition.updatedAt) {
+    throw new Error('El borrador no tiene marca de actualización; recárgalo antes de guardar.');
+  }
+  const updated = await apiRequest<CatalogDefinition>(
+    `/catalog/definitions/${encodeURIComponent(definition.entityKey)}/draft`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({
+        name: definition.name,
+        specification: definition.specification,
+        expectedUpdatedAt: definition.updatedAt,
+      }),
+    },
+  );
+  return normalizeDefinition(updated);
+}
+
+/** Archiva el borrador. Es un cambio de estado, no un borrado: los tickets
+ *  históricos referencian la fila de la definición con la que se crearon. */
+export async function discardDefinitionDraft(entityKey: string, expectedUpdatedAt: string) {
+  const discarded = await apiRequest<CatalogDefinition>(
+    `/catalog/definitions/${encodeURIComponent(entityKey)}/draft`,
+    { method: 'DELETE', body: JSON.stringify({ expectedUpdatedAt }) },
+  );
+  return normalizeDefinition(discarded);
+}
+
 export async function publishDefinition(entityKey: string, version: number) {
   const published = await apiRequest<CatalogDefinition>(
     `/catalog/definitions/${encodeURIComponent(entityKey)}/versions/${version}/publish`,
@@ -656,12 +970,19 @@ export function getDefinitionManifest(entityKey: string, version: number) {
 }
 
 export function getEntity(entityKey: string, entityId: string) {
+  if (entityKey === 'RFC') {
+    return apiRequest<EntityRecord>(`/changes/${encodeURIComponent(entityId)}`);
+  }
   return apiRequest<EntityRecord>(
     `/entities/${encodeURIComponent(entityKey)}/${encodeURIComponent(entityId)}`,
   );
 }
 
 export async function listEntities(entityKey: string) {
+  if (entityKey === 'RFC') {
+    const response = await apiRequest<{ items: EntityRecord[] }>('/changes');
+    return response.items;
+  }
   const response = await apiRequest<{ items: EntityRecord[] }>(
     `/entities/${encodeURIComponent(entityKey)}`,
   );
@@ -669,10 +990,37 @@ export async function listEntities(entityKey: string) {
 }
 
 export async function listEntityRelations(entityKey: string, entityId: string) {
-  const response = await apiRequest<{ items: EntityRelation[] }>(
-    `/entities/${encodeURIComponent(entityKey)}/${encodeURIComponent(entityId)}/relations`,
+  const paths = [`/relationships/${encodeURIComponent(entityKey)}/${encodeURIComponent(entityId)}`];
+  if (entityKey === 'INC' || entityKey === 'RFC') {
+    paths.push(`/change-relationships/${encodeURIComponent(entityKey)}/${encodeURIComponent(entityId)}`);
+  }
+  const responses = await Promise.all(
+    paths.map((path) => apiRequest<{ items: EntityRelation[] }>(path)),
   );
-  return response.items;
+  const unique = new Map<string, EntityRelation>();
+  for (const response of responses) {
+    for (const relation of response.items) unique.set(`${relation.sourceEntityKey}:${relation.id}`, relation);
+  }
+  return [...unique.values()];
+}
+
+export function createChangeRelation(
+  changeId: string,
+  relationKey: string,
+  targetEntityKey: string,
+  targetEntityId: string,
+) {
+  return apiRequest<EntityRelation>(`/changes/${encodeURIComponent(changeId)}/relationships`, {
+    method: 'POST',
+    body: JSON.stringify({ relationKey, targetEntityKey, targetEntityId }),
+  });
+}
+
+export function deleteChangeRelation(changeId: string, relationId: string) {
+  return apiRequest<void>(
+    `/changes/${encodeURIComponent(changeId)}/relationships/${encodeURIComponent(relationId)}`,
+    { method: 'DELETE' },
+  );
 }
 
 export function createEntityRelation(
@@ -683,7 +1031,7 @@ export function createEntityRelation(
   targetEntityId: string,
 ) {
   return apiRequest<EntityRelation>(
-    `/entities/${encodeURIComponent(entityKey)}/${encodeURIComponent(entityId)}/relations`,
+    `/relationships/${encodeURIComponent(entityKey)}/${encodeURIComponent(entityId)}`,
     {
       method: 'POST',
       body: JSON.stringify({ relationKey, targetEntityKey, targetEntityId }),
@@ -697,21 +1045,34 @@ export function deleteEntityRelation(
   relationId: string,
 ) {
   return apiRequest<void>(
-    `/entities/${encodeURIComponent(entityKey)}/${encodeURIComponent(entityId)}/relations/${encodeURIComponent(relationId)}`,
+    `/relationships/${encodeURIComponent(entityKey)}/${encodeURIComponent(entityId)}/${encodeURIComponent(relationId)}`,
     { method: 'DELETE' },
   );
 }
 
 export function getEntityManifest(entityKey: string, entityId: string) {
+  if (entityKey === 'RFC') {
+    return apiRequest<ExecutableDefinitionManifest>(`/changes/${encodeURIComponent(entityId)}/manifest`);
+  }
   return apiRequest<ExecutableDefinitionManifest>(
     `/entities/${encodeURIComponent(entityKey)}/${encodeURIComponent(entityId)}/manifest`,
   );
 }
 
+// Alias de `GET /catalog/definitions/{entityKey}` — que es exactamente como
+// el backend describe esta ruta (entidades_controller.go, "GET
+// /entities/{entityKey}/presentation es alias de GET
+// /catalog/definitions/{entityKey}").
+//
+// Deliberadamente NO llama a `/entities/{entityKey}/presentation`: ADR-0034
+// remontó esa ruta sobre `ConSecretoInterno` (header `X-Internal-Secret`,
+// para rag_service), no sobre `ConAutenticacion`. Un navegador jamás tiene
+// ese secreto, así que respondía 401 SIEMPRE — para PRB y también para INC.
+// Y un 401 no es inocuo acá: apiClient despacha AUTH_FAILURE_EVENT, que
+// destruye la sesión y rebota al login (que a su vez devuelve a la ruta de
+// origen, remontando esta query en bucle).
 export function getEntityPresentation(entityKey: string) {
-  return apiRequest<CatalogDefinition>(
-    `/entities/${encodeURIComponent(entityKey)}/presentation`,
-  ).then(normalizeDefinition);
+  return getPublishedDefinition(entityKey);
 }
 
 export function updateEntity(
@@ -720,6 +1081,12 @@ export function updateEntity(
   data: Record<string, unknown>,
   expectedUpdatedAt: string,
 ) {
+  if (entityKey === 'RFC') {
+    return apiRequest<EntityRecord>(`/changes/${encodeURIComponent(entityId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ data, expectedUpdatedAt }),
+    });
+  }
   return apiRequest<EntityRecord>(
     `/entities/${encodeURIComponent(entityKey)}/${encodeURIComponent(entityId)}`,
     {
@@ -738,14 +1105,29 @@ export function createEntity(
   entityKey: string,
   data: Record<string, unknown>,
   idempotencyKey?: string,
-  binding?: { recursoId?: string; agenteItId?: string },
+  binding?: { recursoId?: string; agenteItId?: string; assetContext?: AssetContextInput; stakeholders?: StakeholdersInput },
 ) {
+  // recursoId/agenteItId pertenecen al contrato legado de INC. PRB y RFC
+  // reciben solamente el contexto CMDB versionado; enviar esos campos a sus
+  // APIs estrictas hace que DisallowUnknownFields rechace una solicitud sana.
+  const domainBinding = entityKey === 'INC'
+    ? binding
+    : binding?.assetContext || binding?.stakeholders
+      ? { assetContext: binding.assetContext, stakeholders: binding.stakeholders }
+      : undefined;
+  if (entityKey === 'RFC') {
+    return apiRequest<EntityRecord>('/changes', {
+      method: 'POST',
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+      body: JSON.stringify({ data, ...domainBinding }),
+    });
+  }
   return apiRequest<EntityRecord>(
     `/entities/${encodeURIComponent(entityKey)}`,
     {
       method: 'POST',
       headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
-      body: JSON.stringify({ data, ...binding }),
+      body: JSON.stringify({ data, ...domainBinding }),
     },
   );
 }
@@ -755,6 +1137,12 @@ export function transitionEntity(
   entityId: string,
   transitionKey: string,
 ) {
+  if (entityKey === 'RFC') {
+    return apiRequest<EntityRecord>(
+      `/changes/${encodeURIComponent(entityId)}/transitions/${encodeURIComponent(transitionKey)}`,
+      { method: 'POST' },
+    );
+  }
   return apiRequest<EntityRecord>(
     `/entities/${encodeURIComponent(entityKey)}/${encodeURIComponent(entityId)}/transitions/${encodeURIComponent(transitionKey)}`,
     { method: 'POST' },

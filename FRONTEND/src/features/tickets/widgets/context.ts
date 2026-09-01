@@ -1,4 +1,5 @@
-import type { EntityRelation, FieldDefinition } from '@/features/catalog/metamodel';
+import type { ReactNode } from 'react';
+import type { EntityRelation, FieldDefinition, StakeholderDirectory } from '@/features/catalog/metamodel';
 import type { SlaAssessment } from '@/features/sla/api';
 import type { Ticket, TicketActivityEntry, TicketAttachment, TicketComment, TicketStatus } from '../types';
 
@@ -12,6 +13,10 @@ export type TimelineItem =
 // with sample data and no-op handlers. Widgets never fetch their own data —
 // this is what lets `runtime` and `preview` render the exact same components.
 export interface TicketPageContext {
+  /** Domain owner of the record being rendered. The visual runtime is shared,
+   * but every widget still delegates to its owning module. */
+  entityKey: string;
+  preview: boolean;
   ticket: Ticket;
   currentUserName: string;
   can: (permission: string) => boolean;
@@ -22,6 +27,11 @@ export interface TicketPageContext {
   fieldsLoading: boolean;
   fieldsError: boolean;
 
+  assets: {
+    siteAssetId?: string;
+    links: NonNullable<Ticket['assetContext']>['links'];
+  };
+
   sla: {
     assessment?: SlaAssessment;
     loading: boolean;
@@ -29,6 +39,7 @@ export interface TicketPageContext {
 
   attachments: {
     items: TicketAttachment[];
+    canUpload: boolean;
     onUpload: (files: FileList | null) => void;
     onTriggerPicker: () => void;
     uploadPending: boolean;
@@ -41,6 +52,8 @@ export interface TicketPageContext {
     tab: 'all' | 'comments' | 'history';
     onTabChange: (tab: 'all' | 'comments' | 'history') => void;
     loading: boolean;
+    canComment: boolean;
+    canAddInternalNote: boolean;
     commentBody: string;
     onCommentBodyChange: (value: string) => void;
     onSubmitComment: (isInternal: boolean) => void;
@@ -55,15 +68,30 @@ export interface TicketPageContext {
     canUnmerge: boolean;
   };
 
+  stakeholders: {
+    userIds: string[];
+    unitIds: string[];
+    directory?: StakeholderDirectory;
+    loading: boolean;
+  };
+
   relations: {
     items: EntityRelation[];
     linkedProblemIds: Set<string>;
+    management?: ReactNode;
+    canDelete?: (relation: EntityRelation) => boolean;
+    onDelete?: (relationId: string) => void;
+  };
+
+  changeTasks?: {
+    canManage: boolean;
   };
 
   actions: {
     isEditingFields: boolean;
     onStartEditingFields: () => void;
     canEditFields: boolean;
+    canAssign: boolean;
     onAssign: () => void;
     onStatusChange: (status: TicketStatus) => void;
     statusOptions: TicketStatus[];
@@ -78,10 +106,15 @@ export interface TicketPageContext {
     canMerge: boolean;
     onOpenProblemDialog: () => void;
     canManageProblem: boolean;
+    onOpenChangeDialog: () => void;
+    canCreateChange: boolean;
     isWatching: boolean;
     watchersCount: number;
     onToggleWatch: () => void;
     onResolve: () => void;
+    // True only when the historical lifecycle exposes a transition to the
+    // runtime's resolved state. A green button must never bypass metadata.
+    canResolve: boolean;
     // Only true when the ticket's historical lifecycle actually declares a
     // transition from its current state to "open".
     canReopen: boolean;

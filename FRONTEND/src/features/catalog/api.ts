@@ -1,60 +1,34 @@
 import { apiRequest } from '@/lib/apiClient';
 import type { FieldDefinition, PageLayout } from './metamodel';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+// El contrato de `GET /entities/{entityKey}/{entityID}/resolved-definition`:
+// la definición HISTÓRICA fijada al registro, no la publicada hoy.
+//
+// Este módulo contenía además un cliente completo de
+// `/catalog/layouts/{entityKey}/*` (draft, publish, versions, active,
+// activate). Esa familia de rutas nunca existió en el backend: Kong responde
+// 404 y `grep -rn "catalog/layouts" BACKEND/**/*.go` no devuelve nada. Se
+// eliminó junto con sus tipos y con los tres editores que la consumían
+// (LayoutDesigner, LayoutRenderer, LayoutVersionPreview), que ya no importaba
+// nadie. El diseño de la página viaja dentro de `specification.detailPage` y
+// el backend lo proyecta bajo `layouts.detailPage` en esta misma respuesta.
 
-export type LayoutStatus = 'draft' | 'published' | 'deprecated' | 'archived';
-
-export interface CompatibilityPlacement {
-  placementId: string;
-  kind: string;
-  source?: string;
-  fieldId?: string;
-  fieldType?: string;
-  widgetKey?: string;
-  widgetContractVersion?: string;
-  region: string;
-  audienceKey: string;
-  requiredPermissions?: string[];
-  allowMultiple: boolean;
-}
-
-export interface CompatibilityFingerprint {
-  placements: CompatibilityPlacement[];
-  mandatoryWidgets: string[];
-}
-
-export interface CatalogLayoutVersion {
-  id: string;
-  entityKey: string;
-  version: number;
-  status: LayoutStatus;
-  document: Record<string, unknown>;
-  compatibility?: CompatibilityFingerprint;
-  checksum?: string;
-  isActive: boolean;
-  createdAt: string;
-  publishedAt?: string;
-}
-
-// The exact three layout-resolution strings accepted by this frontend
-// contract — never "active".
+// Los tres valores de resolución de layout que este contrato acepta — nunca
+// "active".
 export type LayoutResolutionMode = 'latest-compatible' | 'previous-compatible' | 'legacy-synthesized';
 
-// `document`/`layouts.detail` is authored as free-form JSON (the Catalog
-// Builder draft editor accepts any object), so at the type level it can only
-// be a bare PageLayout or a `{ default, variants? }` wrapper around one —
-// callers must narrow further before trusting the shape (see TicketDetail.tsx).
+// `layouts.detail`/`layouts.detailPage` se redacta como JSON libre (el editor
+// avanzado del Catalog Builder acepta cualquier objeto), así que a nivel de
+// tipo sólo puede ser un PageLayout pelado o un envoltorio `{ default,
+// variants? }` — quien lo consuma debe estrechar el tipo antes de confiar en
+// él (ver TicketDetail.tsx).
 export interface ResolvedLayoutDocument {
   detail?: PageLayout | { default?: PageLayout; variants?: Array<{ audienceKey: string; page: PageLayout }> };
 }
 
-// This is the entity's OWN historical lifecycle (pinned to its
-// definitionVersionId), not
-// whatever is currently published, so it is the only source of truth for
-// which status transitions a given ticket may actually perform.
+// El lifecycle PROPIO del registro (fijado a su definitionVersionId), no el
+// publicado ahora: es la única fuente de verdad sobre qué transiciones puede
+// ejecutar de hecho.
 export interface LifecycleStateDefinition {
   key: string;
   label: string;
@@ -73,7 +47,6 @@ export interface LifecycleDefinition {
   transitions: LifecycleTransitionDefinition[];
 }
 
-/** The shape returned by GET /entities/{entityKey}/{entityID}/resolved-definition */
 export interface ResolvedDefinition {
   entityId: string;
   humanId: string;
@@ -88,58 +61,6 @@ export interface ResolvedDefinition {
   fields: FieldDefinition[];
   lifecycle: LifecycleDefinition;
   layouts: ResolvedLayoutDocument;
-}
-
-// ---------------------------------------------------------------------------
-// API calls
-// ---------------------------------------------------------------------------
-
-export function getLayoutDraft(entityKey: string): Promise<CatalogLayoutVersion> {
-  return apiRequest<CatalogLayoutVersion>(`/catalog/layouts/${entityKey}/draft`);
-}
-
-export function createLayoutDraft(
-  entityKey: string,
-  doc: Record<string, unknown>,
-): Promise<CatalogLayoutVersion> {
-  return apiRequest<CatalogLayoutVersion>(`/catalog/layouts/${entityKey}/draft`, {
-    method: 'POST',
-    body: JSON.stringify(doc),
-  });
-}
-
-export function updateLayoutDraft(
-  entityKey: string,
-  doc: Record<string, unknown>,
-): Promise<CatalogLayoutVersion> {
-  return apiRequest<CatalogLayoutVersion>(`/catalog/layouts/${entityKey}/draft`, {
-    method: 'PUT',
-    body: JSON.stringify(doc),
-  });
-}
-
-export function publishLayoutDraft(entityKey: string): Promise<CatalogLayoutVersion> {
-  return apiRequest<CatalogLayoutVersion>(`/catalog/layouts/${entityKey}/publish`, {
-    method: 'POST',
-  });
-}
-
-export function listLayoutVersions(entityKey: string): Promise<{ items: CatalogLayoutVersion[] }> {
-  return apiRequest<{ items: CatalogLayoutVersion[] }>(`/catalog/layouts/${entityKey}/versions`);
-}
-
-export function getActiveLayoutVersion(entityKey: string): Promise<CatalogLayoutVersion> {
-  return apiRequest<CatalogLayoutVersion>(`/catalog/layouts/${entityKey}/active`);
-}
-
-export function activateLayoutVersion(
-  entityKey: string,
-  version: number,
-): Promise<CatalogLayoutVersion> {
-  return apiRequest<CatalogLayoutVersion>(
-    `/catalog/layouts/${entityKey}/versions/${version}/activate`,
-    { method: 'POST' },
-  );
 }
 
 export function getResolvedDefinition(

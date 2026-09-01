@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, X } from 'lucide-react';
 import {
   useTicket,
@@ -18,7 +18,7 @@ import {
   useActivity,
   ticketKeys,
 } from './hooks';
-import { listTickets, statusFromApi, statusToApi } from './api';
+import { canonicalTicketState, listTickets, statusFromApi, statusToApi, ticketStatesMatch } from './api';
 import type { TicketStatus } from './types';
 import { KNOWN_TICKET_STATUSES } from './types';
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
@@ -28,28 +28,36 @@ import { getSlaAssessment } from '@/features/sla/api';
 import {
   getEntity,
   getEntityManifest,
+  getStakeholderDirectory,
   isFieldRequired,
   updateEntity,
-  type LayoutDocument,
   type PageLayout,
-  type Placement,
+  type PagePlacement,
 } from '@/features/catalog/metamodel';
 import { getResolvedDefinition } from '@/features/catalog/api';
+import { CatalogFormPage } from '@/features/catalog/CatalogFormPage';
 import { DynamicField } from '@/features/catalog/DynamicField';
-import { DynamicLayout } from '@/features/catalog/runtime/DynamicLayout';
-import { filterDocumentByFieldVisibility, resolveLayoutDocument, visibleFieldPlacements } from '@/features/catalog/runtime/layout-normalizer';
+import type { FormPageContext } from '@/features/catalog/form-widgets/context';
+import {
+  filterPageByFieldVisibility,
+  resolveFormPageLayout,
+  visiblePageFieldPlacements,
+} from '@/features/catalog/runtime/form-page-normalizer';
+import { parseResolvedPageLayout, synthesizePageLayoutFromLegacy } from '@/features/catalog/runtime/page-layout-normalizer';
 import { listEntityRelations } from '@/features/catalog/metamodel';
 import { ApiError } from '@/lib/apiClient';
 import { PERMISSIONS } from '@/features/auth/permissions';
 import { IncidentProblemDialog } from '@/features/problems/IncidentProblemDialog';
+import { IncidentChangeDialog } from '@/features/changes/IncidentChangeDialog';
 import { TicketPageLayout } from './TicketPageLayout';
 import type { TicketPageContext, TimelineItem } from './widgets/context';
 
 export default function TicketDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
-  const { displayName: currentUserName, can } = useAuth();
+  const { displayName: currentUserName, deskUserId, can } = useAuth();
   const {
     data: ticket,
     isLoading,
@@ -67,6 +75,7 @@ export default function TicketDetail() {
   const [editData, setEditData] = useState<Record<string, unknown>>({});
   const [editNotice, setEditNotice] = useState('');
   const [showProblemDialog, setShowProblemDialog] = useState(false);
+  const [showChangeDialog, setShowChangeDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const comments = useComments(ticket?.id);
@@ -94,10 +103,21 @@ export default function TicketDetail() {
       !(queryError instanceof ApiError && queryError.status === 404) &&
       failureCount < 2,
   });
+  const hasStakeholders = Boolean(
+    entityRecord.data?.stakeholders &&
+      (entityRecord.data.stakeholders.userIds.length || entityRecord.data.stakeholders.unitIds.length),
+  );
+  const stakeholderDirectory = useQuery({
+    queryKey: ['organization', 'stakeholder-directory'],
+    queryFn: getStakeholderDirectory,
+    enabled: hasStakeholders && !location.pathname.startsWith('/portal'),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
   // The historical manifest used at creation time governs this ticket's DATA:
   // field definitions, types, options and validation. A republish must never
-  // change what the ticket means. Its page LAYOUT comes from the currently
-  // published definition instead (see publishedDefinition below).
+  // change what the ticket means. The page layout is pinned to that same
+  // immutable executable version.
   const definitionManifest = useQuery({
     queryKey: [
       'catalog-definition-manifest',
@@ -107,13 +127,10 @@ export default function TicketDetail() {
     queryFn: () => getEntityManifest('INC', ticket!.entityId!),
     enabled: Boolean(ticket?.entityId && entityRecord.data?.definitionVersion),
   });
-  // Resolved definition: single API call that returns the correct versioned
-  // layout — the server tries the active
-  // published layout ("latest-compatible"), then walks published versions
-  // backward for the first one still compatible with this record's
-  // historical schema ("previous-compatible"), then falls back to a
-  // manifest-synthesized page ("legacy-synthesized"). This is the only
-  // source for the rendered page layout; see `page` below.
+  // Resolved definition: this call is pinned to the exact immutable
+  // definition used by the record. `latest-compatible` only means that this
+  // historical definition is also active; `previous-compatible` means a
+  // newer active version exists. Neither mode substitutes another layout.
   const resolvedDefinition = useQuery({
     queryKey: ['resolved-definition', 'INC', ticket?.entityId ?? 'unlinked'],
     queryFn: () => getResolvedDefinition('INC', ticket!.entityId!),
@@ -181,7 +198,7 @@ export default function TicketDetail() {
     [entityRelations.data],
   );
 
-  const isWatching = (watchers.data ?? []).some((w) => w.watcherName === currentUserName);
+  const isWatching = (watchers.data ?? []).some((w) => w.watcherName === deskUserId);
   const ticketStatus = ticket?.status;
   const isEntityBacked = Boolean(ticket?.entityId);
 
@@ -199,7 +216,7 @@ export default function TicketDetail() {
     const lifecycle = resolvedDefinition.data?.lifecycle;
     if (!lifecycle) return null;
     const currentBackendState = statusToApi(ticketStatus);
-    return lifecycle.transitions.filter((transition) => transition.from === currentBackendState);
+    return lifecycle.transitions.filter((transition) => ticketStatesMatch(transition.from, currentBackendState));
   }, [isEntityBacked, ticketStatus, resolvedDefinition.isLoading, resolvedDefinition.isError, resolvedDefinition.data]);
 
   const canChangeStatus = isEntityBacked ? lifecycleTransitions !== null : true;
@@ -219,10 +236,20 @@ export default function TicketDetail() {
     return options;
   }, [ticketStatus, isEntityBacked, lifecycleTransitions]);
 
-  // Reabrir is only offered when the ticket's historical lifecycle actually
-  // declares a transition from its current state to "open" — never assumed
-  // just because the status happens to be Resolved/Closed.
-  const canReopen = Boolean(lifecycleTransitions?.some((transition) => transition.to === 'open'));
+  // Reabrir is only offered when the historical lifecycle declares it. Some
+  // definitions reopen to `in_progress` rather than `open`; the backend
+  // intentionally interprets any closed -> open/reopened/in_progress as the
+  // Reabrir command, so the UI must use the same semantic boundary.
+  const reopenTransition = lifecycleTransitions?.find(
+    (transition) =>
+      canonicalTicketState(transition.from) === 'cerrado' ||
+      canonicalTicketState(transition.to) === 'abierto' ||
+      canonicalTicketState(transition.to) === 'reabierto',
+  );
+  const resolveTransition = lifecycleTransitions?.find(
+    (transition) => canonicalTicketState(transition.to) === 'resuelto',
+  );
+  const canReopen = Boolean(reopenTransition);
 
   const timeline: TimelineItem[] = useMemo(() => {
     const activityItems: TimelineItem[] = (activity.data ?? [])
@@ -238,46 +265,43 @@ export default function TicketDetail() {
     return combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [activity.data, comments.data, activityTab]);
 
-  const editDocument = useMemo((): LayoutDocument | null => {
+  // Metamodel 1.6: the edit form is a full page too, on the same engine as
+  // the detail page it sits on. It resolves against the record's HISTORICAL
+  // specification, never today's published one — editing a ticket must offer
+  // the fields that ticket was created with.
+  const editPage = useMemo((): PageLayout | null => {
     const specification = definitionManifest.data?.specification;
     if (!specification) return null;
-    return filterDocumentByFieldVisibility(
-      resolveLayoutDocument(specification, 'edit', 'agent'),
+    return filterPageByFieldVisibility(
+      resolveFormPageLayout(specification, 'edit', 'agent'),
       specification.fields,
       editData,
     );
   }, [definitionManifest.data, editData]);
 
-  // The resolved-definition endpoint is the SOLE authority for which layout
-  // renders — no client-side merging of published/historical specs (that
-  // policy, formerly resolveTicketPageLayout, now lives entirely in the
-  // server-side resolved-definition operation). `layouts.detail` is
+  // The resolved-definition endpoint is authoritative for the exact
+  // historical layout. The manifest fallback only synthesizes definitions
+  // that predate detailPage; it never merges today's published version.
+  // `layouts.detail` is
   // authored either as a bare PageLayout or as `{ default: PageLayout,
   // variants?: [...] }`; both shapes are accepted here since the Catalog
   // Builder's JSON draft editor can produce either.
   const page = useMemo((): PageLayout | null => {
-    const raw = resolvedDefinition.data?.layouts as Record<string, unknown> | undefined;
-    if (!raw) return null;
-    const detail = (raw.detailPage ?? raw.detail ?? raw) as Record<string, unknown> | null;
-    if (!detail) return null;
-    if ('default' in detail && detail.default) return detail.default as unknown as PageLayout;
-    if ('header' in detail && detail.header && detail.actions && detail.main && detail.sidebar && detail.footer) {
-      return detail as unknown as PageLayout;
-    }
-    return null;
-  }, [resolvedDefinition.data]);
+    const parsed = parseResolvedPageLayout(resolvedDefinition.data?.layouts);
+    if (parsed) return parsed;
+    const historicalSpecification = definitionManifest.data?.specification;
+    return historicalSpecification ? synthesizePageLayoutFromLegacy(historicalSpecification) : null;
+  }, [resolvedDefinition.data, definitionManifest.data]);
 
-  function renderEditPlacement(placement: Placement) {
-    if (placement.kind !== 'field' || placement.source !== 'catalog' || !placement.fieldKey) {
-      return null;
-    }
+  function renderEditField(placement: PagePlacement) {
+    if (!placement.fieldKey) return null;
     const field = definitionManifest.data?.specification.fields.find(
       (candidate) => candidate.key === placement.fieldKey,
     );
     if (!field) return null;
     return (
       <DynamicField
-        field={field}
+        field={placement.label ? { ...field, label: placement.label } : field}
         value={editData[field.key]}
         required={isFieldRequired(field, editData)}
         onChange={(value) => setEditData((current) => ({ ...current, [field.key]: value }))}
@@ -307,17 +331,50 @@ export default function TicketDetail() {
   }
 
   function handleAssign() {
-    const name = window.prompt('Assign to:', ticket!.assignee || currentUserName);
+    const transition = lifecycleTransitions?.find(
+      (candidate) => canonicalTicketState(candidate.to) === 'en_progreso',
+    );
+    if (!transition) {
+      window.alert('La definición histórica no permite asignar este ticket desde su estado actual.');
+      return;
+    }
+    const name = window.prompt('ID del agente que recibirá el ticket:', ticket!.assignee || '');
     if (name === null) return;
     assignTicket.mutate(
-      { id: ticket!.id, assigneeName: name.trim() || null, actorName: currentUserName },
+      { id: ticket!.id, assigneeName: name.trim() || null, actorName: currentUserName, transitionKey: transition.key },
       { onError: (err) => window.alert(err.message) },
     );
   }
 
   function handleStatusChange(status: TicketStatus) {
+    const transition = lifecycleTransitions?.find((candidate) => ticketStatesMatch(candidate.to, status));
+    if (!transition) {
+      window.alert('La definición histórica no contiene esa transición para el estado actual.');
+      return;
+    }
+    const target = canonicalTicketState(transition.to);
+    const source = canonicalTicketState(transition.from);
+    // Solo open -> in_progress es la asignación inicial. Reanudar desde
+    // espera también termina en progreso, pero no debe pedir otro agente.
+    if (source === 'abierto' && target === 'en_progreso') {
+      handleAssign();
+      return;
+    }
+    let motivo: string | undefined;
+    // Una definición puede modelar reopen como closed -> in_progress. La
+    // intención se reconoce por el origen cerrado, no únicamente por el
+    // nombre del estado destino.
+    if (source === 'cerrado' || target === 'abierto' || target === 'reabierto') {
+      const value = window.prompt('Motivo de la reapertura:');
+      if (value === null) return;
+      motivo = value.trim();
+      if (!motivo) {
+        window.alert('El motivo de reapertura es obligatorio.');
+        return;
+      }
+    }
     updateStatus.mutate(
-      { id: ticket!.id, status, actorName: currentUserName },
+      { id: ticket!.id, status, actorName: currentUserName, transitionKey: transition.key, motivo },
       { onError: (err) => window.alert(err.message) },
     );
   }
@@ -386,13 +443,13 @@ export default function TicketDetail() {
     event.preventDefault();
     const record = entityRecord.data;
     const specification = definitionManifest.data?.specification;
-    if (!record || !specification || !editDocument) return;
+    if (!record || !specification || !editPage) return;
     // Start from the record's existing data so fields outside this edit
     // layout/audience (or conditionally hidden right now) keep their value —
     // only fields the user could actually see and edit this session are
     // touched. An explicit clear of a visible, optional field is respected.
     const data: Record<string, unknown> = { ...record.data };
-    const visibleCatalogKeys = visibleFieldPlacements(editDocument, editData)
+    const visibleCatalogKeys = visiblePageFieldPlacements(editPage, editData)
       .filter((placement) => placement.source === 'catalog')
       .map((placement) => placement.fieldKey);
     for (const key of visibleCatalogKeys) {
@@ -415,8 +472,74 @@ export default function TicketDetail() {
 
   const specification = definitionManifest.data?.specification;
   const layoutResolution = resolvedDefinition.data?.layoutResolution;
+
+  function closeEditor() {
+    setIsEditingFields(false);
+    updateEntityMutation.reset();
+  }
+
+  // The edit form is the same surface as the create form — same context type,
+  // same renderer, same widgets — so a redesign in the Catalog Builder shows
+  // up identically in both places.
+  const editContext: FormPageContext | null = specification
+    ? {
+        entityKey: 'INC',
+        kind: 'edit',
+        preview: false,
+        definitionName: 'Editar datos del incidente',
+        definitionVersion: entityRecord.data?.definitionVersion,
+        description: 'Formulario interpretado desde la definición con la que se creó este ticket.',
+        humanId: ticket?.humanId ?? ticket?.id,
+        fields: specification.fields,
+        data: editData,
+        renderField: renderEditField,
+        requester: { displayName: currentUserName },
+        stakeholders: {
+          directory: stakeholderDirectory.data,
+          loading: stakeholderDirectory.isLoading,
+          value: entityRecord.data?.stakeholders ?? { userIds: [], unitIds: [] },
+          readOnly: true,
+          onChange: () => {},
+          onRetry: () => void stakeholderDirectory.refetch(),
+        },
+        // A record that already exists has a real SLA assessment; the widget
+        // that estimates one for a record that does not exist yet has nothing
+        // to say here.
+        sla: { state: 'unavailable', message: 'El SLA de un ticket existente se muestra en su propia tarjeta.', onRetry: () => {} },
+        attachments: {
+          items: (attachments.data ?? []).map((item) => ({
+            id: item.id,
+            name: item.fileName,
+            size: item.sizeBytes,
+            type: item.contentType,
+          })),
+          maxFiles: 10,
+          maxBytesPerFile: 10 * 1024 * 1024,
+          canRemove: false,
+          onAddFiles: (files) => {
+            const file = files[0];
+            if (file) uploadAttachment.mutate({ file, uploaderName: currentUserName });
+          },
+          onRemove: () => {},
+        },
+        submit: {
+          submitLabel: 'Guardar cambios',
+          cancelLabel: 'Cancelar',
+          pending: updateEntityMutation.isPending,
+          errorMessage: updateEntityMutation.isError
+            ? updateEntityMutation.error instanceof ApiError && updateEntityMutation.error.status === 409
+              ? 'El ticket cambió mientras lo editabas. Recarga sus datos antes de volver a guardar.'
+              : updateEntityMutation.error.message
+            : undefined,
+          onCancel: closeEditor,
+          disabled: false,
+        },
+      }
+    : null;
   const context: TicketPageContext | null = specification
     ? {
+        entityKey: 'INC',
+        preview: false,
         ticket,
         currentUserName,
         can,
@@ -425,9 +548,14 @@ export default function TicketDetail() {
         entityData: entityRecord.data?.data ?? {},
         fieldsLoading: entityRecord.isLoading || definitionManifest.isLoading,
         fieldsError: entityRecord.isError || definitionManifest.isError,
+        assets: {
+          siteAssetId: ticket.assetContext?.siteAssetId,
+          links: ticket.assetContext?.links ?? [],
+        },
         sla: { assessment: slaAssessment.data, loading: slaAssessment.isLoading },
         attachments: {
           items: attachments.data ?? [],
+          canUpload: can(PERMISSIONS.ticketsAttach),
           onUpload: handleFilesSelected,
           onTriggerPicker: triggerFilePicker,
           uploadPending: uploadAttachment.isPending,
@@ -439,6 +567,8 @@ export default function TicketDetail() {
           tab: activityTab,
           onTabChange: setActivityTab,
           loading: activity.isLoading || comments.isLoading,
+          canComment: can(PERMISSIONS.ticketsComment),
+          canAddInternalNote: !location.pathname.startsWith('/portal') && can(PERMISSIONS.ticketsEdit),
           commentBody,
           onCommentBodyChange: setCommentBody,
           onSubmitComment: submitComment,
@@ -451,6 +581,12 @@ export default function TicketDetail() {
           onUnmerge: handleUnmerge,
           canUnmerge: can('sigdesk.tickets.merge'),
         },
+        stakeholders: {
+          userIds: entityRecord.data?.stakeholders?.userIds ?? [],
+          unitIds: entityRecord.data?.stakeholders?.unitIds ?? [],
+          directory: stakeholderDirectory.data,
+          loading: stakeholderDirectory.isLoading,
+        },
         relations: {
           items: entityRelations.data ?? [],
           linkedProblemIds,
@@ -459,6 +595,7 @@ export default function TicketDetail() {
           isEditingFields,
           onStartEditingFields: startEditingFields,
           canEditFields: can('sigdesk.tickets.edit') && Boolean(ticket.entityId),
+          canAssign: can(PERMISSIONS.ticketsAssign),
           onAssign: handleAssign,
           onStatusChange: handleStatusChange,
           statusOptions,
@@ -474,12 +611,17 @@ export default function TicketDetail() {
               can(PERMISSIONS.problemsCreate) &&
               can(PERMISSIONS.problemsEdit),
           ),
+          onOpenChangeDialog: () => setShowChangeDialog(true),
+          canCreateChange: Boolean(
+            ticket.entityId && can(PERMISSIONS.ticketsEdit) && can(PERMISSIONS.changesCreate),
+          ),
           isWatching,
           watchersCount: watchers.data?.length ?? 1,
           onToggleWatch: toggleWatch,
-          onResolve: () => handleStatusChange('Resolved'),
+          onResolve: () => handleStatusChange(resolveTransition ? statusFromApi(resolveTransition.to) : 'Resolved'),
+          canResolve: Boolean(resolveTransition),
           canReopen,
-          onReopen: () => handleStatusChange('Open'),
+          onReopen: () => handleStatusChange(reopenTransition ? statusFromApi(reopenTransition.to) : 'Open'),
         },
       }
     : null;
@@ -501,10 +643,7 @@ export default function TicketDetail() {
       />
 
       {isEditingFields && (
-        <form
-          onSubmit={submitFieldChanges}
-          className="mb-8 rounded-3xl border border-primary/40 bg-surface-container-low/95 backdrop-blur-md p-6 sm:p-8 shadow-[0_10px_35px_rgba(0,0,0,0.3)] transition-all"
-        >
+        <div className="mb-8 rounded-3xl border border-primary/40 bg-surface-container-low/95 backdrop-blur-md p-6 sm:p-8 shadow-[0_10px_35px_rgba(0,0,0,0.3)] transition-all">
           <div className="flex items-start justify-between gap-4 border-b border-border/40 pb-4">
             <div>
               <h2 className="text-lg font-black text-on-surface">Editar datos del incidente</h2>
@@ -515,52 +654,21 @@ export default function TicketDetail() {
             <button
               type="button"
               aria-label="Cancelar edición"
-              onClick={() => {
-                setIsEditingFields(false);
-                updateEntityMutation.reset();
-              }}
+              onClick={closeEditor}
               className="rounded-xl p-2 text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="mt-6">
-            {editDocument && (
-              <DynamicLayout
-                document={editDocument}
-                data={editData}
-                renderPlacement={renderEditPlacement}
-              />
-            )}
-          </div>
-          {updateEntityMutation.isError && (
-            <div className="mt-5 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300 font-medium">
-              {updateEntityMutation.error instanceof ApiError &&
-              updateEntityMutation.error.status === 409
-                ? 'El ticket cambió mientras lo editabas. Recarga sus datos antes de volver a guardar.'
-                : updateEntityMutation.error.message}
-            </div>
+          {editPage && editContext && (
+            <CatalogFormPage
+              page={editPage}
+              context={editContext}
+              onSubmit={submitFieldChanges}
+              className="mt-6"
+            />
           )}
-          <div className="mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-border/40 pt-5">
-            <button
-              type="button"
-              onClick={() => {
-                setIsEditingFields(false);
-                updateEntityMutation.reset();
-              }}
-              className="px-5 py-2.5 rounded-xl bg-surface-container border border-border/60 text-on-surface font-semibold text-sm hover:bg-surface-container-high hover:border-border transition-all cursor-pointer"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={updateEntityMutation.isPending}
-              className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-sm inline-flex items-center gap-2 hover:opacity-90 hover:shadow-[0_0_20px_rgba(34,211,238,0.3)] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
-            >
-              <span>{updateEntityMutation.isPending ? 'Guardando…' : 'Guardar cambios'}</span>
-            </button>
-          </div>
-        </form>
+        </div>
       )}
 
       {editNotice && !isEditingFields && (
@@ -615,18 +723,31 @@ export default function TicketDetail() {
       )}
 
       {ticket.entityId && (
-        <IncidentProblemDialog
-          open={showProblemDialog}
-          ticket={ticket}
-          currentUserName={currentUserName}
-          linkedProblemIds={linkedProblemIds}
-          onClose={() => setShowProblemDialog(false)}
-          onLinked={() => {
-            void queryClient.invalidateQueries({
-              queryKey: ['catalog-entity-relations', 'INC', ticket.entityId],
-            });
-          }}
-        />
+        <>
+          <IncidentProblemDialog
+            open={showProblemDialog}
+            ticket={ticket}
+            currentUserName={currentUserName}
+            linkedProblemIds={linkedProblemIds}
+            onClose={() => setShowProblemDialog(false)}
+            onLinked={() => {
+              void queryClient.invalidateQueries({
+                queryKey: ['catalog-entity-relations', 'INC', ticket.entityId],
+              });
+            }}
+          />
+          <IncidentChangeDialog
+            open={showChangeDialog}
+            ticket={ticket}
+            currentUserName={currentUserName}
+            onClose={() => setShowChangeDialog(false)}
+            onLinked={() => {
+              void queryClient.invalidateQueries({
+                queryKey: ['catalog-entity-relations', 'INC', ticket.entityId],
+              });
+            }}
+          />
+        </>
       )}
     </div>
   );
