@@ -98,9 +98,9 @@ export const FORM_WIDGETS: Record<FormWidgetKey, FormWidgetDefinition> = {
   },
   formAssetSummary: {
     key: 'formAssetSummary',
-    label: 'Contexto de activos',
+    label: 'Contexto de Resource Management',
     icon: Building2,
-    ownerModule: 'Assets / CMDB',
+    ownerModule: 'Resource Management',
     allowedRegions: ['main', 'sidebar', 'footer'],
     minColumnSpan: 3,
     allowMultiple: false,

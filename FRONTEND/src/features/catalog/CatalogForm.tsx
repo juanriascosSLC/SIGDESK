@@ -165,6 +165,17 @@ export default function CatalogForm() {
   //
   // (El comentario anterior citaba TODO-24, que es sobre SLOs de latencia.)
   const bindingFields = definition?.specification.fields.filter((field) => field.bindsTo) ?? [];
+  // INC is backed by the Ticket aggregate, whose resource is an invariant.
+  // A definition may leave its ordinary fields optional, but it must offer at
+  // least one way to choose the resource that anchors the incident. Without
+  // this guard a malformed published definition reaches POST /entities/INC
+  // with an empty recursoId and the user only gets a backend 4xx.
+  const incidentResourceFields = bindingFields.filter(
+    (field) =>
+      field.bindsTo === 'recursoId' ||
+      field.bindsTo === 'siteAssetId' ||
+      field.bindsTo === 'assetId',
+  );
   const needsRecursoPicker = bindingFields.some((field) => field.bindsTo === 'recursoId');
   const needsAgentePicker = bindingFields.some((field) => field.bindsTo === 'agenteItId');
   const needsSitePicker = bindingFields.some((field) => field.bindsTo === 'siteAssetId');
@@ -371,6 +382,12 @@ export default function CatalogForm() {
     // excluyen del payload `data` genérico.
     const bindingKeys = new Set(bindingFields.map((field) => field.key));
     const dataKeys = activeKeys.filter((key) => !bindingKeys.has(key));
+    if (definition.entityKey.toUpperCase() === 'INC' && incidentResourceFields.length === 0) {
+      setSubmitError(
+        'Esta definición de INC no tiene un campo de recurso o CMDB. Agrega «Dispositivo CMDB» en Catalog Builder → Campos del formulario y publícala antes de crear el incidente.',
+      );
+      return;
+    }
     const missing = definition.specification.fields.find((field) => {
       if (!activeKeys.includes(field.key) || !isFieldRequired(field, conditionData)) return false;
       const value = effectiveData[field.key];
@@ -429,6 +446,12 @@ export default function CatalogForm() {
     if (assetContext.siteAssetId || assetContext.links.length) binding.assetContext = assetContext;
     if (stakeholders.userIds.length || stakeholders.unitIds.length) {
       binding.stakeholders = stakeholders;
+    }
+    if (definition.entityKey.toUpperCase() === 'INC' && !binding.recursoId) {
+      setSubmitError(
+        'Selecciona un recurso o activo CMDB para crear el incidente. Este vínculo es necesario aunque los demás campos sean opcionales.',
+      );
+      return;
     }
     createMutation.mutate({
       entityData: Object.fromEntries(dataKeys.map((key) => [key, effectiveData[key]])),

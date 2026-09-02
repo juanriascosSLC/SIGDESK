@@ -214,6 +214,27 @@ test('un campo nuevo se abre solo: sin configurar no sirve de nada', async ({ pa
   await expect(nueva.locator('input').first()).toHaveValue(/Nuevo campo/);
 });
 
+test('Dispositivo del sitio agrega el sitio necesario antes del dispositivo', async ({ page }) => {
+  await abrirCampos(page);
+
+  await page.getByTitle('Crear tipo específico').click();
+  await page.getByRole('button', { name: 'Dispositivo del sitio' }).click();
+
+  const spec = await leerSpec(page);
+  const siteIndex = spec.fields.findIndex((field) => field.bindsTo === 'siteAssetId');
+  const deviceIndex = spec.fields.findIndex((field) => field.bindsTo === 'assetId');
+  expect(siteIndex).toBeGreaterThanOrEqual(0);
+  expect(deviceIndex).toBe(siteIndex + 1);
+  expect(spec.fields[siteIndex]).toMatchObject({ label: 'Sitio afectado', required: false });
+  expect(spec.fields[deviceIndex]).toMatchObject({
+    label: 'Dispositivo del sitio', required: false,
+  });
+  expect(spec.views?.create?.slice(-2)).toEqual([
+    spec.fields[siteIndex].key,
+    spec.fields[deviceIndex].key,
+  ]);
+});
+
 // Duplicar junto al original, no al final: se duplica para tener dos variantes
 // de lo mismo, y buscarlo doce posiciones abajo rompe eso.
 test('la copia queda junto al original y con clave propia', async ({ page }) => {

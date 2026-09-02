@@ -75,6 +75,24 @@ function bindingFieldsMissingFromCreateForm(
   );
 }
 
+// INC is the ticket-backed entity. Its aggregate always needs a resource,
+// independently of whether the rest of the catalog fields are optional. A
+// legacy resource, a CMDB site, or a CMDB device can provide it.
+function incidentHasResourceBinding(
+  entityKey: string,
+  specification: CatalogSpecification | undefined,
+): boolean {
+  if (entityKey.trim().toUpperCase() !== 'INC') return true;
+  return Boolean(
+    specification?.fields.some(
+      (field) =>
+        field.bindsTo === 'recursoId' ||
+        field.bindsTo === 'siteAssetId' ||
+        field.bindsTo === 'assetId',
+    ),
+  );
+}
+
 // Repairs legacy drafts that already have `bindsTo` fields outside Crear.
 // The backend is right to reject those definitions: no one could supply the
 // resource/agent binding at record creation time. Keep this here as a final
@@ -92,6 +110,34 @@ function placeBindingFieldsOnCreateForm(
     fields.reduce((updated, field) => appendCatalogFieldRow(updated, field.key), page),
   );
   return next;
+}
+
+// `assetId` is the existing "Dispositivo del sitio" binding. A device is
+// selected from the inventory of a site, therefore the definition must also
+// collect `siteAssetId`. This runs at save time too, so old drafts are repaired
+// even if their fields section was not opened in the current session.
+function addMissingSiteBinding(
+  specification: CatalogSpecification,
+): { specification: CatalogSpecification; added?: FieldDefinition } {
+  const hasDevice = specification.fields.some((field) => field.bindsTo === 'assetId');
+  const hasSite = specification.fields.some((field) => field.bindsTo === 'siteAssetId');
+  if (!hasDevice || hasSite) return { specification };
+
+  const next = structuredClone(specification);
+  const usedKeys = new Set(next.fields.map((field) => field.key));
+  let key = 'siteAfectado';
+  let suffix = 2;
+  while (usedKeys.has(key)) key = `siteAfectado${suffix++}`;
+  const site: FieldDefinition = {
+    key,
+    label: 'Sitio afectado',
+    type: 'text',
+    required: false,
+    bindsTo: 'siteAssetId',
+  };
+  const deviceIndex = next.fields.findIndex((field) => field.bindsTo === 'assetId');
+  next.fields.splice(deviceIndex < 0 ? next.fields.length : deviceIndex, 0, site);
+  return { specification: placeBindingFieldsOnCreateForm(next, [site]), added: site };
 }
 
 export default function CatalogBuilder() {
@@ -244,6 +290,11 @@ export default function CatalogBuilder() {
             .join(', ')}. Agrégalos en Diseño visual → Crear antes de publicar.`,
         );
       }
+      if (!incidentHasResourceBinding(entityKey, selected?.specification)) {
+        throw new Error(
+          'INC necesita un campo vinculado a Recurso, Sitio CMDB o Dispositivo CMDB para poder crear tickets. Agrega «Dispositivo CMDB» en Campos del formulario antes de publicar.',
+        );
+      }
       const validation = await validateDefinition(entityKey, version);
       if (!validation.valid) {
         throw new Error(
@@ -315,16 +366,21 @@ export default function CatalogBuilder() {
 
   function saveDraft() {
     setEditorError('');
-    const unplacedBindings = bindingFieldsMissingFromCreateForm(selected.specification);
+    const dependencyRepair = addMissingSiteBinding(selected.specification);
+    const unplacedBindings = bindingFieldsMissingFromCreateForm(dependencyRepair.specification);
     const specificationToSave = placeBindingFieldsOnCreateForm(
-      selected.specification,
+      dependencyRepair.specification,
       unplacedBindings,
     );
-    if (unplacedBindings.length > 0) {
+    const repairedBindingFields = [
+      ...(dependencyRepair.added ? [dependencyRepair.added] : []),
+      ...unplacedBindings,
+    ];
+    if (dependencyRepair.added || unplacedBindings.length > 0) {
       setSelected((current) => ({ ...current, specification: specificationToSave }));
       setHasLocalChanges(true);
       setNotice(
-        `Se agregaron a Crear los campos vinculados: ${unplacedBindings
+        `Se agregaron a Crear los campos vinculados: ${repairedBindingFields
           .map((field) => `Â«${field.label || field.key}Â»`)
           .join(', ')}.`,
       );
@@ -382,14 +438,19 @@ export default function CatalogBuilder() {
   }
 
   function publishDraft() {
-    const unplacedBindings = bindingFieldsMissingFromCreateForm(selected.specification);
-    if (unplacedBindings.length > 0) {
-      const repaired = placeBindingFieldsOnCreateForm(selected.specification, unplacedBindings);
+    const dependencyRepair = addMissingSiteBinding(selected.specification);
+    const unplacedBindings = bindingFieldsMissingFromCreateForm(dependencyRepair.specification);
+    if (dependencyRepair.added || unplacedBindings.length > 0) {
+      const repaired = placeBindingFieldsOnCreateForm(dependencyRepair.specification, unplacedBindings);
+      const repairedBindingFields = [
+        ...(dependencyRepair.added ? [dependencyRepair.added] : []),
+        ...unplacedBindings,
+      ];
       setSelected((current) => ({ ...current, specification: repaired }));
       setHasLocalChanges(true);
       setActiveSection('fields');
       setEditorError(
-        `Se agregaron a Crear los campos vinculados: ${unplacedBindings
+        `Se agregaron a Crear los campos vinculados: ${repairedBindingFields
           .map((field) => `Â«${field.label || field.key}Â»`)
           .join(', ')}. Guarda el borrador y luego publÃ­calo.`,
       );

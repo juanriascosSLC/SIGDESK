@@ -23,10 +23,10 @@ export function FormAssetSummaryWidget({ context }: { context: FormPageContext }
     <section className="rounded-2xl border border-border/50 bg-surface-container p-5" data-testid="form-asset-summary-widget">
       <div className="flex items-center gap-2">
         <Building2 className="h-4 w-4 text-primary" />
-        <h3 className="font-black text-on-surface">Contexto de activos</h3>
+        <h3 className="font-black text-on-surface">Contexto de Resource Management</h3>
       </div>
       {linked.length === 0 ? (
-        <p className="mt-3 text-sm text-on-surface-variant">Los sitios y equipos seleccionados aparecerán aquí.</p>
+        <p className="mt-3 text-sm text-on-surface-variant">El sitio y dispositivo seleccionados aparecerán aquí.</p>
       ) : (
         <ul className="mt-3 space-y-2">
           {linked.map(({ field, value, isPrincipal, count }) => (

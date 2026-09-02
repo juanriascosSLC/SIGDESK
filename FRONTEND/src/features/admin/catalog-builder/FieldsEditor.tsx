@@ -65,7 +65,7 @@ const QUICK_FIELD_TEMPLATES: Array<{
   },
   { label: 'Fecha', type: 'date', icon: Calendar, color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
   { label: 'Número', type: 'number', icon: Hash, color: 'text-violet-400 bg-violet-500/10 border-violet-500/20' },
-  { label: 'Dispositivo CMDB', type: 'text', icon: Server, color: 'text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20', bindsTo: 'assetId' },
+  { label: 'Dispositivo del sitio', type: 'text', icon: Server, color: 'text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20', bindsTo: 'assetId' },
   { label: 'Sí / No', type: 'boolean', icon: ToggleLeft, color: 'text-teal-400 bg-teal-500/10 border-teal-500/20' },
   { label: 'Correo', type: 'email', icon: Mail, color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
 ];
@@ -170,10 +170,37 @@ export function FieldsEditor({
     return next;
   }
 
+  // Inventory devices are always scoped by a site. Reuse the existing
+  // `assetId` ("Dispositivo del sitio") binding, but make its prerequisite
+  // explicit so the API never receives an impossible definition.
+  function ensureSiteAssetBinding(current: CatalogSpecification): CatalogSpecification {
+    if (current.fields.some((field) => field.bindsTo === 'siteAssetId')) return current;
+
+    const siteKey = uniqueFieldKey(
+      current.fields.map((field) => field.key),
+      'siteAfectado',
+    );
+    const firstDevice = current.fields.findIndex((field) => field.bindsTo === 'assetId');
+    const siteField: FieldDefinition = {
+      key: siteKey,
+      label: 'Sitio afectado',
+      type: 'text',
+      required: false,
+      bindsTo: 'siteAssetId',
+    };
+    // Keep the logical field order intuitive even when repairing an old draft.
+    current.fields.splice(firstDevice < 0 ? current.fields.length : firstDevice, 0, siteField);
+    placeNewField(current, siteKey);
+    return current;
+  }
+
   // Also repair drafts authored before this guard existed. Without this, a
   // field that is already `bindsTo` would require the admin to toggle its
   // selector off and on again before the definition could be published.
   useEffect(() => {
+    const needsSite =
+      specification.fields.some((field) => field.bindsTo === 'assetId') &&
+      !specification.fields.some((field) => field.bindsTo === 'siteAssetId');
     const missing = specification.fields.filter(
       (field) =>
         field.bindsTo &&
@@ -181,10 +208,11 @@ export function FieldsEditor({
           pageHasCatalogField(resolveFormPageLayout(specification, 'create', audience), field.key),
         ),
     );
-    if (missing.length === 0) return;
-    updateSpecification((current) =>
-      missing.reduce((next, field) => ensureCreatePlacement(next, field.key), current),
-    );
+    if (!needsSite && missing.length === 0) return;
+    updateSpecification((current) => {
+      const withSite = needsSite ? ensureSiteAssetBinding(current) : current;
+      return missing.reduce((next, field) => ensureCreatePlacement(next, field.key), withSite);
+    });
   }, [specification, updateSpecification]);
 
   function updateField(index: number, changes: Partial<FieldDefinition>) {
@@ -198,8 +226,11 @@ export function FieldsEditor({
         next.key = safeKey;
         renameFieldEverywhere(current, previous.key, safeKey);
       }
+      const withDependencies = next.bindsTo === 'assetId'
+        ? ensureSiteAssetBinding(current)
+        : current;
       const withCreatePlacement = next.bindsTo
-        ? ensureCreatePlacement(current, next.key)
+        ? ensureCreatePlacement(withDependencies, next.key)
         : current;
       if (next.bindsTo) {
         if (withCreatePlacement.layouts?.edit) {
@@ -283,6 +314,7 @@ export function FieldsEditor({
       labelPreset ? technicalKey(labelPreset) : `field${specification.fields.length + 1}`,
     );
     updateSpecification((current) => {
+      if (bindsToPreset === 'assetId') ensureSiteAssetBinding(current);
       const newField: FieldDefinition = {
         key,
         label,

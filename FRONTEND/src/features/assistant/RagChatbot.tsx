@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { ApiError, apiRequest } from "../../lib/apiClient";
+import { answerLatestTicketForSite } from './site-ticket-lookup';
 
 type ChatSource = { type: string; id: string; score: number };
 type ChatMessage = {
@@ -66,6 +67,19 @@ export default function RagChatbot() {
     ]);
     setIsSending(true);
     try {
+      const siteTicketAnswer = await answerLatestTicketForSite(text);
+      if (siteTicketAnswer) {
+        setMessages((current) => [
+          ...current,
+          {
+            from: "assistant",
+            text: siteTicketAnswer.answer,
+            time: "Ahora",
+            sources: siteTicketAnswer.sources,
+          },
+        ]);
+        return;
+      }
       const response = await apiRequest<ChatResponse>("/ia_advisor/chat", {
         method: "POST",
         body: JSON.stringify({ message: text }),
