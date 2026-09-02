@@ -38,8 +38,11 @@ import {
   type Section,
 } from './catalog-builder/config';
 import {
+  appendCatalogFieldRow,
+  mapPageDefinition,
   pageHasCatalogField,
   resolveFormPageLayout,
+  upgradeSpecificationToFormPages,
 } from '@/features/catalog/runtime/form-page-normalizer';
 import { useUnsavedChangesGuard } from './catalog-builder/useUnsavedChangesGuard';
 import { GeneralEditor } from './catalog-builder/GeneralEditor';
@@ -70,6 +73,25 @@ function bindingFieldsMissingFromCreateForm(
   return bindingFields.filter(
     (field) => !pages.some((page) => pageHasCatalogField(page, field.key)),
   );
+}
+
+// Repairs legacy drafts that already have `bindsTo` fields outside Crear.
+// The backend is right to reject those definitions: no one could supply the
+// resource/agent binding at record creation time. Keep this here as a final
+// safety net as well as in FieldsEditor, because a draft can be opened
+// directly on Revisar y publicar without mounting that editor first.
+function placeBindingFieldsOnCreateForm(
+  specification: CatalogSpecification,
+  fields: FieldDefinition[],
+): CatalogSpecification {
+  if (fields.length === 0) return specification;
+  const next = upgradeSpecificationToFormPages(structuredClone(specification));
+  next.views = next.views ?? {};
+  next.views.create = [...new Set([...(next.views.create ?? []), ...fields.map((field) => field.key)])];
+  next.createPage = mapPageDefinition(next.createPage!, (page) =>
+    fields.reduce((updated, field) => appendCatalogFieldRow(updated, field.key), page),
+  );
+  return next;
 }
 
 export default function CatalogBuilder() {
@@ -293,6 +315,20 @@ export default function CatalogBuilder() {
 
   function saveDraft() {
     setEditorError('');
+    const unplacedBindings = bindingFieldsMissingFromCreateForm(selected.specification);
+    const specificationToSave = placeBindingFieldsOnCreateForm(
+      selected.specification,
+      unplacedBindings,
+    );
+    if (unplacedBindings.length > 0) {
+      setSelected((current) => ({ ...current, specification: specificationToSave }));
+      setHasLocalChanges(true);
+      setNotice(
+        `Se agregaron a Crear los campos vinculados: ${unplacedBindings
+          .map((field) => `Â«${field.label || field.key}Â»`)
+          .join(', ')}.`,
+      );
+    }
     if (!selected.entityKey.trim() || !selected.name.trim()) {
       setEditorError('Completa el código y el nombre de la entidad.');
       setActiveSection('general');
@@ -339,9 +375,33 @@ export default function CatalogBuilder() {
     }
     saveMutation.mutate({
       ...selected,
+      specification: specificationToSave,
       entityKey: selected.entityKey.toUpperCase().trim(),
       name: selected.name.trim(),
     });
+  }
+
+  function publishDraft() {
+    const unplacedBindings = bindingFieldsMissingFromCreateForm(selected.specification);
+    if (unplacedBindings.length > 0) {
+      const repaired = placeBindingFieldsOnCreateForm(selected.specification, unplacedBindings);
+      setSelected((current) => ({ ...current, specification: repaired }));
+      setHasLocalChanges(true);
+      setActiveSection('fields');
+      setEditorError(
+        `Se agregaron a Crear los campos vinculados: ${unplacedBindings
+          .map((field) => `Â«${field.label || field.key}Â»`)
+          .join(', ')}. Guarda el borrador y luego publÃ­calo.`,
+      );
+      return;
+    }
+    if (hasLocalChanges) {
+      setEditorError('Guarda los cambios del borrador antes de publicar.');
+      return;
+    }
+    if (selected.version) {
+      publishMutation.mutate({ entityKey: selected.entityKey, version: selected.version });
+    }
   }
 
   function openSection(section: Section) {
@@ -539,10 +599,7 @@ export default function CatalogBuilder() {
               )}
               <button
                 data-testid="catalog-publish"
-                onClick={() =>
-                  selected.version &&
-                  publishMutation.mutate({ entityKey: selected.entityKey, version: selected.version })
-                }
+                onClick={publishDraft}
                 disabled={selected.status !== 'draft' || publishMutation.isPending}
                 className="px-4 py-2.5 rounded-xl bg-emerald-500 text-slate-950 text-sm font-black flex items-center gap-2 disabled:opacity-30"
               >
@@ -833,13 +890,7 @@ export default function CatalogBuilder() {
                 ) : selected.status === 'draft' ? (
                   <button
                     data-testid="catalog-publish"
-                    onClick={() =>
-                      selected.version &&
-                      publishMutation.mutate({
-                        entityKey: selected.entityKey,
-                        version: selected.version,
-                      })
-                    }
+                    onClick={publishDraft}
                     disabled={publishMutation.isPending}
                     className="px-5 py-2.5 rounded-xl bg-emerald-500 text-slate-950 text-sm font-black flex items-center gap-2 disabled:opacity-40"
                   >

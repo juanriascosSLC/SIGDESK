@@ -19,6 +19,7 @@ type Spec = {
   fields: Array<Record<string, unknown>>;
   views?: Record<string, string[]>;
   createPage?: unknown;
+  layouts?: unknown;
 };
 
 const definicion = {
@@ -168,6 +169,37 @@ test('duplicar, eliminar y mover están disponibles sin expandir', async ({ page
   await expect(titulo.getByRole('button', { name: 'Duplicar campo' })).toBeVisible();
   await expect(titulo.getByRole('button', { name: 'Bajar campo' })).toBeVisible();
   await expect(titulo.getByRole('button', { name: 'Subir campo' }), 'el primero no sube').toBeDisabled();
+});
+
+test('escribir la etiqueta conserva el foco y no desplaza la tarjeta', async ({ page }) => {
+  await abrirCampos(page);
+
+  const titulo = tarjeta(page, 'titulo');
+  await titulo.getByRole('button', { name: /Configurar el campo/ }).click();
+  const etiqueta = page.getByLabel('Etiqueta', { exact: true });
+  await etiqueta.focus();
+  await etiqueta.press('End');
+  await etiqueta.type(' actualizado');
+
+  await expect(etiqueta).toHaveValue('Título actualizado');
+  await expect(etiqueta).toBeFocused();
+});
+
+test('activar bindsTo vuelve a colocar el campo en Crear', async ({ page }) => {
+  await abrirCampos(page, conPaginaDeCreacion);
+
+  const cantidad = tarjeta(page, 'cantidad');
+  await cantidad.getByRole('button', { name: /Configurar el campo/ }).click();
+  await page.getByTestId('catalog-field-bindsto-cantidad').selectOption('assetId');
+
+  const spec = await leerSpec(page);
+  const createPage = spec.createPage as {
+    default: { main: { placements: Array<{ fieldKey?: string }> } };
+  };
+  expect(
+    createPage.default.main.placements.some((placement) => placement.fieldKey === 'cantidad'),
+    'un campo vinculado debe quedar disponible en el formulario de creación',
+  ).toBeTruthy();
 });
 
 test('un campo nuevo se abre solo: sin configurar no sirve de nada', async ({ page }) => {

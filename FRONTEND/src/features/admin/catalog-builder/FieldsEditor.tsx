@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Calendar,
   ChevronDown,
@@ -20,11 +20,15 @@ import type {
   CatalogSpecification,
   FieldDefinition,
   FieldType,
+  LayoutDocument,
 } from '@/features/catalog/metamodel';
 import { fieldTypeUsesOptions } from '@/features/catalog/metamodel';
 import {
   appendCatalogFieldRow,
   mapPageDefinition,
+  pageHasCatalogField,
+  resolveFormPageLayout,
+  upgradeSpecificationToFormPages,
 } from '@/features/catalog/runtime/form-page-normalizer';
 import { upgradeSpecificationToPageLayout } from '@/features/catalog/runtime/page-layout-normalizer';
 import { removeFieldEverywhere, renameFieldEverywhere } from './field-references';
@@ -75,7 +79,9 @@ export function FieldsEditor({
   updateSpecification: (updater: (current: CatalogSpecification) => CatalogSpecification) => void;
   guided?: boolean;
 }) {
-  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  // La clave técnica puede cambiar mientras se edita la etiqueta. La
+  // tarjeta abierta depende de su índice, no de esa clave mutable.
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [query, setQuery] = useState('');
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
@@ -119,6 +125,68 @@ export function FieldsEditor({
 
   const canReorder = trimmedQuery === '' && categoryFilter === 'all';
 
+  // `bindsTo` has a runtime invariant: the value must be collectable while
+  // creating the record. A field may have been created before the page
+  // designer existed, or removed from it and later turned into a binding, so
+  // adding the binding must repair the placement instead of asking the admin
+  // to discover a backend-only validation error at publish time.
+  function ensureCreatePlacement(
+    specification: CatalogSpecification,
+    key: string,
+  ): CatalogSpecification {
+    const next = specification.createPage || specification.layouts?.create
+      ? specification
+      : upgradeSpecificationToFormPages(specification);
+
+    next.views = next.views ?? {};
+    next.views.create = [...new Set([...(next.views.create ?? []), key])];
+
+    const appendToLegacyDocument = (document: LayoutDocument) => {
+      const alreadyPlaced = document.sections.some((section) =>
+        section.placements.some(
+          (placement) => placement.kind === 'field' && placement.source === 'catalog' && placement.fieldKey === key,
+        ),
+      );
+      if (alreadyPlaced) return;
+      const placement = {
+        id: `placement-create-${key}`,
+        kind: 'field' as const,
+        source: 'catalog' as const,
+        fieldKey: key,
+        columnSpan: 1 as const,
+      };
+      const section = document.sections[0];
+      if (section) section.placements.push(placement);
+      else document.sections.push({ id: 'section-create-main', columns: 1, placements: [placement] });
+    };
+
+    if (next.layouts?.create) {
+      appendToLegacyDocument(next.layouts.create.default);
+      next.layouts.create.variants?.forEach((variant) => appendToLegacyDocument(variant.document));
+    }
+    if (next.createPage) {
+      next.createPage = mapPageDefinition(next.createPage, (page) => appendCatalogFieldRow(page, key));
+    }
+    return next;
+  }
+
+  // Also repair drafts authored before this guard existed. Without this, a
+  // field that is already `bindsTo` would require the admin to toggle its
+  // selector off and on again before the definition could be published.
+  useEffect(() => {
+    const missing = specification.fields.filter(
+      (field) =>
+        field.bindsTo &&
+        !(['agent', 'requester', 'supervisor'] as const).some((audience) =>
+          pageHasCatalogField(resolveFormPageLayout(specification, 'create', audience), field.key),
+        ),
+    );
+    if (missing.length === 0) return;
+    updateSpecification((current) =>
+      missing.reduce((next, field) => ensureCreatePlacement(next, field.key), current),
+    );
+  }, [specification, updateSpecification]);
+
   function updateField(index: number, changes: Partial<FieldDefinition>) {
     updateSpecification((current) => {
       const previous = current.fields[index];
@@ -129,10 +197,12 @@ export function FieldsEditor({
         const safeKey = uniqueFieldKey(others, changes.key);
         next.key = safeKey;
         renameFieldEverywhere(current, previous.key, safeKey);
-        setExpandedKey((currentKey) => (currentKey === previous.key ? safeKey : currentKey));
       }
-      if (changes.bindsTo) {
-        if (current.layouts?.edit) {
+      const withCreatePlacement = next.bindsTo
+        ? ensureCreatePlacement(current, next.key)
+        : current;
+      if (next.bindsTo) {
+        if (withCreatePlacement.layouts?.edit) {
           const markReadOnly = (document: { sections: { placements: { fieldKey?: string; readOnly?: boolean }[] }[] }) => {
             for (const section of document.sections) {
               for (const placement of section.placements) {
@@ -140,11 +210,11 @@ export function FieldsEditor({
               }
             }
           };
-          markReadOnly(current.layouts.edit.default);
-          current.layouts.edit.variants?.forEach((variant) => markReadOnly(variant.document));
+          markReadOnly(withCreatePlacement.layouts.edit.default);
+          withCreatePlacement.layouts.edit.variants?.forEach((variant) => markReadOnly(variant.document));
         }
-        if (current.editPage) {
-          current.editPage = mapPageDefinition(current.editPage, (page) => ({
+        if (withCreatePlacement.editPage) {
+          withCreatePlacement.editPage = mapPageDefinition(withCreatePlacement.editPage, (page) => ({
             ...page,
             main: {
               ...page.main,
@@ -155,7 +225,7 @@ export function FieldsEditor({
           }));
         }
       }
-      return current;
+      return withCreatePlacement;
     });
   }
 
@@ -225,7 +295,7 @@ export function FieldsEditor({
       placeNewField(current, key);
       return current;
     });
-    setExpandedKey(key);
+    setExpandedIndex(specification.fields.length);
     setQuery('');
     setCategoryFilter('all');
     setShowQuickMenu(false);
@@ -242,7 +312,7 @@ export function FieldsEditor({
       placeNewField(current, copy.key);
       return current;
     });
-    setExpandedKey(copy.key);
+    setExpandedIndex(index + 1);
     setQuery('');
   }
 
@@ -253,7 +323,11 @@ export function FieldsEditor({
       removeFieldEverywhere(current, removedKey);
       return current;
     });
-    setExpandedKey((current) => (current === removedKey ? null : current));
+    setExpandedIndex((current) => {
+      if (current === null) return null;
+      if (current === index) return null;
+      return current > index ? current - 1 : current;
+    });
   }
 
   function move(from: number, to: number) {
@@ -410,16 +484,16 @@ export function FieldsEditor({
             <button
               type="button"
               onClick={() => {
-                if (expandedKey) {
-                  setExpandedKey(null);
+                if (expandedIndex !== null) {
+                  setExpandedIndex(null);
                 } else if (specification.fields.length > 0) {
-                  setExpandedKey(specification.fields[0].key);
+                  setExpandedIndex(0);
                 }
               }}
               className="secondary-button !px-3 !py-2 text-xs"
-              title={expandedKey ? 'Colapsar tarjeta activa' : 'Expandir primer campo'}
+              title={expandedIndex !== null ? 'Colapsar tarjeta activa' : 'Expandir primer campo'}
             >
-              {expandedKey ? (
+              {expandedIndex !== null ? (
                 <>
                   <ChevronsDownUp className="w-3.5 h-3.5" /> Colapsar
                 </>
@@ -570,16 +644,22 @@ export function FieldsEditor({
         ) : (
           visible.map(({ field, index }) => (
             <FieldCard
-              key={`${field.key}-${index}`}
+              // La clave tÃ©cnica puede cambiar mientras se escribe la
+              // etiqueta. Usarla aquÃ­ desmonta la tarjeta en cada tecla,
+              // haciendo que el input pierda el foco y que el navegador
+              // recalcule el scroll del contenedor. El Ã­ndice es estable
+              // durante la ediciÃ³n; las operaciones de reordenamiento siguen
+              // actualizando la lista desde el padre.
+              key={index}
               field={field}
               index={index}
               total={specification.fields.length}
               specification={specification}
-              expanded={expandedKey === field.key}
+              expanded={expandedIndex === index}
               draggable={canReorder}
               guided={guided}
               dragging={dragFrom === index}
-              onToggle={() => setExpandedKey((current) => (current === field.key ? null : field.key))}
+              onToggle={() => setExpandedIndex((current) => (current === index ? null : index))}
               onChange={(changes) => updateField(index, changes)}
               onChangeType={(type) => changeType(index, type)}
               onDuplicate={() => duplicate(index)}
