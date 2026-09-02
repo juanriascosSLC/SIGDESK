@@ -717,7 +717,10 @@ export const emptyDefinition = (): CatalogDefinition => ({
         key: 'title',
         label: 'Título',
         type: 'text',
-        required: true,
+        // Las entidades nuevas empiezan con campos opcionales. El
+        // administrador puede activar esta regla explícitamente desde
+        // "Reglas y validaciones" cuando el contrato lo necesite.
+        required: false,
         minLength: 3,
         maxLength: 160,
       },

@@ -104,18 +104,12 @@ export default function RagChatbot() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Abrir asistente RAG"
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-3 rounded-2xl border border-cyan-400/30 bg-surface-container-lowest/95 px-4 py-3 text-left shadow-[0_14px_40px_rgba(0,0,0,0.45),0_0_25px_rgba(34,211,238,0.12)] backdrop-blur-xl transition-all hover:-translate-y-1 hover:border-cyan-300/60"
+        title="SIG Assistant"
+        className="group fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full border border-cyan-400/30 bg-surface-container-lowest/95 text-cyan-300 shadow-[0_14px_40px_rgba(0,0,0,0.45),0_0_25px_rgba(34,211,238,0.12)] backdrop-blur-xl transition-all hover:-translate-y-1 hover:border-cyan-300/60 hover:bg-cyan-400/10"
       >
-        <span className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-400/30 bg-cyan-400/10 text-cyan-300">
-          <Bot size={20} />
-        </span>
-        <span>
-          <span className="block text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">
-            SIG Assistant
-          </span>
-          <span className="mt-0.5 block text-xs text-on-surface-variant">
-            Pregúntale a la base de conocimiento
-          </span>
+        <Bot size={22} />
+        <span className="pointer-events-none absolute right-full mr-3 whitespace-nowrap rounded-lg border border-cyan-400/20 bg-surface-container-lowest/95 px-3 py-1.5 text-xs text-on-surface opacity-0 shadow-lg backdrop-blur-xl transition-opacity group-hover:opacity-100">
+          SIG Assistant
         </span>
       </button>
     );
