@@ -5,12 +5,14 @@ import type { WorkflowNodeData } from './CustomNodes';
 
 interface AssignmentActionEditorProps {
   data: WorkflowNodeData;
-  mode: 'team' | 'user';
   readOnly: boolean;
   onChange: (data: Partial<WorkflowNodeData>) => void;
 }
 
-export default function AssignmentActionEditor({ data, mode, readOnly, onChange }: AssignmentActionEditorProps) {
+export default function AssignmentActionEditor({ data, readOnly, onChange }: AssignmentActionEditorProps) {
+  // El modo vive en el nodo. Antes lo imponía el bloque elegido en la paleta, y
+  // cambiar de equipo a persona obligaba a borrar el nodo y reconfigurarlo.
+  const mode: 'team' | 'user' = data.assignmentMode === 'user' ? 'user' : 'team';
   const directory = useQuery({
     queryKey: ['organization', 'assignment-directory', 'tickets'],
     queryFn: getWorkflowAssignmentDirectory,
@@ -25,7 +27,8 @@ export default function AssignmentActionEditor({ data, mode, readOnly, onChange 
 
   if (readOnly) {
     return (
-      <div className="mt-5 space-y-2 rounded-xl border border-border/40 bg-on-surface/5 p-4 text-xs text-on-surface-variant">
+      <div className="mt-5 space-y-2 rounded-xl border border-border/40 bg-on-surface/5 p-4 text-xs text-on-surface-variant" data-testid="assignment-summary">
+        <p><span className="font-black text-on-surface">Modo:</span> {mode === 'user' ? 'Asignar a una persona' : 'Asignar a un equipo'}</p>
         <p><span className="font-black text-on-surface">Área:</span> {String(data.departmentName || data.departmentId || 'No disponible')}</p>
         <p><span className="font-black text-on-surface">Equipo:</span> {String(data.teamName || data.teamId || 'No disponible')}</p>
         {mode === 'user' && <p><span className="font-black text-on-surface">Persona:</span> {String(data.assigneeName || data.assigneeUserId || 'No disponible')}</p>}
@@ -52,7 +55,36 @@ export default function AssignmentActionEditor({ data, mode, readOnly, onChange 
   }
 
   return (
-    <div className="mt-5 space-y-4">
+    <div className="mt-5 space-y-4" data-testid="assignment-editor">
+      <fieldset className="rounded-xl border border-border/40 bg-on-surface/5 p-3">
+        <legend className="px-1 text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Modo</legend>
+        <div className="mt-1 grid grid-cols-2 gap-2">
+          {([
+            { valor: 'team' as const, etiqueta: 'A un equipo', ayuda: 'El trabajo queda en el equipo, sin dueño concreto.' },
+            { valor: 'user' as const, etiqueta: 'A una persona', ayuda: 'Se asigna a un responsable del equipo.' },
+          ]).map((opcion) => (
+            <button
+              key={opcion.valor}
+              type="button"
+              data-testid={`assignment-mode-${opcion.valor}`}
+              aria-pressed={mode === opcion.valor}
+              title={opcion.ayuda}
+              onClick={() => onChange(opcion.valor === 'team'
+                // Cambiar a equipo LIMPIA la persona: el contrato del backend no
+                // admite assignee_user_id en modo team, y dejarlo colgando haría
+                // que el diagrama mostrara una persona que no se va a asignar.
+                ? { assignmentMode: 'team', assigneeUserId: '', assigneeName: '' }
+                : { assignmentMode: 'user' })}
+              className={`rounded-lg border px-3 py-2 text-xs font-bold transition ${mode === opcion.valor
+                ? 'border-primary/60 bg-primary/15 text-on-surface'
+                : 'border-border/40 bg-transparent text-on-surface-variant hover:border-border'}`}
+            >
+              {opcion.etiqueta}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+
       <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Área
         <select
           value={String(data.departmentId ?? '')}

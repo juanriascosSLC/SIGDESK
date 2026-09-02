@@ -1,6 +1,16 @@
 import { expect, test } from '@playwright/test';
 import { mockAuthenticatedAdmin } from './support';
 
+// La etiqueta que AutomationsList muestra para la accion `asignar_automatico`.
+// Se declara aqui, junto a la asercion, para que quede claro que la prueba
+// comprueba lo que ve una persona y no la clave interna del contrato.
+//
+// El sufijo "(legado)" ya no describe la realidad: `asignar_automatico` es la
+// segunda capacidad completamente funcional de Automations (ADR-0037). Cambiar
+// el texto de la interfaz queda para la ronda del disenador visual; esta prueba
+// solo deja de mentir sobre lo que se renderiza hoy.
+const ETIQUETA_ASIGNACION_AUTOMATICA = 'Asignación automática (legado)';
+
 test('Inventory, SLA and Automations fail visibly and recover on an explicit retry', async ({ page }) => {
   await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
 
@@ -61,7 +71,10 @@ test('Inventory, SLA and Automations fail visibly and recover on an explicit ret
   await expect(page.getByTestId('automations-retry')).toBeVisible();
   workflowsRecovered = true;
   await page.getByTestId('automations-retry').click();
-  await expect(page.getByText('asignar_automatico')).toBeVisible();
+  // La lista pinta la ETIQUETA de la accion, no su clave tecnica: ver
+  // `actionLabels` en AutomationsList.tsx. Buscar `asignar_automatico` fallaba
+  // aunque la recuperacion funcionara perfectamente.
+  await expect(page.getByText(ETIQUETA_ASIGNACION_AUTOMATICA)).toBeVisible();
   await expect(page.getByText('Automatizaciones no está disponible temporalmente')).toHaveCount(0);
 });
 
@@ -71,6 +84,6 @@ test('Automations renders workflows from the live owner service', async ({ page 
   await page.goto('/app/automations');
   await expect(page.getByTestId('automations-list')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'INC' }).first()).toBeVisible();
-  await expect(page.getByText('asignar_automatico').first()).toBeVisible();
+  await expect(page.getByText(ETIQUETA_ASIGNACION_AUTOMATICA).first()).toBeVisible();
   await expect(page.getByText('Automatizaciones no está disponible temporalmente')).toHaveCount(0);
 });

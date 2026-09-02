@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState, type DragEvent } from 'react';
 import {
   addEdge,
@@ -36,10 +37,14 @@ import {
   Workflow,
   X,
   Zap,
+  Undo2,
+  Redo2,
+  Save,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import type { PublishWorkflowInput, WorkflowDefinition } from './api';
+import { getWorkflowAssignmentDirectory, type PublishWorkflowInput, type SaveDraftInput, type WorkflowDefinition } from './api';
 import AssignmentActionEditor from './AssignmentActionEditor';
+import StatusActionEditor from './StatusActionEditor';
 import {
   ActionNode,
   ApprovalNode,
@@ -54,6 +59,7 @@ import {
   catalogItem,
   compileVisualWorkflow,
   graphFromDefinition,
+  esAccionDeAsignacion,
   nodeFromCatalog,
   workflowCatalog,
   type CatalogGroup,
@@ -134,9 +140,23 @@ interface WorkflowCanvasEditorProps {
   publishing?: boolean;
   publishError?: string;
   onPublish?: (payload: PublishWorkflowInput) => void;
+  /** Guardar SIN publicar. Su ausencia oculta el botón. */
+  saving?: boolean;
+  saveError?: string;
+  onSaveDraft?: (payload: SaveDraftInput) => void;
+  /** Publicar un borrador YA guardado, por su id. */
+  onPublishDraft?: () => void;
+  /** Abrir un borrador nuevo desde esta versión publicada. Su ausencia oculta
+   *  el botón, que es lo correcto para quien solo puede leer. */
+  onCrearBorrador?: () => void;
+  creandoBorrador?: boolean;
 }
 
-function CanvasEditor({ definition, readOnly = false, publishing = false, publishError, onPublish }: WorkflowCanvasEditorProps) {
+function CanvasEditor({
+  definition, readOnly = false, publishing = false, publishError, onPublish,
+  saving = false, saveError, onSaveDraft, onPublishDraft,
+  onCrearBorrador, creandoBorrador = false,
+}: WorkflowCanvasEditorProps) {
   const navigate = useNavigate();
   const start = useMemo(() => initialGraph(definition), [definition]);
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>(start.nodes);
@@ -147,15 +167,154 @@ function CanvasEditor({ definition, readOnly = false, publishing = false, publis
   const [openGroups, setOpenGroups] = useState<Set<CatalogGroup>>(new Set(groups));
   const [showValidation, setShowValidation] = useState(false);
   const [showJSON, setShowJSON] = useState(false);
-  const { screenToFlowPosition, fitView } = useReactFlow();
+  const { screenToFlowPosition, fitView, setCenter } = useReactFlow();
 
-  const compilation = useMemo(() => compileVisualWorkflow(nodes, edges, version), [edges, nodes, version]);
-  const selectedNode = nodes.find((node) => node.id === selectedID);
+  // Deshacer/rehacer sobre instantáneas del grafo.
+  //
+  // Se guarda el grafo entero y no un diff porque las operaciones que la gente
+  // deshace aquí —soltar un bloque, borrarlo, reconectar— cambian nodos y
+  // aristas a la vez, y reconstruir un diff correcto para cada una es más
+  // frágil que copiar dos arreglos pequeños.
+  const [pasado, setPasado] = useState<Array<{ nodes: WorkflowNode[]; edges: Edge[] }>>([]);
+  const [futuro, setFuturo] = useState<Array<{ nodes: WorkflowNode[]; edges: Edge[] }>>([]);
+  const [sinGuardar, setSinGuardar] = useState(false);
+
+  const recordar = useCallback(() => {
+    setPasado((current) => [...current.slice(-49), { nodes, edges }]);
+    // Sin efectos dentro del updater: solo devuelve el arreglo nuevo.
+    // Una acción nueva invalida lo rehacible: rehacer después de un cambio
+    // distinto aplicaría un estado que ya no pertenece a esta historia.
+    setFuturo([]);
+    setSinGuardar(true);
+  }, [edges, nodes]);
+
+  // Los setters se llaman en secuencia, NUNCA dentro del updater de otro.
+  //
+  // La primera versión metía setNodes/setFuturo dentro de setPasado(current =>
+  // …). React invoca los updaters dos veces en modo estricto para detectar
+  // impurezas, así que cada deshacer aplicaba su efecto por duplicado y el
+  // canvas acababa con más nodos de los que había antes de la acción.
+  const deshacer = useCallback(() => {
+    if (pasado.length === 0) return;
+    const anterior = pasado[pasado.length - 1];
+    setPasado(pasado.slice(0, -1));
+    setFuturo([...futuro, { nodes, edges }]);
+    setNodes(anterior.nodes);
+    setEdges(anterior.edges);
+    setSinGuardar(true);
+  }, [edges, futuro, nodes, pasado, setEdges, setNodes]);
+
+  const rehacer = useCallback(() => {
+    if (futuro.length === 0) return;
+    const siguiente = futuro[futuro.length - 1];
+    setFuturo(futuro.slice(0, -1));
+    setPasado([...pasado, { nodes, edges }]);
+    setNodes(siguiente.nodes);
+    setEdges(siguiente.edges);
+    setSinGuardar(true);
+  }, [edges, futuro, nodes, pasado, setEdges, setNodes]);
+
+  // El directorio se consulta también aquí, no solo en el panel: es lo que
+  // permite detectar que un destino guardado ya no existe ANTES de publicar.
+  // React Query comparte la misma clave con el panel, así que no hay dos
+  // llamadas.
+  const directorio = useQuery({
+    queryKey: ['organization', 'assignment-directory', 'tickets'],
+    queryFn: getWorkflowAssignmentDirectory,
+    enabled: !readOnly,
+    retry: 1,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Un destino que Organization ya no reconoce NO se borra en silencio: se
+  // marca. Borrarlo cambiaría el destino de un diagrama guardado sin que nadie
+  // lo decidiera, y la persona publicaría algo distinto de lo que ve.
+  //
+  // Solo se evalúa con el directorio ya cargado: mientras carga, todo id
+  // parecería ausente y el canvas se llenaría de errores falsos.
+  const nodosConReferencias = useMemo(() => {
+    if (!directorio.data) return nodes;
+    const areas = new Set(directorio.data.departments.map((item) => item.id));
+    const equipos = new Set(directorio.data.teams.map((item) => item.id));
+    const personas = new Set(directorio.data.assignees.map((item) => item.id));
+    return nodes.map((node) => {
+      if (!esAccionDeAsignacion(node.data.catalogKey)) return node;
+      const ausentes: string[] = [];
+      if (node.data.departmentId && !areas.has(String(node.data.departmentId))) ausentes.push('un área');
+      if (node.data.teamId && !equipos.has(String(node.data.teamId))) ausentes.push('un equipo');
+      if (node.data.assignmentMode === 'user' && node.data.assigneeUserId && !personas.has(String(node.data.assigneeUserId))) ausentes.push('una persona');
+      const previas = (node.data.missingReferences ?? []) as string[];
+      if (previas.length === ausentes.length && previas.every((valor, indice) => valor === ausentes[indice])) return node;
+      return { ...node, data: { ...node.data, missingReferences: ausentes } };
+    });
+  }, [directorio.data, nodes]);
+
+  const compilation = useMemo(
+    () => compileVisualWorkflow(nodosConReferencias, edges, version),
+    [edges, nodosConReferencias, version],
+  );
+  const selectedNode = nodosConReferencias.find((node) => node.id === selectedID);
+
+  // Los mensajes se cuelgan del nodo para que se vea CUÁL está mal, sin
+  // guardarlos en el estado: son derivados, y persistirlos obligaría a
+  // sincronizarlos en cada cambio.
+  const nodosPintados = useMemo(() => {
+    const porNodo = new Map<string, string[]>();
+    for (const issue of compilation.issues) {
+      if (!issue.nodeId) continue;
+      porNodo.set(issue.nodeId, [...(porNodo.get(issue.nodeId) ?? []), issue.message]);
+    }
+    if (porNodo.size === 0) return nodosConReferencias;
+    return nodosConReferencias.map((node) => porNodo.has(node.id)
+      ? { ...node, data: { ...node.data, issueMessages: porNodo.get(node.id) } }
+      : node);
+  }, [compilation.issues, nodosConReferencias]);
+
+  // Al pulsar un error, el canvas lo enfoca y lo selecciona. Sin esto la
+  // persona lee "completa área y equipo" y tiene que buscar a mano el bloque en
+  // un diagrama grande.
+  // borradorActual serializa el canvas TAL CUAL, sin exigir que compile: un
+  // borrador incompleto también se guarda, y sus reglas conservan su id para no
+  // desligar el historial de la regla que lo produjo.
+  const borradorActual = (): SaveDraftInput => ({
+    id: definition?.id,
+    // La revisión que se leyó. Sin ella el backend no puede detectar que otro
+    // administrador guardó primero, y su trabajo se perdería en silencio.
+    revision: definition?.revision,
+    categoria_id: definition?.categoria_id ?? 'INC',
+    version,
+    // El id de cada regla es el id de su NODO, tal como lo emite el compilador.
+    //
+    // Antes se tomaba de `definition.reglas[indice]`, por POSICIÓN: bastaba con
+    // añadir un bloque en medio para que las reglas heredaran el id de otra y
+    // el historial quedara atribuido a la regla equivocada. Con el plan sería
+    // peor: el plan referencia el nodo, así que los ids tienen que coincidir o
+    // el backend rechaza la publicación.
+    reglas: compilation.payload?.reglas ?? [],
+    layout: {
+      nodes: nodes.map(({ id, type, position, data }) => ({ id, type, position, data: { ...data } })),
+      edges: edges.map(({ id, source, target, sourceHandle, targetHandle }) => ({ id, source, target, sourceHandle, targetHandle })),
+    },
+    // El plan viaja también en el borrador: es lo que permite cerrar el
+    // navegador a mitad del diseño y recuperar el mismo grafo, y lo que hace
+    // que publicar después no tenga que recompilar nada distinto.
+    execution_plan: compilation.payload?.execution_plan,
+  });
+
+  const enfocarNodo = useCallback((nodeID?: string) => {
+    if (!nodeID) return;
+    const objetivo = nodes.find((node) => node.id === nodeID);
+    if (!objetivo) return;
+    setSelectedID(nodeID);
+    setShowValidation(false);
+    void setCenter(objetivo.position.x + 140, objetivo.position.y + 70, { zoom: 1.1, duration: 420 });
+  }, [nodes, setCenter]);
 
   const onConnect = useCallback((connection: Connection) => {
     if (readOnly) return;
+    recordar();
     setEdges((current) => addEdge(edgeStyle({ ...connection, id: crypto.randomUUID() } as Edge), current));
-  }, [readOnly, setEdges]);
+  }, [readOnly, recordar, setEdges]);
 
   const onNodeClick: NodeMouseHandler<WorkflowNode> = useCallback((_event, node) => {
     setSelectedID(node.id);
@@ -163,11 +322,13 @@ function CanvasEditor({ definition, readOnly = false, publishing = false, publis
 
   const updateSelected = (data: Record<string, unknown>) => {
     if (!selectedID || readOnly) return;
+    recordar();
     setNodes((current) => current.map((node) => node.id === selectedID ? { ...node, data: { ...node.data, ...data } } : node));
   };
 
   const removeSelected = () => {
     if (!selectedID || readOnly) return;
+    recordar();
     setNodes((current) => current.filter((node) => node.id !== selectedID));
     setEdges((current) => current.filter((edge) => edge.source !== selectedID && edge.target !== selectedID));
     setSelectedID(undefined);
@@ -175,6 +336,7 @@ function CanvasEditor({ definition, readOnly = false, publishing = false, publis
 
   const duplicateSelected = () => {
     if (!selectedNode || readOnly) return;
+    recordar();
     const duplicate: WorkflowNode = {
       ...selectedNode,
       id: crypto.randomUUID(),
@@ -197,6 +359,7 @@ function CanvasEditor({ definition, readOnly = false, publishing = false, publis
     const key = event.dataTransfer.getData('application/sigdesk-workflow');
     const item = catalogItem(key);
     if (!item) return;
+    recordar();
     const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
     const created = nodeFromCatalog(item, position);
     setNodes((current) => [...current, created]);
@@ -222,7 +385,18 @@ function CanvasEditor({ definition, readOnly = false, publishing = false, publis
               <h1 className="truncate text-lg font-black text-on-surface">
                 {definition ? `Workflow ${definition.categoria_id}` : 'Diseñador de automatización'}
               </h1>
-              {definition && <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-black uppercase text-emerald-300">Publicado</span>}
+              {definition && (
+                <span
+                  data-testid="canvas-estado"
+                  className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase ${definition.estado === 'publicado'
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                    : definition.estado === 'borrador'
+                      ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                      : 'border-slate-500/30 bg-slate-500/10 text-slate-300'}`}
+                >
+                  {definition.estado} · v{definition.version}
+                </span>
+              )}
             </div>
             <p className="mt-0.5 truncate text-xs text-on-surface-variant">Arrastra, conecta y configura bloques. El grafo publicado se ejecuta en el runtime real.</p>
           </div>
@@ -234,20 +408,80 @@ function CanvasEditor({ definition, readOnly = false, publishing = false, publis
               <input className="w-14 bg-transparent text-center font-mono text-on-surface outline-none" type="number" min={1} value={version} onChange={(event) => setVersion(Math.max(1, Number(event.target.value)))} />
             </label>
           )}
-          <button type="button" onClick={() => setShowValidation(true)} className="secondary-button">
+          {!readOnly && (
+            <>
+              <div className="flex items-center gap-1 rounded-xl border border-border/50 bg-on-surface/5 p-1">
+                <button type="button" data-testid="canvas-undo" aria-label="Deshacer" title="Deshacer" disabled={pasado.length === 0} onClick={deshacer} className="rounded-lg px-2 py-1.5 text-on-surface-variant transition hover:bg-on-surface/10 disabled:opacity-35"><Undo2 className="h-4 w-4" /></button>
+                <button type="button" data-testid="canvas-redo" aria-label="Rehacer" title="Rehacer" disabled={futuro.length === 0} onClick={rehacer} className="rounded-lg px-2 py-1.5 text-on-surface-variant transition hover:bg-on-surface/10 disabled:opacity-35"><Redo2 className="h-4 w-4" /></button>
+              </div>
+              <span
+                data-testid="canvas-dirty"
+                className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase ${sinGuardar
+                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                  : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}
+              >
+                {sinGuardar ? 'Cambios sin guardar' : 'Guardado'}
+              </span>
+            </>
+          )}
+          <button type="button" data-testid="canvas-validate" onClick={() => setShowValidation(true)} className="secondary-button">
             {compilation.errors.length ? <AlertTriangle className="h-4 w-4 text-amber-300" /> : <CheckCircle2 className="h-4 w-4 text-emerald-300" />}
             Validar {compilation.errors.length ? `(${compilation.errors.length})` : ''}
           </button>
           <button type="button" onClick={() => setShowJSON(true)} className="secondary-button"><Braces className="h-4 w-4" /> Contrato</button>
+          {!readOnly && onSaveDraft && (
+            // Guardar NO exige que el diseño esté completo: para eso existe un
+            // borrador. Lo que exige completitud es publicar.
+            <button
+              type="button"
+              data-testid="canvas-save-draft"
+              disabled={saving}
+              onClick={() => { onSaveDraft(borradorActual()); setSinGuardar(false); }}
+              className="secondary-button"
+            >
+              <Save className="h-4 w-4" /> {saving ? 'Guardando…' : 'Guardar borrador'}
+            </button>
+          )}
+          {readOnly && onCrearBorrador && (
+            // Una versión publicada es inmutable: el backend rechaza
+            // modificarla porque es la que el runtime ejecuta. La única forma
+            // de cambiarla es abrir un borrador nuevo de su misma familia.
+            <button
+              type="button"
+              data-testid="canvas-new-draft"
+              disabled={creandoBorrador}
+              onClick={onCrearBorrador}
+              className="primary-button"
+            >
+              <GitBranch className="h-4 w-4" /> {creandoBorrador ? 'Creando…' : 'Crear nuevo borrador desde esta versión'}
+            </button>
+          )}
           {!readOnly && (
-            <button type="button" disabled={!compilation.payload || publishing} onClick={() => compilation.payload && onPublish?.(compilation.payload)} className="primary-button">
+            <button
+              type="button"
+              data-testid="canvas-publish"
+              disabled={!compilation.payload || publishing}
+              onClick={() => {
+                if (!compilation.payload) return;
+                // Si estamos editando un borrador ya guardado, se publica ESE,
+                // conservando su id y su versión; el historial de ejecuciones
+                // los referencia. Si no, se usa el camino directo de siempre.
+                if (onPublishDraft) onPublishDraft(); else onPublish?.(compilation.payload);
+                setSinGuardar(false);
+              }}
+              className="primary-button"
+            >
               <Rocket className="h-4 w-4" /> {publishing ? 'Publicando…' : 'Publicar versión'}
             </button>
           )}
         </div>
       </header>
 
-      {publishError && <div className="border-b border-red-500/30 bg-red-500/10 px-5 py-2 text-sm text-red-300">{publishError}</div>}
+      {/* Los errores del BACKEND se muestran tal cual: la validación del canvas
+          no lo sustituye. Un 422 dice cosas que el frontend no puede saber, como
+          que el equipo dejó de pertenecer al área. */}
+      {publishError && <div data-testid="canvas-publish-error" className="border-b border-red-500/30 bg-red-500/10 px-5 py-2 text-sm text-red-300">{publishError}</div>}
+      {saveError && <div data-testid="canvas-save-error" className="border-b border-red-500/30 bg-red-500/10 px-5 py-2 text-sm text-red-300">{saveError}</div>}
 
       <div className="flex min-h-0 flex-1">
         <aside className="z-10 flex w-[290px] shrink-0 flex-col border-r border-border/50 bg-surface-container-low">
@@ -288,6 +522,7 @@ function CanvasEditor({ definition, readOnly = false, publishing = false, publis
                         onDragStart={(event) => dragStart(event, item)}
                         onClick={() => {
                           if (readOnly) return;
+                          recordar();
                           const created = nodeFromCatalog(item, { x: 180 + nodes.length * 30, y: 120 + nodes.length * 18 });
                           setNodes((current) => [...current, created]);
                           setSelectedID(created.id);
@@ -310,7 +545,7 @@ function CanvasEditor({ definition, readOnly = false, publishing = false, publis
 
         <main className="relative min-w-0 flex-1 bg-surface-container-lowest">
           <ReactFlow
-            nodes={nodes}
+            nodes={nodosPintados}
             edges={edges}
             nodeTypes={nodeTypes}
             onNodesChange={readOnly ? undefined : onNodesChange}
@@ -334,7 +569,7 @@ function CanvasEditor({ definition, readOnly = false, publishing = false, publis
             <Controls position="bottom-left" />
             <MiniMap position="bottom-right" pannable zoomable nodeColor={(node) => node.data.supportStatus === 'planned' ? '#64748b' : '#06b6d4'} maskColor="rgba(2, 6, 23, 0.72)" />
             <div className="absolute left-4 top-4 z-10 flex gap-2">
-              <button type="button" onClick={() => { setNodes((current) => autoLayout(current, edges)); window.setTimeout(() => void fitView({ duration: 350, padding: 0.18 }), 20); }} className="secondary-button bg-surface-container-low/95 px-3"><Grid3X3 className="h-4 w-4" /> Ordenar</button>
+              <button type="button" onClick={() => { recordar(); setNodes((current) => autoLayout(current, edges)); window.setTimeout(() => void fitView({ duration: 350, padding: 0.18 }), 20); }} className="secondary-button bg-surface-container-low/95 px-3"><Grid3X3 className="h-4 w-4" /> Ordenar</button>
               <div className={`flex items-center gap-2 rounded-xl border bg-surface-container-low/95 px-3 py-2 text-xs font-bold ${compilation.errors.length ? 'border-amber-500/30 text-amber-300' : 'border-emerald-500/30 text-emerald-300'}`}>
                 {compilation.errors.length ? <AlertTriangle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
                 {compilation.errors.length ? 'Diseño incompleto' : 'Listo para publicar'}
@@ -396,11 +631,19 @@ function CanvasEditor({ definition, readOnly = false, publishing = false, publis
               </div>
             )}
 
-            {(selectedNode.data.catalogKey === 'action.assign_user' || selectedNode.data.catalogKey === 'action.assign_team') && (
+            {esAccionDeAsignacion(selectedNode.data.catalogKey) && (
               <AssignmentActionEditor
                 data={selectedNode.data}
-                mode={selectedNode.data.catalogKey === 'action.assign_user' ? 'user' : 'team'}
                 readOnly={readOnly}
+                onChange={updateSelected}
+              />
+            )}
+
+            {selectedNode.data.catalogKey === 'action.change_status' && (
+              <StatusActionEditor
+                data={selectedNode.data}
+                readOnly={readOnly}
+                entityKey={definition?.categoria_id ?? 'INC'}
                 onChange={updateSelected}
               />
             )}
@@ -428,7 +671,28 @@ function CanvasEditor({ definition, readOnly = false, publishing = false, publis
             ) : (
               <div className="mt-5 space-y-3">
                 {compilation.errors.length === 0 && <div className="flex gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200"><CheckCircle2 className="h-5 w-5 shrink-0" /><div><p className="font-black">Workflow válido</p><p className="mt-1 opacity-75">La definición puede publicarse y ejecutarse.</p></div></div>}
-                {compilation.errors.map((error) => <div key={error} className="flex gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200"><AlertTriangle className="h-5 w-5 shrink-0" /><span>{error}</span></div>)}
+                {/* Cada error que sabe a qué nodo pertenece es pulsable: enfoca y
+                    selecciona ese bloque. Leer "completa área y equipo" sin poder
+                    ir al bloque obliga a buscarlo a mano en un diagrama grande. */}
+                {compilation.issues.map((issue, indice) => {
+                  const anclado = Boolean(issue.nodeId);
+                  return (
+                    <button
+                      key={`${issue.nodeId ?? 'general'}-${indice}`}
+                      type="button"
+                      data-testid={anclado ? 'validation-issue-anchored' : 'validation-issue'}
+                      disabled={!anclado}
+                      onClick={() => enfocarNodo(issue.nodeId)}
+                      className={`flex w-full gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-left text-sm text-red-200 ${anclado ? 'transition hover:border-red-400/60 hover:bg-red-500/15' : 'cursor-default'}`}
+                    >
+                      <AlertTriangle className="h-5 w-5 shrink-0" />
+                      <span className="min-w-0 flex-1">
+                        {issue.message}
+                        {anclado && <span className="mt-1 block text-[10px] font-black uppercase tracking-wider opacity-70">Pulsa para ir al bloque</span>}
+                      </span>
+                    </button>
+                  );
+                })}
                 {compilation.warnings.map((warning) => <div key={warning} className="flex gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200"><Info className="h-5 w-5 shrink-0" /><span>{warning}</span></div>)}
               </div>
             )}

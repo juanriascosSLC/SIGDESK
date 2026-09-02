@@ -26,6 +26,23 @@ export type WorkflowNodeData = {
   assigneeUserId?: string;
   assigneeName?: string;
   overwriteExisting?: boolean;
+  /** Transición publicada que pide el bloque «Cambiar estado».
+   *
+   * Solo `transitionKey` se publica. El origen, el destino y la etiqueta se
+   * guardan para poder leer el diagrama sin abrir el panel; son nombres, y los
+   * nombres cambian. */
+  transitionKey?: string;
+  transitionFrom?: string;
+  transitionTo?: string;
+  transitionLabel?: string;
+  /** Referencias organizacionales que Organization ya no reconoce.
+   *
+   * Lo escribe el editor al cargar el directorio; el compilador lo convierte en
+   * un error que bloquea la publicación. No se limpia el id ausente: hacerlo
+   * cambiaría el destino de un diagrama guardado sin que nadie lo decidiera. */
+  missingReferences?: string[];
+  /** Mensajes de validación del bloque, para resaltarlo en el canvas. */
+  issueMessages?: string[];
   [key: string]: unknown;
 };
 
@@ -48,8 +65,18 @@ function frameColor(data: WorkflowNodeData) {
 function NodeFrame({ data, icon, kind, children }: { data: WorkflowNodeData; icon: ReactNode; kind: string; children?: ReactNode }) {
   const color = frameColor(data);
   const planned = data.supportStatus === 'planned';
+  // Un bloque con problemas se ve DESDE el canvas. Antes los errores vivían solo
+  // en el panel de validación, así que en un diagrama grande había que abrirlo y
+  // buscar a mano cuál de los bloques era el que fallaba.
+  const problemas = (data.issueMessages ?? []) as string[];
+  const conProblema = problemas.length > 0;
   return (
-    <div className={`relative w-[270px] rounded-2xl border bg-surface-container-low p-4 shadow-2xl transition-all ${planned ? 'border-dashed border-slate-500/60 opacity-85' : `border-border/60 ${color.border}`}`}>
+    <div
+      data-testid={conProblema ? 'workflow-node-invalid' : 'workflow-node'}
+      className={`relative w-[270px] rounded-2xl border bg-surface-container-low p-4 shadow-2xl transition-all ${conProblema
+        ? 'border-red-500/70 ring-2 ring-red-500/30'
+        : planned ? 'border-dashed border-slate-500/60 opacity-85' : `border-border/60 ${color.border}`}`}
+    >
       <div className="mb-3 flex items-start gap-3">
         <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${color.icon}`}>{icon}</div>
         <div className="min-w-0 flex-1">
@@ -63,6 +90,11 @@ function NodeFrame({ data, icon, kind, children }: { data: WorkflowNodeData; ico
         </div>
       </div>
       {children || <p className="rounded-xl border border-border/30 bg-on-surface/5 p-2.5 text-[11px] leading-relaxed text-on-surface-variant">{String(data.description || '')}</p>}
+      {conProblema && (
+        <ul className="mt-2 space-y-1 rounded-xl border border-red-500/30 bg-red-500/10 p-2.5 text-[10px] leading-relaxed text-red-200">
+          {problemas.map((problema) => <li key={problema}>{problema}</li>)}
+        </ul>
+      )}
     </div>
   );
 }
@@ -85,8 +117,15 @@ export function ConditionNode({ data }: WorkflowNodeProps) {
       <NodeFrame data={data} kind="Condición" icon={<GitBranch className="h-4 w-4" />}>
         <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-2.5 font-mono text-[11px] text-amber-200">{summary}</p>
       </NodeFrame>
-      <Handle type="source" position={Position.Right} id="yes" className="!h-3 !w-3 !border-2 !border-surface-container-low !bg-emerald-400" />
-      <span className="absolute -right-9 top-1/2 -translate-y-1/2 text-[8px] font-black uppercase text-emerald-300">Sí</span>
+      {/* Dos salidas: la condición del plan tiene rama verdadera y rama falsa.
+          Antes solo existía «Sí», así que un flujo no podía declarar qué hacer
+          cuando la condición no se cumple —y el runtime no tenía de dónde
+          sacarlo—. Una conexión guardada sin handle sigue siendo la rama
+          verdadera, para que los diagramas anteriores signifiquen lo mismo. */}
+      <Handle type="source" position={Position.Right} id="yes" style={{ top: '38%' }} className="!h-3 !w-3 !border-2 !border-surface-container-low !bg-emerald-400" />
+      <span className="absolute -right-9 top-[38%] -translate-y-1/2 text-[8px] font-black uppercase text-emerald-300">Sí</span>
+      <Handle type="source" position={Position.Right} id="no" style={{ top: '68%' }} className="!h-3 !w-3 !border-2 !border-surface-container-low !bg-red-400" />
+      <span className="absolute -right-9 top-[68%] -translate-y-1/2 text-[8px] font-black uppercase text-red-300">No</span>
     </div>
   );
 }
@@ -104,17 +143,32 @@ export function DelayNode({ data }: WorkflowNodeProps) {
 }
 
 export function ActionNode({ data }: WorkflowNodeProps) {
-  const assignmentSummary = data.catalogKey === 'action.assign_user'
-    ? `Persona ${String(data.assigneeName || data.assigneeUserId || 'sin seleccionar')} · Equipo ${String(data.teamName || data.teamId || 'sin seleccionar')}`
-    : data.catalogKey === 'action.assign_team'
-      ? `Equipo ${String(data.teamName || data.teamId || 'sin seleccionar')}`
-      : undefined;
+  // El destino se resume en el propio nodo para poder leer el diagrama sin
+  // abrir el panel. Depende del MODO, no de la clave del bloque: al unificarse
+  // en uno solo, mirar la clave dejaba el resumen en blanco.
+  const esAsignacion = data.catalogKey === 'action.assign'
+    || data.catalogKey === 'action.assign_user'
+    || data.catalogKey === 'action.assign_team';
+  const equipo = String(data.teamName || data.teamId || 'sin seleccionar');
+  const assignmentSummary = !esAsignacion
+    ? undefined
+    : data.assignmentMode === 'user'
+      ? `Persona ${String(data.assigneeName || data.assigneeUserId || 'sin seleccionar')} · Equipo ${equipo}`
+      : `Equipo ${equipo}`;
+  // El bloque de estado resume la TRANSICIÓN, no el estado: es lo que se
+  // publica, y dos transiciones pueden llevar al mismo estado.
+  const statusSummary = data.catalogKey !== 'action.change_status'
+    ? undefined
+    : data.transitionKey
+      ? `${String(data.transitionFrom ?? '?')} → ${String(data.transitionTo ?? '?')} · ${String(data.transitionKey)}`
+      : 'Transición sin seleccionar';
+  const resumen = assignmentSummary ?? statusSummary;
   return (
     <div className="relative">
       <Handle type="target" position={Position.Left} className={handleClass(data)} />
       <NodeFrame data={data} kind="Acción" icon={data.catalogKey === 'action.notify_stakeholders' ? <BellRing className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}>
-        {assignmentSummary
-          ? <p className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-2.5 text-[11px] leading-relaxed text-emerald-200">{assignmentSummary}</p>
+        {resumen
+          ? <p className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-2.5 text-[11px] leading-relaxed text-emerald-200">{resumen}</p>
           : <p className="rounded-xl border border-border/30 bg-on-surface/5 p-2.5 text-[11px] leading-relaxed text-on-surface-variant">{String(data.description || '')}</p>}
       </NodeFrame>
       <Handle type="source" position={Position.Right} className={handleClass(data)} />

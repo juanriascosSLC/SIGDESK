@@ -20,6 +20,12 @@ type WorkflowPayload = {
     }>;
     edges: Array<{ id: string; source: string; target: string }>;
   };
+  /** Plan ejecutable compilado del diagrama (ADR-0038). */
+  execution_plan?: {
+    version: number;
+    entrypoints: string[];
+    nodes: Array<{ id: string; kind: string; action?: string; next?: string[]; on_true?: string[]; on_false?: string[] }>;
+  };
 };
 
 function publishedDefinition(id: string, payload: WorkflowPayload) {
@@ -172,23 +178,43 @@ test('el canvas publica el mismo grafo que luego vuelve a renderizar y conserva 
   expect(posted).toBeDefined();
   expect(posted!.categoria_id).toBe('INC');
   expect(posted!.version).toBe(7);
-  expect(posted!.reglas).toEqual([{
-    accion: 'notificar_interesados', condicion: 'prioridad == alta', demora_segundos: 900,
-  }]);
+  // La regla lleva el id de SU NODO (ADR-0038): el plan ejecutable referencia
+  // el nodo, y con ids distintos el plan y las reglas hablarían de cosas
+  // distintas. Aquí el id lo generó el canvas, así que solo se comprueba que
+  // existe y que coincide con el nodo de la acción.
+  expect(posted!.reglas).toHaveLength(1);
+  const reglaPublicada = posted!.reglas[0] as { id?: string; accion: string; condicion: string; demora_segundos: number };
+  expect(reglaPublicada.accion).toBe('notificar_interesados');
+  expect(reglaPublicada.condicion).toBe('prioridad == alta');
+  expect(reglaPublicada.demora_segundos).toBe(900);
+  const nodoDeAccion = posted!.layout.nodes.find((node) => node.type === 'action');
+  expect(reglaPublicada.id).toBe(nodoDeAccion?.id);
+  // Y el plan publica ese mismo id como nodo de acción.
+  const planPublicado = posted!.execution_plan!;
+  expect(planPublicado.nodes.filter((nodo) => nodo.kind === 'action').map((nodo) => nodo.id))
+    .toEqual([nodoDeAccion?.id]);
   expect(posted!.layout.nodes).toHaveLength(4);
   expect(posted!.layout.edges).toHaveLength(3);
   expect(posted!.layout.nodes.find((node) => node.type === 'condition')?.data.priority).toBe('alta');
 
   await expect(page.locator('.react-flow__node')).toHaveCount(4);
   await expect(page.locator('.react-flow__node').filter({ hasText: 'Prioridad = alta' })).toBeVisible();
-  await expect(page.getByText('Publicado', { exact: true })).toBeVisible();
+  // La insignia muestra el estado REAL y la versión, no un texto fijo: ahora
+  // una versión puede estar en borrador, publicada o archivada.
+  // La versión la fija el propio test más arriba; lo que se comprueba es que
+  // la insignia refleja el ESTADO real y la versión, no un texto fijo.
+  await expect(page.getByTestId('canvas-estado')).toContainText('publicado');
+  await expect(page.getByTestId('canvas-estado')).toContainText('v');
 
   await page.getByRole('button', { name: 'Ver ejecuciones' }).click();
   await expect(page.getByRole('heading', { name: 'Historial real de ejecuciones' })).toBeVisible();
   await expect(page.getByText('INC-E2E-001', { exact: true })).toBeVisible();
   await expect(page.getByText('completada', { exact: true })).toBeVisible();
   await expect(page.getByText('INC-E2E-002', { exact: true })).toBeVisible();
-  await expect(page.getByText('Asignar automáticamente', { exact: true })).toBeVisible();
+  // Dentro de la tabla del historial: "Asignar automáticamente" es ahora también
+  // el nombre del bloque en la paleta, así que buscarlo en toda la página
+  // encontraría dos elementos distintos.
+  await expect(page.getByRole('table').getByText('Asignar automáticamente', { exact: true })).toBeVisible();
   await expect(page.getByText('omitida', { exact: true })).toBeVisible();
   await expect(page.getByText('El ticket ya tenía una asignación y overwrite_existing está desactivado.', { exact: true })).toBeVisible();
 });
@@ -271,7 +297,10 @@ test('una asignación publicada sin layout conserva su modo, destino y política
   });
 
   const action = graph.nodes.find((node) => node.type === 'action');
-  expect(action?.data.catalogKey).toBe('action.assign_user');
+  // El bloque es uno solo; lo que distingue equipo de persona es el MODO, que
+  // se rehidrata desde la configuración publicada y no desde la clave.
+  expect(action?.data.catalogKey).toBe('action.assign');
+  expect(action?.data.assignmentMode).toBe('user');
   expect(action?.data.supportStatus).toBe('operational');
   expect(action?.data.departmentId).toBe('department-services');
   expect(action?.data.teamId).toBe('team-services');
@@ -299,6 +328,8 @@ test('el compilador produce el contrato tipado de una asignación individual com
 
   expect(compiled.errors).toEqual([]);
   expect(compiled.payload?.reglas).toEqual([{
+    // El id de la regla es el id del nodo de la acción (ADR-0038).
+    id: assignment.id,
     accion: 'asignar_automatico',
     condicion: 'siempre',
     demora_segundos: 0,
@@ -337,7 +368,9 @@ test('la asignación por equipo no inventa persona y una asignación incompleta 
   assignment.data.teamId = '';
   const incomplete = compileVisualWorkflow([trigger, assignment], [edge], 5);
   expect(incomplete.payload).toBeUndefined();
-  expect(incomplete.errors).toContain('Completa área y equipo en “Asignar equipo”.');
+  expect(incomplete.errors).toContain('Completa área y equipo en “Asignar automáticamente”.');
+  // El error viaja anclado al nodo, que es lo que permite resaltarlo y enfocarlo.
+  expect(incomplete.issues.some((issue) => issue.nodeId === assignment.id)).toBe(true);
 });
 
 test('el selector de asignación usa Organization, recupera un fallo y limpia selecciones dependientes', async ({ page }) => {
@@ -356,16 +389,18 @@ test('el selector de asignación usa Organization, recupera un fallo y limpia se
   );
 
   await page.goto('/app/automations/new');
-  await page.getByRole('button', { name: /Asignar persona/ }).click();
+  await page.getByRole('button', { name: /Asignar automáticamente/ }).click();
   await expect(page.getByText('No se pudo consultar Organization')).toBeVisible();
   await page.getByRole('button', { name: 'Reintentar directorio' }).click();
 
+  // El modo se elige dentro del bloque, no eligiendo otro bloque distinto.
+  await page.getByTestId('assignment-mode-user').click();
   await page.getByRole('combobox', { name: 'Área' }).selectOption('department-services');
   await page.getByRole('combobox', { name: 'Equipo' }).selectOption('team-services');
   await page.getByRole('combobox', { name: 'Persona' }).selectOption('user-services-1');
   await page.getByLabel('Reasignar si ya tiene responsable').check();
 
-  const assignmentNode = page.locator('.react-flow__node').filter({ hasText: 'Asignar persona' });
+  const assignmentNode = page.locator('.react-flow__node').filter({ hasText: 'Asignar automáticamente' });
   await expect(assignmentNode).toContainText('Agente Services');
   await expect(assignmentNode).toContainText('Servicios');
 

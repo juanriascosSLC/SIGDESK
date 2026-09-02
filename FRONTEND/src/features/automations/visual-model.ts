@@ -3,7 +3,10 @@ import type {
   PublishWorkflowInput,
   WorkflowAssignmentConfig,
   WorkflowDefinition,
+  WorkflowExecutionPlan,
+  WorkflowPlanNode,
   WorkflowRule,
+  WorkflowStatusConfig,
   WorkflowVisualLayout,
 } from './api';
 import type { WorkflowNode, WorkflowNodeData } from './CustomNodes';
@@ -46,10 +49,21 @@ export const workflowCatalog: WorkflowCatalogItem[] = [
   { key: 'control.parser', group: 'Control', nodeType: 'parser', title: 'Transformar datos', description: 'Mapea variables para una acción.', support: 'planned', color: 'pink' },
 
   { key: 'action.notify_stakeholders', group: 'Acciones', nodeType: 'action', title: 'Notificar interesados', description: 'Creador, personas y áreas interesadas.', support: 'operational', color: 'emerald', defaults: { actionType: 'notify', title: 'Notificar interesados' } },
-  { key: 'action.assign_user', group: 'Acciones', nodeType: 'action', title: 'Asignar persona', description: 'Asigna un responsable concreto.', support: 'planned', color: 'emerald', defaults: { assignmentMode: 'user', overwriteExisting: false } },
-  { key: 'action.assign_team', group: 'Acciones', nodeType: 'action', title: 'Asignar equipo', description: 'Envía el trabajo a un equipo.', support: 'planned', color: 'emerald', defaults: { assignmentMode: 'team', overwriteExisting: false } },
+  // Un solo bloque, con el modo dentro del panel. Antes eran dos entradas
+  // separadas ("Asignar persona" y "Asignar equipo") y ambas estaban en
+  // preparación porque faltaba el directorio autenticado de Organization. Ya
+  // existe, así que la acción pasa a ser funcional; y se unifica porque elegir
+  // entre equipo y persona es una propiedad de la asignación, no dos bloques
+  // distintos: separarlas obligaba a borrar el nodo y volver a configurarlo
+  // entero solo para cambiar de modo.
+  { key: 'action.assign', group: 'Acciones', nodeType: 'action', title: 'Asignar automáticamente', description: 'Envía el trabajo a un área, equipo o persona.', support: 'operational', color: 'emerald', defaults: { assignmentMode: 'team', overwriteExisting: false } },
   { key: 'action.add_stakeholder', group: 'Acciones', nodeType: 'action', title: 'Agregar interesado', description: 'Añade persona o área interesada.', support: 'planned', color: 'emerald' },
-  { key: 'action.change_status', group: 'Acciones', nodeType: 'action', title: 'Cambiar estado', description: 'Solicita una transición válida.', support: 'planned', color: 'emerald' },
+  // Operativo desde ADR-0038: hay runtime real detrás
+  // (`cambiar_estado_ticket` → POST /internal/tickets/state), y es una
+  // operación INDEPENDIENTE de la asignación. Antes de eso el bloque estaba en
+  // preparación a propósito: la única ruta a `en_progreso` pasaba por asignar,
+  // así que ofrecerlo habría prometido algo que el backend no hacía.
+  { key: 'action.change_status', group: 'Acciones', nodeType: 'action', title: 'Cambiar estado', description: 'Solicita una transición publicada del lifecycle.', support: 'operational', color: 'emerald', defaults: { actionType: 'changeStatus' } },
   { key: 'action.change_priority', group: 'Acciones', nodeType: 'action', title: 'Cambiar prioridad', description: 'Actualiza la prioridad del ticket.', support: 'planned', color: 'emerald' },
   { key: 'action.add_comment', group: 'Acciones', nodeType: 'action', title: 'Agregar comentario', description: 'Registra actividad automática.', support: 'planned', color: 'emerald' },
   { key: 'action.create_prb', group: 'Acciones', nodeType: 'action', title: 'Crear PRB', description: 'Abre un problema relacionado.', support: 'planned', color: 'emerald' },
@@ -58,8 +72,29 @@ export const workflowCatalog: WorkflowCatalogItem[] = [
   { key: 'action.webhook', group: 'Acciones', nodeType: 'action', title: 'Invocar webhook', description: 'Llama una integración publicada.', support: 'planned', color: 'purple' },
 ];
 
+/** Claves que ya no están en la paleta pero sí en diagramas guardados.
+ *
+ * Un borrador guardado antes de unificar el bloque trae `action.assign_user` o
+ * `action.assign_team`. Resolverlas al bloque nuevo conservando su modo es lo
+ * que impide que recargar un diagrama viejo pierda nodos. */
+const clavesHistoricasDeAsignacion: Record<string, 'user' | 'team'> = {
+  'action.assign_user': 'user',
+  'action.assign_team': 'team',
+};
+
+export function esAccionDeAsignacion(key: unknown): boolean {
+  const clave = String(key ?? '');
+  return clave === 'action.assign' || clave in clavesHistoricasDeAsignacion;
+}
+
 export function catalogItem(key: string) {
-  return workflowCatalog.find((item) => item.key === key);
+  const directo = workflowCatalog.find((item) => item.key === key);
+  if (directo) return directo;
+  const modo = clavesHistoricasDeAsignacion[key];
+  if (!modo) return undefined;
+  const unificado = workflowCatalog.find((item) => item.key === 'action.assign');
+  if (!unificado) return undefined;
+  return { ...unificado, defaults: { ...unificado.defaults, assignmentMode: modo } };
 }
 
 export function nodeFromCatalog(item: WorkflowCatalogItem, position: { x: number; y: number }): WorkflowNode {
@@ -104,25 +139,44 @@ function ancestorsOf(nodeID: string, nodes: WorkflowNode[], edges: Edge[]) {
   return result;
 }
 
+/** Un problema del diagrama, atado al nodo que lo causa cuando se puede.
+ *
+ * `errors` sigue existiendo como lista de textos porque es lo que consume el
+ * resumen de validación; `issues` es lo que permite RESALTAR el nodo culpable y
+ * enfocarlo al pulsar el error. Sin el id, la persona lee "completa área y
+ * equipo" y tiene que buscar a mano en qué bloque de un diagrama grande. */
+export interface WorkflowIssue {
+  nodeId?: string;
+  message: string;
+}
+
 export interface CompilationResult {
   payload?: PublishWorkflowInput;
   errors: string[];
   warnings: string[];
+  issues: WorkflowIssue[];
 }
 
 export function compileVisualWorkflow(nodes: WorkflowNode[], edges: Edge[], version: number): CompilationResult {
+  const issues: WorkflowIssue[] = [];
   const errors: string[] = [];
   const warnings: string[] = [];
+  const fallar = (message: string, nodeId?: string) => {
+    errors.push(message);
+    issues.push({ nodeId, message });
+  };
   const triggers = nodes.filter((node) => node.type === 'trigger' && node.data.catalogKey === 'ticket.created');
   const actions = nodes.filter((node) => node.type === 'action'
     && node.data.supportStatus === 'operational'
-    && ['action.notify_stakeholders', 'action.assign_user', 'action.assign_team'].includes(String(node.data.catalogKey)));
-  if (triggers.length !== 1) errors.push('El flujo debe tener exactamente un disparador operativo “INC creado”.');
-  if (actions.length === 0) errors.push('Conecta al menos una acción operativa.');
+    && (String(node.data.catalogKey) === 'action.notify_stakeholders'
+      || String(node.data.catalogKey) === 'action.change_status'
+      || esAccionDeAsignacion(node.data.catalogKey)));
+  if (triggers.length !== 1) fallar('El flujo debe tener exactamente un disparador operativo “INC creado”.');
+  if (actions.length === 0) fallar('Conecta al menos una acción operativa.');
 
   const connectedIDs = new Set(edges.flatMap((edge) => [edge.source, edge.target]));
   for (const node of nodes.filter((candidate) => candidate.data.supportStatus === 'planned')) {
-    if (connectedIDs.has(node.id)) errors.push(`“${String(node.data.label)}” está en preparación y todavía no puede publicarse.`);
+    if (connectedIDs.has(node.id)) fallar(`“${String(node.data.label)}” está en preparación y todavía no puede publicarse.`, node.id);
     else warnings.push(`“${String(node.data.label)}” está en el canvas como diseño futuro, pero no se publicará.`);
   }
 
@@ -130,39 +184,81 @@ export function compileVisualWorkflow(nodes: WorkflowNode[], edges: Edge[], vers
   for (const action of actions) {
     const ancestors = ancestorsOf(action.id, nodes, edges);
     if (!ancestors.some((node) => triggers.some((trigger) => trigger.id === node.id))) {
-      errors.push(`La acción “${String(action.data.label)}” no está conectada al disparador.`);
+      fallar(`La acción “${String(action.data.label)}” no está conectada al disparador.`, action.id);
       continue;
     }
     const conditions = ancestors.filter((node) => node.type === 'condition' && node.data.supportStatus === 'operational');
     const delays = ancestors.filter((node) => node.type === 'delay' && node.data.supportStatus === 'operational');
-    if (conditions.length > 1) errors.push('Cada rama publicable admite una condición operativa en esta versión.');
-    if (delays.length > 1) errors.push('Cada rama publicable admite una sola espera durable en esta versión.');
+    if (conditions.length > 1) fallar('Cada rama publicable admite una condición operativa en esta versión.', action.id);
+    if (delays.length > 1) fallar('Cada rama publicable admite una sola espera durable en esta versión.', action.id);
     const condition = conditions[0];
     const conditionText = condition
       ? (condition.data.conditionMode === 'always' ? 'siempre' : `prioridad == ${String(condition.data.priority ?? 'critica')}`)
       : 'siempre';
     const delaySeconds = secondsFromNode(delays[0]);
-    if (delaySeconds > 2_592_000) errors.push('La espera máxima publicable es de 30 días.');
-    if (action.data.catalogKey === 'action.notify_stakeholders') {
-      rules.push({ accion: 'notificar_interesados', condicion: conditionText, demora_segundos: delaySeconds });
+    if (delaySeconds > 2_592_000) fallar('La espera máxima publicable es de 30 días.', delays[0]?.id);
+    if (String(action.data.catalogKey) === 'action.notify_stakeholders') {
+      rules.push({ id: action.id, accion: 'notificar_interesados', condicion: conditionText, demora_segundos: delaySeconds });
       continue;
     }
 
-    const mode = action.data.catalogKey === 'action.assign_user' ? 'user' : 'team';
+    if (String(action.data.catalogKey) === 'action.change_status') {
+      // Una referencia a una transición que Catalog Builder ya no publica NO se
+      // borra en silencio: el editor la marca al cargar las transiciones y aquí
+      // bloquea la publicación. Limpiarla sola cambiaría lo que hace el flujo
+      // sin que nadie lo decidiera.
+      const ausentesEstado = Array.isArray(action.data.missingReferences) ? action.data.missingReferences as string[] : [];
+      if (ausentesEstado.length > 0) {
+        fallar(`“${String(action.data.label)}” apunta a ${ausentesEstado.join(', ')} que Catalog Builder ya no publica. Vuelve a elegir la transición.`, action.id);
+        continue;
+      }
+      const transitionKey = String(action.data.transitionKey ?? '').trim();
+      if (!transitionKey) {
+        fallar(`Elige la transición en “${String(action.data.label)}”.`, action.id);
+        continue;
+      }
+      if (transitionKey !== String(action.data.transitionKey)) {
+        fallar(`La transición de “${String(action.data.label)}” contiene espacios alrededor.`, action.id);
+        continue;
+      }
+      rules.push({
+        id: action.id,
+        accion: 'cambiar_estado_ticket',
+        condicion: conditionText,
+        demora_segundos: delaySeconds,
+        config: { transition_key: transitionKey } satisfies WorkflowStatusConfig,
+      });
+      continue;
+    }
+
+    // El modo vive en el NODO, no en la clave del catálogo: es lo que permite
+    // cambiar de equipo a persona sin recrear el bloque.
+    const mode = action.data.assignmentMode === 'user' ? 'user' : 'team';
     const departmentID = String(action.data.departmentId ?? '');
     const teamID = String(action.data.teamId ?? '');
     const assigneeUserID = String(action.data.assigneeUserId ?? '');
+
+    // Una referencia que Organization ya no reconoce NO se borra en silencio:
+    // el editor la marca al cargar el directorio y aquí bloquea la publicación.
+    // Limpiarla sola haría que un diagrama guardado cambiara de destino sin que
+    // nadie lo decidiera.
+    const ausentes = Array.isArray(action.data.missingReferences) ? action.data.missingReferences as string[] : [];
+    if (ausentes.length > 0) {
+      fallar(`“${String(action.data.label)}” apunta a ${ausentes.join(', ')} que Organization ya no reconoce. Vuelve a elegir el destino.`, action.id);
+      continue;
+    }
     if (!departmentID || !teamID || (mode === 'user' && !assigneeUserID)) {
-      errors.push(mode === 'user'
+      fallar(mode === 'user'
         ? `Completa área, equipo y persona en “${String(action.data.label)}”.`
-        : `Completa área y equipo en “${String(action.data.label)}”.`);
+        : `Completa área y equipo en “${String(action.data.label)}”.`, action.id);
       continue;
     }
     if ([departmentID, teamID, assigneeUserID].some((id) => id && id !== id.trim())) {
-      errors.push(`La asignación “${String(action.data.label)}” contiene identificadores no normalizados.`);
+      fallar(`La asignación “${String(action.data.label)}” contiene identificadores no normalizados.`, action.id);
       continue;
     }
     rules.push({
+      id: action.id,
       accion: 'asignar_automatico',
       condicion: conditionText,
       demora_segundos: delaySeconds,
@@ -176,15 +272,27 @@ export function compileVisualWorkflow(nodes: WorkflowNode[], edges: Edge[], vers
     });
   }
 
-  if (errors.length > 0) return { errors: [...new Set(errors)], warnings: [...new Set(warnings)] };
+  if (errors.length > 0) return { errors: [...new Set(errors)], warnings: [...new Set(warnings)], issues };
   const layout: WorkflowVisualLayout = {
     nodes: nodes.map(({ id, type, position, data }) => ({ id, type, position, data: { ...data } })),
     edges: edges.map(({ id, source, target, sourceHandle, targetHandle }) => ({ id, source, target, sourceHandle, targetHandle })),
   };
+
+  // El plan se compila del MISMO grafo del que salieron las reglas, así que el
+  // orden publicado es el orden dibujado. El backend lo valida entero —ciclos,
+  // nodos inalcanzables, conectores— y devuelve 422 con el motivo, que el canvas
+  // muestra junto al nodo culpable.
+  const plan = compileExecutionPlan(nodes, edges, triggers[0], rules);
+  if (!plan) {
+    fallar('El diagrama no se pudo compilar en un plan ejecutable. Revisa que todo cuelgue del disparador.');
+    return { errors: [...new Set(errors)], warnings: [...new Set(warnings)], issues };
+  }
+
   return {
     errors,
     warnings: [...new Set(warnings)],
-    payload: { categoria_id: 'INC', version, reglas: rules, layout },
+    issues,
+    payload: { categoria_id: 'INC', version, reglas: rules, layout, execution_plan: plan },
   };
 }
 
@@ -210,14 +318,11 @@ function actionFromRule(rule: WorkflowRule, position: { x: number; y: number }):
   }
   if (rule.accion === 'asignar_automatico') {
     const config = assignmentConfig(rule.config);
-    const key = config?.mode === 'user' ? 'action.assign_user' : 'action.assign_team';
-    const node = nodeFromCatalog(catalogItem(key)!, position);
-    // Una regla que ya fue publicada por el backend es ejecutable aunque el
-    // editor todavía no permita crear otra hasta disponer del directorio
-    // autenticado de Organization. El modo read-only no debe presentarla
-    // erróneamente como una idea futura ni perder sus identificadores.
+    const node = nodeFromCatalog(catalogItem('action.assign')!, position);
     node.data.supportStatus = 'operational';
-    node.data.assignmentMode = config?.mode;
+    // El modo viene de la configuración publicada, no de la clave del bloque:
+    // una regla guardada manda sobre el valor por defecto de la paleta.
+    node.data.assignmentMode = config?.mode ?? 'team';
     node.data.departmentId = config?.department_id;
     node.data.teamId = config?.team_id;
     node.data.assigneeUserId = config?.assignee_user_id;
@@ -261,7 +366,14 @@ export function graphFromDefinition(definition: WorkflowDefinition): { nodes: Wo
       condition.data.priority = rule.condicion.split('==')[1]?.trim() || 'critica';
     }
     const action = actionFromRule(rule, { x: (rule.demora_segundos ?? 0) > 0 ? 980 : 700, y });
-    action.id = `action-${rule.id}`;
+    // El id del nodo de acción ES el id de la regla, no `action-<id>`.
+    //
+    // Importa al clonar un workflow legado —sin layout— a un borrador nuevo: al
+    // publicarlo, el compilador usa el id del nodo como id de regla. Con el
+    // prefijo, la regla cambiaría de identidad, el execution_id calculado sería
+    // otro y el historial dejaría de poder seguir «la misma regla» entre
+    // versiones, que es justo lo que el modelo de familias conserva.
+    action.id = rule.id;
     nodes.push(condition, action);
     edges.push({ id: `e-trigger-${rule.id}`, source: trigger.id, target: condition.id, animated: true });
     let previous = condition.id;
@@ -277,4 +389,135 @@ export function graphFromDefinition(definition: WorkflowDefinition): { nodes: Wo
     edges.push({ id: `e-action-${rule.id}`, source: previous, target: action.id, animated: true });
   });
   return { nodes, edges };
+}
+
+/** Nodos del canvas que el plan SÍ ejecuta.
+ *
+ *  Un bloque en preparación no entra: no tiene runtime, y meterlo en el plan
+ *  haría que el backend rechazara la publicación por una acción que el canvas
+ *  ya avisa que no se publicará. Lo que sí se rechaza es tenerlo CONECTADO, y
+ *  eso lo comprueba compileVisualWorkflow antes de llegar aquí. */
+function esNodoEjecutable(node: WorkflowNode): boolean {
+  if (node.data.supportStatus !== 'operational') return false;
+  if (node.type === 'trigger') return node.data.catalogKey === 'ticket.created';
+  if (node.type === 'condition') return node.data.catalogKey === 'condition.priority';
+  if (node.type === 'delay') return node.data.catalogKey === 'control.delay';
+  if (node.type === 'action') {
+    const clave = String(node.data.catalogKey ?? '');
+    return clave === 'action.notify_stakeholders' || clave === 'action.change_status' || esAccionDeAsignacion(clave);
+  }
+  return false;
+}
+
+function conditionExpression(node: WorkflowNode): string {
+  return node.data.conditionMode === 'always'
+    ? 'siempre'
+    : `prioridad == ${String(node.data.priority ?? 'critica')}`;
+}
+
+/** accionDeNodo traduce la clave del bloque a la acción que ejecuta el runtime.
+ *
+ *  Es la misma traducción que hacen las reglas, en un solo sitio: dos tablas
+ *  para lo mismo divergen, y el plan y las reglas tienen que declarar la MISMA
+ *  acción o el backend rechaza la publicación (y con razón: ejecutaría algo
+ *  distinto de lo que el diagrama muestra). */
+function accionDeNodo(node: WorkflowNode): string | undefined {
+  const clave = String(node.data.catalogKey ?? '');
+  if (clave === 'action.notify_stakeholders') return 'notificar_interesados';
+  if (clave === 'action.change_status') return 'cambiar_estado_ticket';
+  if (esAccionDeAsignacion(clave)) return 'asignar_automatico';
+  return undefined;
+}
+
+/** Compila el diagrama en el plan ejecutable.
+ *
+ *  # Qué hace y qué no
+ *
+ *  Traduce nodos y conexiones a un grafo con identidad estable: el id de cada
+ *  nodo del plan ES el id del nodo del canvas, y para las acciones es también
+ *  el id de su regla. Eso es lo que hace que el historial sea por nodo y que
+ *  recargar el diseñador muestre exactamente lo que se ejecutó.
+ *
+ *  NO valida el grafo. Ciclos, nodos inalcanzables y conectores incompatibles
+ *  los rechaza el backend al publicar, que es el único sitio donde la
+ *  comprobación no se puede saltar: el canvas es un cliente y un cliente
+ *  siempre se puede eludir.
+ *
+ *  Devuelve undefined solo cuando no hay disparador ejecutable, porque entonces
+ *  no hay plan que compilar. */
+export function compileExecutionPlan(
+  nodes: WorkflowNode[],
+  edges: Edge[],
+  trigger: WorkflowNode | undefined,
+  rules: PublishWorkflowInput['reglas'],
+): WorkflowExecutionPlan | undefined {
+  if (!trigger) return undefined;
+
+  const ejecutables = nodes.filter(esNodoEjecutable);
+  const permitidos = new Set(ejecutables.map((node) => node.id));
+  // Solo las conexiones entre nodos ejecutables. Una que toque un bloque en
+  // preparación no se traduce: ese bloque no está en el plan y la conexión
+  // apuntaría a un nodo inexistente, que el backend rechazaría con un mensaje
+  // sobre el plan en vez de sobre el bloque.
+  const conexiones = edges.filter((edge) => permitidos.has(edge.source) && permitidos.has(edge.target));
+  const conIDDeRegla = new Set((rules ?? []).map((rule) => rule.id).filter(Boolean) as string[]);
+
+  const salidas = (id: string, rama?: 'yes' | 'no') => conexiones
+    .filter((edge) => edge.source === id)
+    .filter((edge) => {
+      if (!rama) return true;
+      // Una conexión sin handle explícito es la rama verdadera: es como se
+      // dibujaban las condiciones antes de que existiera la salida «No», y un
+      // diagrama guardado entonces tiene que seguir significando lo mismo.
+      const handle = edge.sourceHandle ?? 'yes';
+      return handle === rama;
+    })
+    // Orden estable: el backend desempata ramas independientes por id de nodo,
+    // así que emitirlas ordenadas hace que el JSON publicado sea idéntico entre
+    // guardados y que un diff del plan solo muestre cambios reales.
+    .map((edge) => edge.target)
+    .sort();
+
+  const planNodes: WorkflowPlanNode[] = [];
+  for (const node of ejecutables) {
+    if (node.type === 'trigger') {
+      planNodes.push({ id: node.id, kind: 'trigger', type: 'ticket_created', next: salidas(node.id) });
+      continue;
+    }
+    if (node.type === 'condition') {
+      const siVerdadero = salidas(node.id, 'yes');
+      const siFalso = salidas(node.id, 'no');
+      planNodes.push({
+        id: node.id,
+        kind: 'condition',
+        expression: { condicion: conditionExpression(node) },
+        ...(siVerdadero.length > 0 ? { on_true: siVerdadero } : {}),
+        ...(siFalso.length > 0 ? { on_false: siFalso } : {}),
+      });
+      continue;
+    }
+    if (node.type === 'delay') {
+      planNodes.push({
+        id: node.id, kind: 'delay',
+        delay_seconds: secondsFromNode(node),
+        next: salidas(node.id),
+      });
+      continue;
+    }
+    const accion = accionDeNodo(node);
+    // Sin regla no hay configuración que ejecutar, y el backend lo rechaza con
+    // razón. Puede pasar cuando la acción quedó fuera de las reglas por un
+    // error de validación anterior; omitirla aquí deja que el mensaje que ve la
+    // persona sea el de su bloque, no uno sobre el plan.
+    if (!accion || !conIDDeRegla.has(node.id)) continue;
+    planNodes.push({ id: node.id, kind: 'action', action: accion, next: salidas(node.id) });
+  }
+
+  return {
+    version: 1,
+    entrypoints: [trigger.id],
+    // Ordenado por id, por la misma razón que las salidas: el plan publicado
+    // tiene que ser el mismo para el mismo diagrama.
+    nodes: planNodes.sort((a, b) => a.id.localeCompare(b.id)),
+  };
 }
