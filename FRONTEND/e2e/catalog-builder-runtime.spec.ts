@@ -409,3 +409,51 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
     ),
   ).toBeFalsy();
 });
+
+test('creates and publishes a new catalog entity from the Builder', async ({ page, request }) => {
+  test.setTimeout(120_000);
+  const entityKey = `E2E${randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase()}`;
+  const entityName = `Entidad E2E ${entityKey}`;
+
+  await mockAuthenticatedAdmin(page);
+  await page.goto('/app/admin/catalog-builder');
+  await expect(page.getByTestId('catalog-builder')).toBeVisible();
+  await page.getByRole('button', { name: 'Crear entidad' }).click();
+
+  await page.getByTestId('catalog-section-general').getByLabel('Nombre visible').fill(entityName);
+  await page.getByTestId('catalog-section-general').getByLabel('Código corto').fill(entityKey);
+  await page.getByTestId('catalog-section-fields').click();
+  await expect(page.getByTestId(/^catalog-field-editor-/)).toHaveCount(1);
+  await page.getByTestId('catalog-section-workflow').click();
+  await page.getByTestId('catalog-section-relations').click();
+  await page.getByTestId('catalog-section-resources').click();
+  await page.getByTestId('catalog-section-review').click();
+
+  const saveResponse = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === '/api/v1/catalog/definitions' &&
+      response.request().method() === 'POST' && response.ok(),
+  );
+  await page.getByTestId('catalog-save-draft').click();
+  const draft = await jsonOrFailure<Definition>(await saveResponse, 'create catalog entity draft');
+  expect(draft.entityKey).toBe(entityKey);
+  expect(draft.name).toBe(entityName);
+  expect(draft.specification.fields.length).toBeGreaterThan(0);
+
+  const publishResponse = page.waitForResponse(
+    (response) => new URL(response.url()).pathname.endsWith(
+      `/catalog/definitions/${entityKey}/versions/${draft.version}/publish`,
+    ) && response.request().method() === 'POST' && response.ok(),
+  );
+  await page.getByTestId('catalog-publish').click();
+  const published = await jsonOrFailure<Definition>(await publishResponse, 'publish new catalog entity');
+  expect(published.entityKey).toBe(entityKey);
+  expect(published.status).toBe('published');
+
+  const active = await jsonOrFailure<Definition>(
+    await request.get(`${apiBaseURL}/catalog/definitions/${entityKey}`),
+    'reload published catalog entity',
+  );
+  expect(active.entityKey).toBe(entityKey);
+  expect(active.version).toBe(published.version);
+  expect(active.specification.fields).toEqual(published.specification.fields);
+});

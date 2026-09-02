@@ -29,6 +29,7 @@ import {
   type CatalogSpecification,
   type FieldDefinition,
 } from '@/features/catalog/metamodel';
+import { ApiError } from '@/lib/apiClient';
 import {
   guidedSteps,
   sectionItems,
@@ -793,7 +794,11 @@ export default function CatalogBuilder() {
               role="alert"
               className="whitespace-pre-line rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300"
             >
-              {editorError || mutationError?.message}
+              {editorError || (
+                mutationError instanceof ApiError && mutationError.issues?.length
+                  ? mutationError.issues.map((issue) => `${issue.path || 'especificación'}: ${issue.message}`).join('\n')
+                  : mutationError?.message
+              )}
             </div>
           )}
           {notice && (

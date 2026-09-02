@@ -1012,17 +1012,19 @@ function UserRow({
             </button>
           </div>
         ) : canEdit ? (
-          <button
-            onClick={() => {
-              setDraftRoleId(user.roleId ?? roles[0]?.id ?? '');
-              setDraftCompanyId(user.companyId ?? companies[0]?.id ?? '');
-              onEdit();
-            }}
-            disabled={roles.length === 0}
-            className="text-xs font-bold text-cyan-500 hover:text-cyan-400 disabled:opacity-50 disabled:text-on-surface-variant"
-          >
-            Editar acceso
-          </button>
+          <div className="flex items-center justify-end">
+            <button
+              onClick={() => {
+                setDraftRoleId(user.roleId ?? roles[0]?.id ?? '');
+                setDraftCompanyId(user.companyId ?? companies[0]?.id ?? '');
+                onEdit();
+              }}
+              disabled={roles.length === 0}
+              className="text-xs font-bold text-cyan-500 hover:text-cyan-400 disabled:opacity-50 disabled:text-on-surface-variant"
+            >
+              Editar acceso
+            </button>
+          </div>
         ) : (
           <span className="text-xs text-on-surface-variant">Solo lectura</span>
         )}

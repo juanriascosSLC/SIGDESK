@@ -76,6 +76,7 @@ export interface KnownUser {
    *  PUT /admin/users/:username/roles would 404 (ADR-0017 decisión 4:
    *  provisioning is a separate, manual step from role assignment). */
   hasAccount: boolean;
+  status: string | null;
 }
 
 export interface Company {
@@ -122,6 +123,7 @@ interface AdminUsuarioDTO {
   company_id?: string;
   ultimo_acceso?: string;
   tiene_usuario: boolean;
+  estado?: string;
 }
 
 interface CompanyDTO {
@@ -150,6 +152,7 @@ function knownUserFromDTO(dto: AdminUsuarioDTO): KnownUser {
     roleId: dto.role_id || null,
     companyId: dto.company_id || null,
     hasAccount: dto.tiene_usuario,
+    status: dto.estado ?? null,
   };
 }
 
@@ -277,4 +280,12 @@ export const rbacService = {
       method: 'PUT',
       body: JSON.stringify({ role_id: roleId }),
     }),
+
+  setUserAssignment: (username: string, companyId: string, roleId: string): Promise<void> =>
+    apiRequest<void>(`/admin/users/${encodeURIComponent(username)}/assignment`, {
+      method: 'PUT', body: JSON.stringify({ company_id: companyId, role_id: roleId }),
+    }),
+
+  revokeUserAccess: (username: string): Promise<void> =>
+    apiRequest<void>(`/admin/users/${encodeURIComponent(username)}/roles`, { method: 'DELETE' }),
 };
