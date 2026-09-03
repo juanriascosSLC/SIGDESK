@@ -42,6 +42,7 @@ import {
   resolveFormPageLayout,
 } from '@/features/catalog/runtime/form-page-normalizer';
 import { useUnsavedChangesGuard } from './catalog-builder/useUnsavedChangesGuard';
+import { ConfirmDialog } from '@/components/ui';
 import { GeneralEditor } from './catalog-builder/GeneralEditor';
 import { FieldsEditor } from './catalog-builder/FieldsEditor';
 import { TemplateDesigner } from './catalog-builder/template-designer/TemplateDesigner';
@@ -137,10 +138,13 @@ export default function CatalogBuilder() {
     };
   }, [definitionsQuery.isSuccess, grouped, selected.id, isCreatingNew]);
 
-  useUnsavedChangesGuard(
-    hasLocalChanges,
-    'Tienes cambios sin guardar en esta entidad. Si sales ahora se perderán.',
-  );
+  const unsavedGuard = useUnsavedChangesGuard(hasLocalChanges);
+  // Replaces the three window.confirm() calls this screen used to make:
+  // switching entity/version, starting a new entity, and discarding a draft.
+  const [pendingUnsavedAction, setPendingUnsavedAction] = useState<
+    { kind: 'select'; definition: CatalogDefinition } | { kind: 'new' } | null
+  >(null);
+  const [showDiscardDialog, setShowDiscardDialog] = useState(false);
 
   const saveMutation = useMutation({
     // Guardar edita EL borrador abierto de la entidad; solo crea una versión
@@ -168,7 +172,7 @@ export default function CatalogBuilder() {
       setIsCreatingNew(false);
       setActiveSection('review');
       setNotice(
-        `Borrador v${created.version} guardado. Los usuarios siguen usando la versión publicada.`,
+        `Draft v${created.version} saved. Users are still using the published version.`,
       );
     },
   });
@@ -189,7 +193,7 @@ export default function CatalogBuilder() {
         .sort((left, right) => (right.version ?? 0) - (left.version ?? 0))[0];
       if (published) selectDefinition(published, true);
       setHasLocalChanges(false);
-      setNotice('Borrador descartado. La entidad vuelve a su versión publicada.');
+      setNotice('Draft discarded. The entity is back to its published version.');
     },
   });
 
@@ -200,12 +204,12 @@ export default function CatalogBuilder() {
       );
       if (invalidField) {
         throw new Error(
-          `El campo «${invalidField.label || invalidField.key || 'sin nombre'}» necesita nombre y clave técnica antes de publicar.`,
+          `The field “${invalidField.label || invalidField.key || 'unnamed'}” needs a name and technical key before publishing.`,
         );
       }
       const fieldKeys = selected?.specification.fields.map((field) => field.key.trim()) ?? [];
       if (new Set(fieldKeys).size !== fieldKeys.length) {
-        throw new Error('Hay claves técnicas de campo repetidas. Cada campo debe tener una clave única.');
+        throw new Error('There are duplicate field technical keys. Every field must have a unique key.');
       }
       // Caught here rather than left to the backend on purpose. tickets_service
       // does reject this (ErrDefinicionConCampoSinPlacement → 422), but it
@@ -217,9 +221,9 @@ export default function CatalogBuilder() {
       const unplaced = bindingFieldsMissingFromCreateForm(selected?.specification);
       if (unplaced.length > 0) {
         throw new Error(
-          `Estos campos están vinculados a un recurso o agente IT pero no aparecen en el formulario de creación: ${unplaced
-            .map((field) => `«${field.label || field.key}»`)
-            .join(', ')}. Agrégalos en Diseño visual → Crear antes de publicar.`,
+          `These fields are linked to a resource or IT agent but don't appear on the creation form: ${unplaced
+            .map((field) => `"${field.label || field.key}"`)
+            .join(', ')}. Add them in Visual design → Create before publishing.`,
         );
       }
       const validation = await validateDefinition(entityKey, version);
@@ -240,10 +244,8 @@ export default function CatalogBuilder() {
   });
 
   function selectDefinition(definition: CatalogDefinition, force = false): boolean {
-    if (
-      !force && hasLocalChanges &&
-      !window.confirm('Tienes cambios sin guardar. Si cambias de entidad o versión se perderán. ¿Continuar?')
-    ) {
+    if (!force && hasLocalChanges) {
+      setPendingUnsavedAction({ kind: 'select', definition });
       return false;
     }
     setSelected(structuredClone(definition));
@@ -256,13 +258,7 @@ export default function CatalogBuilder() {
     return true;
   }
 
-  function startNew() {
-    if (
-      hasLocalChanges &&
-      !window.confirm('Tienes cambios sin guardar. Si creas otra entidad se perderán. ¿Continuar?')
-    ) {
-      return;
-    }
+  function performStartNew() {
     const definition = emptyDefinition();
     setSelected(definition);
     setHasLocalChanges(true);
@@ -272,6 +268,14 @@ export default function CatalogBuilder() {
     setEditorError('');
     setNotice('');
     setActiveSection('general');
+  }
+
+  function startNew() {
+    if (hasLocalChanges) {
+      setPendingUnsavedAction({ kind: 'new' });
+      return;
+    }
+    performStartNew();
   }
 
   function updateSpecification(updater: (current: CatalogSpecification) => CatalogSpecification) {
@@ -294,7 +298,7 @@ export default function CatalogBuilder() {
   function saveDraft() {
     setEditorError('');
     if (!selected.entityKey.trim() || !selected.name.trim()) {
-      setEditorError('Completa el código y el nombre de la entidad.');
+      setEditorError('Fill in the entity code and name.');
       setActiveSection('general');
       return;
     }
@@ -363,13 +367,13 @@ export default function CatalogBuilder() {
       activeSection === 'fields' &&
       specification.fields.some((field) => !field.key.trim() || !field.label.trim())
     ) {
-      return 'Todos los campos necesitan un nombre visible y una clave técnica.';
+      return 'All fields need a visible name and a technical key.';
     }
     if (
       activeSection === 'fields' &&
       new Set(specification.fields.map((field) => field.key.trim())).size !== specification.fields.length
     ) {
-      return 'Cada campo debe tener una clave técnica única.';
+      return 'Every field must have a unique technical key.';
     }
     if (
       activeSection === 'workflow' &&
@@ -399,7 +403,7 @@ export default function CatalogBuilder() {
       setEditorError('');
       setNotice('Los cambios avanzados se aplicaron al borrador local.');
     } catch {
-      setEditorError('El contenido técnico no tiene un formato válido.');
+      setEditorError('The technical content is not in a valid format.');
     }
   }
 
@@ -434,10 +438,10 @@ export default function CatalogBuilder() {
             <AlertTriangle className="h-6 w-6" />
           </div>
           <h1 className="mt-5 text-2xl font-black text-on-surface">
-            No pudimos cargar el catálogo
+            We couldn't load the catalog
           </h1>
           <p className="mt-2 text-sm leading-6 text-on-surface-variant">
-            No se modificó ninguna definición. Revisa la conexión e intenta cargar las entidades nuevamente.
+            No definition was changed. Check your connection and try loading the entities again.
           </p>
           <button
             type="button"
@@ -463,7 +467,7 @@ export default function CatalogBuilder() {
           </p>
           <h1 className="mt-2 text-3xl font-black text-on-surface">Crea tu primera entidad</h1>
           <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-on-surface-variant">
-            El asistente te guiará por la información, los campos, el diseño visual y la publicación. Podrás revisar todo antes de activarlo.
+            The wizard will guide you through the information, fields, visual design and publishing. You can review everything before it goes live.
           </p>
           <button type="button" onClick={startNew} className="primary-button mx-auto mt-7">
             <Plus className="h-4 w-4" /> Empezar con el asistente
@@ -481,11 +485,11 @@ export default function CatalogBuilder() {
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-primary text-xs font-black uppercase tracking-[0.2em] mb-2">
-            <Settings2 className="w-4 h-4" /> Configuración sin código
+            <Settings2 className="w-4 h-4" /> No-code configuration
           </div>
           <h1 className="text-3xl font-black text-on-surface">Catalog Builder</h1>
           <p className="text-sm text-on-surface-variant mt-1">
-            Define qué se captura, cómo fluye y cómo se verá cada registro.
+            Define what's captured, how it flows, and how each record will look.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -523,13 +527,7 @@ export default function CatalogBuilder() {
               {selected.status === 'draft' && selected.updatedAt && (
                 <button
                   data-testid="catalog-discard-draft"
-                  onClick={() => {
-                    if (!window.confirm('Se descartará el borrador y volverás a la versión publicada. ¿Continuar?')) return;
-                    discardMutation.mutate({
-                      entityKey: selected.entityKey,
-                      updatedAt: selected.updatedAt!,
-                    });
-                  }}
+                  onClick={() => setShowDiscardDialog(true)}
                   disabled={discardMutation.isPending}
                   className="secondary-button disabled:opacity-50"
                 >
@@ -632,7 +630,7 @@ export default function CatalogBuilder() {
                         }`}
                       >
                         <span className="text-xs font-bold text-on-surface">
-                          Versión {definition.version}
+                          Version {definition.version}
                         </span>
                         <span
                           className={`text-[10px] font-black border rounded-full px-2 py-0.5 ${statusClasses(definition.status)}`}
@@ -651,7 +649,7 @@ export default function CatalogBuilder() {
           </div>
 
           <div className="panel-card p-3.5 shadow-sm">
-            <span className="section-eyebrow px-2 font-bold text-xs uppercase tracking-wider text-on-surface-variant">Configuración</span>
+            <span className="section-eyebrow px-2 font-bold text-xs uppercase tracking-wider text-on-surface-variant">Configuration</span>
             <nav className="mt-2.5 space-y-1">
               {sectionItems.map((item) => (
                 <button
@@ -683,7 +681,7 @@ export default function CatalogBuilder() {
                 <div>
                   <p className="text-sm font-black text-on-surface">Ruta recomendada</p>
                   <p className="mt-1 text-xs leading-5 text-on-surface-variant">
-                    Ajusta los campos → organiza el diseño visual → revisa las reglas → valida y publica. Los tickets existentes conservarán su versión anterior.
+                    Adjust the fields → organize the visual design → review the rules → validate and publish. Existing tickets will keep their previous version.
                   </p>
                 </div>
               </div>
@@ -796,7 +794,7 @@ export default function CatalogBuilder() {
             >
               {editorError || (
                 mutationError instanceof ApiError && mutationError.issues?.length
-                  ? mutationError.issues.map((issue) => `${issue.path || 'especificación'}: ${issue.message}`).join('\n')
+                  ? mutationError.issues.map((issue) => `${issue.path || 'specification'}: ${issue.message}`).join('\n')
                   : mutationError?.message
               )}
             </div>
@@ -824,7 +822,7 @@ export default function CatalogBuilder() {
                   onClick={() => openSection('advanced')}
                   className="text-xs text-on-surface-variant hover:text-on-surface"
                 >
-                  Configuración técnica
+                  Technical configuration
                 </button>
                 {activeSection !== 'review' ? (
                   <button onClick={() => goToGuidedStep(1)} className="primary-button">
@@ -855,10 +853,10 @@ export default function CatalogBuilder() {
                   >
                     <Save className="w-4 h-4" />
                     {saveMutation.isPending
-                      ? 'Guardando…'
+                      ? 'Saving…'
                       : hasLocalChanges
-                        ? 'Guardar borrador'
-                        : 'Sin cambios por guardar'}
+                        ? 'Save draft'
+                        : 'No changes to save'}
                   </button>
                 )}
               </div>
@@ -866,6 +864,50 @@ export default function CatalogBuilder() {
           )}
         </main>
       </div>
+
+      <ConfirmDialog
+        open={unsavedGuard.pending}
+        onClose={unsavedGuard.cancelLeave}
+        onConfirm={unsavedGuard.confirmLeave}
+        title="Leave editor with unsaved changes?"
+        description="You have unsaved changes in this entity. If you leave now, they'll be lost."
+        confirmLabel="Leave"
+        tone="destructive"
+      />
+      <ConfirmDialog
+        open={pendingUnsavedAction !== null}
+        onClose={() => setPendingUnsavedAction(null)}
+        onConfirm={() => {
+          if (pendingUnsavedAction?.kind === 'select') {
+            selectDefinition(pendingUnsavedAction.definition, true);
+          } else if (pendingUnsavedAction?.kind === 'new') {
+            performStartNew();
+          }
+          setPendingUnsavedAction(null);
+        }}
+        title={pendingUnsavedAction?.kind === 'new' ? 'Discard changes and create a new entity?' : 'Discard changes and switch?'}
+        description={
+          pendingUnsavedAction?.kind === 'new'
+            ? "You have unsaved changes. If you create another entity now, they'll be lost."
+            : "You have unsaved changes. If you switch entity or version now, they'll be lost."
+        }
+        confirmLabel="Discard and continue"
+        tone="destructive"
+      />
+      <ConfirmDialog
+        open={showDiscardDialog}
+        onClose={() => setShowDiscardDialog(false)}
+        onConfirm={() => {
+          setShowDiscardDialog(false);
+          discardMutation.mutate({ entityKey: selected.entityKey, updatedAt: selected.updatedAt! });
+        }}
+        title="Discard draft"
+        description="The draft will be discarded and you'll go back to the published version."
+        confirmLabel="Discard draft"
+        tone="destructive"
+        loading={discardMutation.isPending}
+        error={discardMutation.error?.message}
+      />
     </div>
   );
 }

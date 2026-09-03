@@ -17,19 +17,19 @@ export function StakeholdersWidget({ context }: { context: TicketPageContext }) 
       </p>
       {loading && <p className="text-sm text-on-surface-variant">Resolviendo directorio…</p>}
       {!loading && userIds.length === 0 && unitIds.length === 0 && (
-        <p className="text-sm text-on-surface-variant">No hay personas ni áreas interesadas.</p>
+        <p className="text-sm text-on-surface-variant">No stakeholders or interested areas.</p>
       )}
       {!loading && (unitIds.length > 0 || userIds.length > 0) && (
         <div className="space-y-4">
           {unitIds.length > 0 && (
             <div>
               <p className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wide text-on-surface-variant">
-                <Building2 className="h-3.5 w-3.5" /> Áreas / equipos
+                <Building2 className="h-3.5 w-3.5" /> Areas / teams
               </p>
               <div className="flex flex-wrap gap-2">
                 {unitIds.map((id, index) => (
                   <span key={id} className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs text-on-surface">
-                    {units[index]?.name ?? 'Área interesada'}
+                    {units[index]?.name ?? 'Interested area'}
                   </span>
                 ))}
               </div>

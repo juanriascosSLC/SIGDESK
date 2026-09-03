@@ -7,8 +7,9 @@ import { useNavigate } from 'react-router-dom';
 import TicketsList from './TicketsList';
 import { useTickets, useUpdateTicketStatus } from './hooks';
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { EmptyState, ErrorState } from '@/components/ui/states';
 import { useAuth } from '@/features/auth/useAuth';
+import { useToast } from '@/components/ui';
 
 type StatusStyle = { icon: LucideIcon; color: string; bgColor: string };
 
@@ -173,6 +174,7 @@ export default function TicketsKanban() {
   const [dragOverStatus, setDragOverStatus] = useState<TicketStatus | null>(null);
   const { displayName: currentUserName } = useAuth();
   const updateStatus = useUpdateTicketStatus();
+  const toast = useToast();
   const filters = useMemo(
     () => ({ site: site || undefined, assignee: assignee || undefined, limit: 200 }),
     [site, assignee],
@@ -203,20 +205,7 @@ export default function TicketsKanban() {
   }
 
   if (isError) {
-    return (
-      <EmptyState
-        title="Could not load tickets"
-        description={error.message}
-        action={
-          <button
-            onClick={() => void refetch()}
-            className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold"
-          >
-            Try again
-          </button>
-        }
-      />
-    );
+    return <ErrorState title="Could not load tickets" description={error.message} onRetry={() => void refetch()} />;
   }
 
   const hasActiveFilters = Boolean(site || assignee);
@@ -224,7 +213,7 @@ export default function TicketsKanban() {
   if (tickets.length === 0 && !hasActiveFilters) {
     return (
       <EmptyState
-        type="inbox"
+        icon="inbox"
         title="No tickets yet"
         description="Create the first request from the service catalog."
       />
@@ -302,6 +291,7 @@ export default function TicketsKanban() {
 
       {tickets.length === 0 && hasActiveFilters ? (
         <EmptyState
+          icon="search"
           title="No tickets match these filters"
           description="Try a different site or assignee, or clear the filters."
           action={
@@ -329,7 +319,10 @@ export default function TicketsKanban() {
                 if (!ticket || ticket.status === newStatus) return;
                 updateStatus.mutate(
                   { id: ticketId, status: newStatus, actorName: currentUserName },
-                  { onError: (err) => window.alert(err.message) },
+                  {
+                    onError: (err) =>
+                      toast.show({ tone: 'error', title: "Couldn't update status", description: err.message }),
+                  },
                 );
               }}
             />

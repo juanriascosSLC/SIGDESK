@@ -25,7 +25,11 @@ export function GeneralEditor({
   }
 
   return (
-    <section className="panel-card p-6 lg:p-8">
+    // `catalog-panel-general` identifica el PANEL. El testid parecido
+    // `catalog-section-general` está en el botón de navegación, y una prueba que
+    // buscaba los campos dentro de él no podía encontrarlos nunca: son cosas
+    // distintas y ahora cada una tiene su nombre.
+    <section data-testid="catalog-panel-general" className="panel-card p-6 lg:p-8">
       <SectionHeading
         icon={<Info className="w-5 h-5" />}
         title="Información general"
@@ -73,7 +77,7 @@ export function GeneralEditor({
               Lo usamos internamente para numerar y conectar la entidad.
             </p>
           </div>
-          <code className="text-sm font-black text-primary">{selected.entityKey || '—'}</code>
+          <code data-testid="catalog-entity-key" className="text-sm font-black text-primary">{selected.entityKey || '—'}</code>
         </div>
       )}
       <div className="mt-5">

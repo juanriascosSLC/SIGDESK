@@ -48,7 +48,7 @@ function FullScreenLoader() {
       <div className="flex flex-col items-center gap-4">
         <div className="w-10 h-10 rounded-full border-2 border-cyan-500/30 border-t-cyan-400 animate-spin" />
         <p className="text-xs font-mono uppercase tracking-[0.3em] text-cyan-500/70">
-          Verificando sesión
+          Verifying session
         </p>
       </div>
     </div>
@@ -154,6 +154,7 @@ function AppRoutes() {
           <EndUserLayout>
             <Routes>
               <Route path="/" element={<EndUserDashboard />} />
+              <Route path="/catalog" element={<ServiceCatalog />} />
               <Route path="/catalog/:categoryId" element={<CatalogForm />} />
               <Route path="/knowledge" element={<KnowledgeBase />} />
               <Route path="/knowledge/:id" element={<ArticleDetail />} />
@@ -313,8 +314,23 @@ function AppRoutes() {
                   <SlaPolicies />
                 </ProtectedRoute>
               } />
-              <Route path="/settings/chatops" element={<ChatOps />} />
-              <Route path="/settings/api-keys" element={<ApiKeys />} />
+              {/* Neither route has a canonical chatops or apikeys permission on
+                  the backend — both screens are also fully non-functional
+                  placeholders (see ChatOps.tsx / ApiKeys.tsx) with no data to
+                  protect yet. Gated on canManageUsersAndRoles, the same
+                  capability the sidebar already nav-gates them behind, so
+                  this is consistency, not a new restriction. Replace with a
+                  real capability check once one exists on the backend. */}
+              <Route path="/settings/chatops" element={
+                <ProtectedRoute requireCondition={canManageUsersAndRoles} fallbackTo="/app">
+                  <ChatOps />
+                </ProtectedRoute>
+              } />
+              <Route path="/settings/api-keys" element={
+                <ProtectedRoute requireCondition={canManageUsersAndRoles} fallbackTo="/app">
+                  <ApiKeys />
+                </ProtectedRoute>
+              } />
 
               <Route path="*" element={<div className="p-8 text-on-surface-variant">Module in development...</div>} />
             </Routes>

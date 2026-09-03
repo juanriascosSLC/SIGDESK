@@ -43,7 +43,7 @@ export default function EndUserLayout({ children }: { children: React.ReactNode 
 
           {/* Nav Links */}
           <nav className="flex items-center gap-2">
-            <NavItem active={currentPath === '/portal'} to="/portal" icon={FolderKanban} label="Service Catalog" />
+            <NavItem active={currentPath.startsWith('/portal/catalog')} to="/portal/catalog" icon={FolderKanban} label="Service Catalog" />
             <NavItem active={currentPath.startsWith('/portal/knowledge')} to="/portal/knowledge" icon={BookOpen} label="Knowledge Base" />
             <NavItem active={currentPath.startsWith('/portal/tickets')} to="/portal/tickets" icon={TicketIcon} label="My Tickets" />
           </nav>

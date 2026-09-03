@@ -412,16 +412,27 @@ test('publishes Catalog Builder changes and preserves historical ticket manifest
 
 test('creates and publishes a new catalog entity from the Builder', async ({ page, request }) => {
   test.setTimeout(120_000);
-  const entityKey = `E2E${randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase()}`;
-  const entityName = `Entidad E2E ${entityKey}`;
+  // El nombre es lo unico que se teclea. El codigo corto lo DERIVA el asistente
+  // —el unico camino del producto para crear una entidad nueva— y lo muestra
+  // como identificador automatico, sin campo editable; se lee de ahi.
+  const entityName = `Entidad E2E ${randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase()}`;
 
   await mockAuthenticatedAdmin(page);
   await page.goto('/app/admin/catalog-builder');
   await expect(page.getByTestId('catalog-builder')).toBeVisible();
   await page.getByRole('button', { name: 'Crear entidad' }).click();
 
-  await page.getByTestId('catalog-section-general').getByLabel('Nombre visible').fill(entityName);
-  await page.getByTestId('catalog-section-general').getByLabel('Código corto').fill(entityKey);
+  // El PANEL, no el boton de navegacion: `catalog-section-general` marca el
+  // paso del asistente, asi que buscar los campos dentro de el no resolvia
+  // nunca y la prueba moria por timeout señalando al sitio equivocado.
+  await page.getByTestId('catalog-panel-general').getByLabel('Nombre visible').fill(entityName);
+
+  // Lo que se comprueba es que el identificador que el asistente MUESTRA es el
+  // que termina persistido: teclear uno propio ya no es posible, y afirmar
+  // sobre el valor visible es una comprobacion mas fuerte que afirmar sobre uno
+  // elegido por la prueba.
+  const entityKey = (await page.getByTestId('catalog-entity-key').innerText()).trim();
+  expect(entityKey).toMatch(/^[A-Z0-9_]+$/);
   await page.getByTestId('catalog-section-fields').click();
   await expect(page.getByTestId(/^catalog-field-editor-/)).toHaveCount(1);
   await page.getByTestId('catalog-section-workflow').click();
@@ -430,7 +441,11 @@ test('creates and publishes a new catalog entity from the Builder', async ({ pag
   await page.getByTestId('catalog-section-review').click();
 
   const saveResponse = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === '/api/v1/catalog/definitions' &&
+    // Sin el prefijo `/api/v1`: la aplicacion llama a Kong en
+    // `/catalog/definitions` —como el resto de esperas de este archivo—, asi que
+    // el predicado no casaba nunca y la prueba expiraba pese a que el guardado
+    // habia funcionado.
+    (response) => new URL(response.url()).pathname === '/catalog/definitions' &&
       response.request().method() === 'POST' && response.ok(),
   );
   await page.getByTestId('catalog-save-draft').click();

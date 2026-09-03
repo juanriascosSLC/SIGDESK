@@ -9,6 +9,7 @@ import {
   listAvailableResources,
   type CatalogSpecification,
 } from '@/features/catalog/metamodel';
+import { AutomationsBindingsEditor } from './AutomationsBindingsEditor';
 import { bindingKinds } from './config';
 import {
   EmptyMessage,
@@ -26,15 +27,29 @@ export function ResourcesEditor({
   updateSpecification: (updater: (current: CatalogSpecification) => CatalogSpecification) => void;
   guided?: boolean;
 }) {
-  const bindings = specification.bindings ?? [];
+  // Las automatizaciones tienen su propia sección (ADR-0039): su referencia
+  // apunta a una versión publicada exacta, admiten varias a la vez y pueden
+  // quedar apagadas sin quitarse. Editarlas también aquí dejaría dos sitios que
+  // escriben el mismo binding con reglas distintas.
+  const bindings = (specification.bindings ?? [])
+    .map((binding, index) => ({ binding, index }))
+    .filter(({ binding }) => !(binding.module === 'automations' && binding.resourceType === 'workflow'));
   const resourcesQuery = useQuery({
     queryKey: ['catalog-resources'],
     queryFn: listAvailableResources,
   });
   const availableResources = resourcesQuery.data ?? [];
 
+  // La clase «Automatización» se excluye del selector genérico: su vinculación
+  // vive en AutomationsBindingsEditor.
+  const clasesGenericas = bindingKinds.filter(
+    (kind) => !(kind.module === 'automations' && kind.resourceType === 'workflow'),
+  );
+
   function addBinding() {
-    const first = availableResources[0];
+    const first = availableResources.find(
+      (resource) => resource.reference.module !== 'automations',
+    );
     if (!first) return;
     updateSpecification((current) => {
       current.bindings = [
@@ -53,6 +68,8 @@ export function ResourcesEditor({
   }
 
   return (
+    <div className="space-y-6">
+    <AutomationsBindingsEditor specification={specification} updateSpecification={updateSpecification} />
     <section className="panel-card p-6 lg:p-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <SectionHeading
@@ -94,7 +111,7 @@ export function ResourcesEditor({
         />
       ) : (
         <div className="space-y-3 mt-6">
-          {bindings.map((binding, index) => {
+          {bindings.map(({ binding, index }) => {
             const selectedKind = bindingKinds.find(
               (item) =>
                 item.module === binding.module && item.resourceType === binding.resourceType,
@@ -141,7 +158,7 @@ export function ResourcesEditor({
                       className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
                       style={{ colorScheme: 'dark' }}
                     >
-                      {bindingKinds.map((kind) => (
+                      {clasesGenericas.map((kind) => (
                         <option
                           key={`${kind.module}:${kind.resourceType}`}
                           value={`${kind.module}:${kind.resourceType}`}
@@ -237,5 +254,6 @@ export function ResourcesEditor({
         </div>
       )}
     </section>
+    </div>
   );
 }

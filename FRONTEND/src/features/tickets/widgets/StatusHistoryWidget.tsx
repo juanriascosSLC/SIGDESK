@@ -13,7 +13,7 @@ export function StatusHistoryWidget({ context }: { context: TicketPageContext })
         Historial de estado
       </h3>
       {entries.length === 0 ? (
-        <p className="text-sm italic text-on-surface-variant">Sin cambios de estado todavía.</p>
+        <p className="text-sm italic text-on-surface-variant">No status changes yet.</p>
       ) : (
         <div className="space-y-2">
           {entries.map((entry) => {

@@ -27,7 +27,29 @@ async function creationBindings(request: APIRequestContext) {
   expect(agentsResponse.ok(), `Could not load IT agents: ${await agentsResponse.text()}`).toBeTruthy();
   const rawAgents = await agentsResponse.json() as Array<{ id: string }> | { items?: Array<{ id: string }> };
   const agents = Array.isArray(rawAgents) ? rawAgents : rawAgents.items ?? [];
-  return { recursoId: recursoId!, siteDisplayName: sites.items?.[0]?.displayName, agenteItId: agents[0]?.id };
+
+  // Un destino organizacional REAL (area + equipo), que es lo que pide la
+  // asignación desde ADR-0037. Lo resuelve Organization, dueño del árbol: el
+  // equipo tiene que pertenecer de verdad al área, y por eso se toma el par
+  // que el directorio ya relaciona en vez de combinar dos ids a mano.
+  const directoryResponse = await request.get(`${apiBaseURL}/organization/assignment-directory`);
+  expect(
+    directoryResponse.ok(),
+    `Could not load the assignment directory: ${await directoryResponse.text()}`,
+  ).toBeTruthy();
+  const directory = await directoryResponse.json() as {
+    teams?: Array<{ id: string; department_id: string }>;
+  };
+  const team = directory.teams?.[0];
+  expect(team, 'At least one team is required to assign organizationally').toBeTruthy();
+
+  return {
+    recursoId: recursoId!,
+    siteDisplayName: sites.items?.[0]?.displayName,
+    agenteItId: agents[0]?.id,
+    departmentId: team!.department_id,
+    teamId: team!.id,
+  };
 }
 
 async function seedIncident(request: APIRequestContext): Promise<SeededEntity> {
@@ -210,11 +232,30 @@ test('an incident walks its full historical lifecycle: open -> in progress -> pe
   await expect(select).toHaveValue('Open');
   await expect(page.getByTestId('ticket-reopen-button')).toHaveCount(0);
 
-  expect(binding.agenteItId, 'The lifecycle needs an IT agent for the initial assignment').toBeTruthy();
-  page.once('dialog', (dialog) => dialog.accept(binding.agenteItId));
+  // Sin agente y sin diálogo: pasar a «In Progress» cambia SOLO el estado
+  // (ADR-0040). Antes esta transición desviaba a la asignación y pedía un
+  // AgenteIT por `window.prompt`, así que el recorrido del ciclo de vida no se
+  // podía andar sin tener uno a mano — y de paso reasignaba el ticket.
   await changeStatusAndWait(page, 'In Progress');
   await changeStatusAndWait(page, 'Pending Review');
   await changeStatusAndWait(page, 'In Progress');
+
+  // Asignar es un comando APARTE, y aquí hace falta: resolver exige un
+  // responsable (ErrSinResponsableAsignado). Antes esta línea no existía porque
+  // pasar a «In Progress» asignaba de paso; ahora la separación obliga a
+  // pedirlo, que es justamente lo que se quería (ADR-0040).
+  //
+  // Se usa la ruta organizacional, que NO toca el estado: el ticket ya está en
+  // progreso y una asignación que además transicionara fallaría.
+  const assignResponse = await request.post(
+    `${apiBaseURL}/entities/INC/${entity.id}/assignment`,
+    { data: { department_id: binding.departmentId, team_id: binding.teamId } },
+  );
+  expect(
+    assignResponse.ok(),
+    `Could not assign before resolving: ${await assignResponse.text()}`,
+  ).toBeTruthy();
+
   await changeStatusAndWait(page, 'Resolved');
 
   // Exact destination set at Resolved: the lifecycle only declares

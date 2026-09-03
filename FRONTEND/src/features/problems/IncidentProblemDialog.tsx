@@ -38,7 +38,7 @@ function initialProblemData(
   return {
     ...data,
     title: `Problema recurrente: ${ticket.title}`,
-    description: `Investigación de causa raíz iniciada desde ${ticket.id}. ${ticket.description}`,
+    description: `Root-cause investigation started from ${ticket.id}. ${ticket.description}`,
     impact: ['low', 'medium', 'high', 'critical'].includes(priority)
       ? priority
       : 'medium',
@@ -101,11 +101,11 @@ export function IncidentProblemDialog({
 
   const workflowMutation = useMutation({
     mutationFn: async (existing?: EntityRecord) => {
-      if (!ticket.entityId) throw new Error('El ticket no está vinculado a una entidad INC.');
+      if (!ticket.entityId) throw new Error('This ticket is not linked to an INC entity.');
       let problem = existing;
       if (!problem) {
         const specification = definitionQuery.data?.specification;
-        if (!specification) throw new Error('La definición PRB no está disponible.');
+        if (!specification) throw new Error('The PRB definition is not available.');
         const data: Record<string, unknown> = {};
         for (const field of specification.fields) {
           if (!isFieldVisible(field, formData)) continue;
@@ -149,7 +149,7 @@ export function IncidentProblemDialog({
             </div>
             <h2 className="text-xl font-black text-on-surface">Gestionar problema asociado</h2>
             <p className="mt-1 text-xs text-on-surface-variant">
-              El incidente permanece en Tickets; la investigación de causa raíz se administra como PRB.
+              The incident stays in Tickets; the root-cause investigation is managed as a PRB.
             </p>
           </div>
           <button type="button" onClick={onClose} className="rounded-xl p-2 text-on-surface-variant hover:bg-surface-container" aria-label="Cerrar">

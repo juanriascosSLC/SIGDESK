@@ -45,7 +45,7 @@ export function MergedTicketsWidget({ context }: { context: TicketPageContext })
           ))}
           {mergedTickets.items.length === 0 && (
             <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-300">
-              El contador indica tickets combinados, pero la relación no devolvió registros.
+              The counter shows merged tickets, but the relation didn't return any records.
             </div>
           )}
         </div>

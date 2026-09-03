@@ -15,7 +15,7 @@ export function AssetDetailsWidget({ context }: { context: TicketPageContext }) 
           <Server className="h-5 w-5 text-primary" /> Activos relacionados
         </h2>
         <p className="mt-1 text-xs text-on-surface-variant">
-          Snapshot histórico capturado desde Assets / CMDB al crear el registro
+          Historical snapshot captured from Assets / CMDB when the record was created
         </p>
       </div>
       {links.length ? (

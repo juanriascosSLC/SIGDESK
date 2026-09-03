@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { DynamicField } from '@/features/catalog/DynamicField';
+import { Select } from '@/components/ui';
 import {
   isFieldRequired,
   isFieldVisible,
@@ -31,14 +32,14 @@ import {
 } from './presentation';
 
 const boardColumns = [
-  { key: 'draft', label: 'Borradores', states: ['draft'] },
-  { key: 'assessment', label: 'Evaluación', states: ['assessment'] },
+  { key: 'draft', label: 'Drafts', states: ['draft'] },
+  { key: 'assessment', label: 'Assessment', states: ['assessment'] },
   { key: 'cab', label: 'CAB', states: ['pending_approval'] },
-  { key: 'approved', label: 'Aprobados', states: ['approved', 'scheduled'] },
-  { key: 'execution', label: 'Ejecución', states: ['implementing'] },
+  { key: 'approved', label: 'Approved', states: ['approved', 'scheduled'] },
+  { key: 'execution', label: 'Execution', states: ['implementing'] },
   {
     key: 'closed',
-    label: 'Finalizados',
+    label: 'Closed',
     states: ['completed', 'failed', 'rolled_back', 'closed', 'rejected'],
   },
 ];
@@ -152,12 +153,12 @@ export default function ChangeBoard() {
           <div>
             <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.22em] text-primary">
               <ShieldCheck className="h-4 w-4" />
-              Gobierno de cambios
+              Change governance
             </div>
             <h1 className="text-3xl font-black text-on-surface">Change Management</h1>
             <p className="mt-2 max-w-3xl text-sm text-on-surface-variant">
-              Solicitudes RFC versionadas por Catalog Builder, con riesgo calculado,
-              aprobación CAB y ejecución controlada.
+              RFC requests versioned by Catalog Builder, with calculated risk,
+              CAB approval and controlled execution.
             </p>
           </div>
           {can(PERMISSIONS.changesCreate) && (
@@ -203,22 +204,23 @@ export default function ChangeBoard() {
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar por RFC, título, servicio o solicitante…"
+              placeholder="Search by RFC, title, service or requester…"
               className="w-full bg-transparent py-3 text-sm text-on-surface placeholder:text-on-surface-variant/50 outline-none"
             />
           </label>
-          <select
+          <Select
+            aria-label="Filter by risk"
             value={riskFilter}
             onChange={(event) => setRiskFilter(event.target.value)}
-            className="friendly-input max-w-[220px] rounded-2xl border-border/50 cursor-pointer bg-[#1d2026] text-[#e1e2eb]"
-            style={{ colorScheme: 'dark' }}
-          >
-            <option value="" className="bg-[#191c22] text-[#e1e2eb]">Todos los riesgos</option>
-            <option value="low" className="bg-[#191c22] text-[#e1e2eb]">Riesgo bajo</option>
-            <option value="medium" className="bg-[#191c22] text-[#e1e2eb]">Riesgo medio</option>
-            <option value="high" className="bg-[#191c22] text-[#e1e2eb]">Riesgo alto</option>
-            <option value="critical" className="bg-[#191c22] text-[#e1e2eb]">Riesgo crítico</option>
-          </select>
+            className="max-w-[220px]"
+            options={[
+              { value: '', label: 'All risk levels' },
+              { value: 'low', label: 'Low risk' },
+              { value: 'medium', label: 'Medium risk' },
+              { value: 'high', label: 'High risk' },
+              { value: 'critical', label: 'Critical risk' },
+            ]}
+          />
         </div>
 
         {changesQuery.isLoading && (
@@ -268,10 +270,10 @@ export default function ChangeBoard() {
                             </span>
                           </div>
                           <h3 className="line-clamp-2 text-sm font-bold text-on-surface leading-snug group-hover:text-primary transition-colors">
-                            {textData(change, 'title') || 'RFC sin título'}
+                            {textData(change, 'title') || 'Untitled RFC'}
                           </h3>
                           <p className="mt-2 line-clamp-1 text-xs text-on-surface-variant/80 font-medium">
-                            {textData(change, 'serviceAffected') || 'Sin servicio informado'}
+                            {textData(change, 'serviceAffected') || 'No service reported'}
                           </p>
                           <div className="mt-3.5 flex items-center justify-between gap-2 border-t border-border/30 pt-3">
                             <span className={`rounded-lg border px-2.5 py-0.5 text-[10px] font-extrabold uppercase ${changeStateStyles[change.state] ?? changeStateStyles.draft}`}>
@@ -305,9 +307,9 @@ export default function ChangeBoard() {
           >
             <div className="sticky top-0 z-10 flex items-start justify-between border-b border-border/40 bg-surface-container-low/95 p-6 backdrop-blur-md">
               <div>
-                <h2 className="text-xl font-black text-on-surface">Crear solicitud de cambio</h2>
+                <h2 className="text-xl font-black text-on-surface">Create change request</h2>
                 <p className="mt-1 text-xs text-on-surface-variant">
-                  Formulario generado desde RFC v{definitionQuery.data?.version}. El riesgo se calcula en el módulo de Change Management.
+                  Form generated from RFC v{definitionQuery.data?.version}. Risk is calculated by the Change Management module.
                 </p>
               </div>
               <button

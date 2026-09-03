@@ -42,10 +42,11 @@ import {
 } from './presentation';
 import { ChangeTasksBoard } from './ChangeTasksBoard';
 import { ConfiguredRecordDetail } from '@/features/tickets/ConfiguredRecordDetail';
+import { ConfirmDialog } from '@/components/ui';
 
 function fieldValue(field: FieldDefinition, value: unknown): string {
   if (value === null || value === undefined || value === '') return '—';
-  if (field.type === 'boolean') return value ? 'Sí' : 'No';
+  if (field.type === 'boolean') return value ? 'Yes' : 'No';
   if (field.type === 'date') {
     const date = new Date(`${String(value)}T00:00:00`);
     return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
@@ -89,6 +90,7 @@ export default function ChangeDetail() {
   const queryClient = useQueryClient();
   const { can, displayName } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
+  const [pendingTransition, setPendingTransition] = useState<TransitionDefinition | null>(null);
   const [editData, setEditData] = useState<Record<string, unknown>>({});
   const [notice, setNotice] = useState('');
 
@@ -120,28 +122,27 @@ export default function ChangeDetail() {
       void queryClient.invalidateQueries({ queryKey: ['changes'] });
       setEditData(structuredClone(updated.data));
       setIsEditing(false);
-      setNotice('Datos actualizados y riesgo recalculado.');
+      setNotice('Data updated and risk recalculated.');
     },
   });
+  // "reject" and "complete"/"fail" need a value collected from a person
+  // before they can proceed (a justification, or an implementation result) —
+  // everything else applies immediately.
+  function transitionNeedsValue(key: string): boolean {
+    return key === 'reject' || key === 'complete' || key === 'fail';
+  }
+
   const transitionMutation = useMutation({
-    mutationFn: async (transition: TransitionDefinition) => {
+    mutationFn: async ({ transition, value }: { transition: TransitionDefinition; value?: string }) => {
       let current = changeQuery.data!;
       let data = current.data;
       if (transition.key === 'reject') {
-        const reason = window.prompt('Justificación obligatoria del rechazo:');
-        if (!reason?.trim()) throw new Error('El rechazo requiere una justificación.');
-        data = { ...data, approvalNotes: reason.trim() };
+        data = { ...data, approvalNotes: value };
         current = await updateChange(current.id, data, current.updatedAt);
         queryClient.setQueryData(['changes', id], current);
       }
-      if (['complete', 'fail'].includes(transition.key)) {
-        const result = window.prompt(
-          transition.key === 'complete'
-            ? 'Describe el resultado y las validaciones realizadas:'
-            : 'Describe la falla observada y el estado actual:',
-        );
-        if (!result?.trim()) throw new Error('Debes registrar el resultado de implementación.');
-        data = { ...current.data, implementationResult: result.trim() };
+      if (transition.key === 'complete' || transition.key === 'fail') {
+        data = { ...current.data, implementationResult: value };
         current = await updateChange(current.id, data, current.updatedAt);
         queryClient.setQueryData(['changes', id], current);
       }
@@ -150,9 +151,20 @@ export default function ChangeDetail() {
     onSuccess: (updated) => {
       queryClient.setQueryData(['changes', id], updated);
       void queryClient.invalidateQueries({ queryKey: ['changes'] });
-      setNotice(`Estado actualizado a ${changeStateLabels[updated.state] ?? updated.state}.`);
+      setPendingTransition(null);
+      setNotice(`Status updated to ${changeStateLabels[updated.state] ?? updated.state}.`);
     },
   });
+
+  function requestTransition(transition: TransitionDefinition) {
+    if (transitionNeedsValue(transition.key)) {
+      setPendingTransition(transition);
+      return;
+    }
+    transitionMutation.reset();
+    setNotice('');
+    transitionMutation.mutate({ transition });
+  }
   const deleteRelationMutation = useMutation({
     mutationFn: (relationId: string) => deleteChangeRelation(id!, relationId),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['changes', id, 'relations'] }),
@@ -234,7 +246,7 @@ export default function ChangeDetail() {
   const change = changeQuery.data;
   const specification = manifestQuery.data.specification;
   const risk = textData(change, 'riskLevel') || 'medium';
-  const riskLabel: Record<string, string> = { low: 'Bajo', medium: 'Medio', high: 'Alto', critical: 'Crítico' };
+  const riskLabel: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High', critical: 'Critical' };
   const availableTransitions = specification.lifecycle.transitions.filter(
     (transition) =>
       transition.from === change.state &&
@@ -275,12 +287,12 @@ export default function ChangeDetail() {
     <form onSubmit={submitEdit} className="rounded-3xl border border-primary/30 bg-surface-container-low p-6">
       <div className="flex items-start justify-between border-b border-border/40 pb-4">
         <div>
-          <h2 className="font-black text-on-surface">Editar RFC</h2>
+          <h2 className="font-black text-on-surface">Edit RFC</h2>
           <p className="mt-1 text-xs text-on-surface-variant">
-            Campos interpretados desde la definición inmutable v{change.definitionVersion}.
+            Fields interpreted from the immutable definition v{change.definitionVersion}.
           </p>
         </div>
-        <button type="button" onClick={() => setIsEditing(false)} className="rounded-lg p-2 text-on-surface-variant" aria-label="Cancelar edición">
+        <button type="button" onClick={() => setIsEditing(false)} className="rounded-lg p-2 text-on-surface-variant" aria-label="Cancel editing">
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -307,13 +319,14 @@ export default function ChangeDetail() {
 
   if (specification.detailPage) {
     return (
+      <>
       <ConfiguredRecordDetail
         record={change}
         specification={specification}
         currentUserName={displayName}
         relations={relationsQuery.data ?? []}
         transitions={availableTransitions}
-        onTransition={(transition) => transitionMutation.mutate(transition)}
+        onTransition={(transition) => requestTransition(transition)}
         transitionPending={transitionMutation.isPending}
         transitionError={transitionMutation.error?.message}
         canEdit={can(PERMISSIONS.changesEdit)}
@@ -331,6 +344,38 @@ export default function ChangeDetail() {
         onBack={() => navigate('/app/changes')}
         onNavigate={navigate}
       />
+      <ConfirmDialog
+        open={pendingTransition !== null}
+        onClose={() => setPendingTransition(null)}
+        onConfirm={(value) => {
+          if (pendingTransition) transitionMutation.mutate({ transition: pendingTransition, value });
+        }}
+        title={
+          pendingTransition?.key === 'reject'
+            ? 'Reject RFC'
+            : pendingTransition?.key === 'complete'
+              ? 'Complete implementation'
+              : 'Report implementation failure'
+        }
+        description={
+          pendingTransition?.key === 'reject'
+            ? 'A justification is required to reject this RFC.'
+            : 'Describe the result and validations performed.'
+        }
+        confirmLabel={pendingTransition?.label ?? 'Confirm'}
+        tone={pendingTransition?.key === 'reject' || pendingTransition?.key === 'fail' ? 'destructive' : 'default'}
+        loading={transitionMutation.isPending}
+        error={pendingTransition ? transitionMutation.error?.message : undefined}
+        reasonLabel={pendingTransition?.key === 'reject' ? 'Justification for rejection' : 'Implementation result'}
+        reasonPlaceholder={
+          pendingTransition?.key === 'reject'
+            ? 'Why is this RFC being rejected?'
+            : pendingTransition?.key === 'complete'
+              ? 'Describe the result and validations performed…'
+              : 'Describe the observed failure and current state…'
+        }
+      />
+      </>
     );
   }
 
@@ -342,7 +387,7 @@ export default function ChangeDetail() {
           className="mb-6 flex items-center gap-2 text-sm font-bold text-on-surface-variant hover:text-primary"
         >
           <ArrowLeft className="h-4 w-4" />
-          Volver al tablero
+          Back to board
         </button>
 
         <header className="mb-6 rounded-3xl border border-border/40 bg-surface-container-low p-6 lg:p-8">
@@ -356,11 +401,11 @@ export default function ChangeDetail() {
                   {changeStateLabels[change.state] ?? change.state}
                 </span>
                 <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase ${riskStyles[risk] ?? riskStyles.medium}`}>
-                  Riesgo {riskLabel[risk] ?? risk}
+                  Risk: {riskLabel[risk] ?? risk}
                 </span>
               </div>
               <h1 className="text-3xl font-black text-on-surface">
-                {textData(change, 'title') || 'Solicitud de cambio'}
+                {textData(change, 'title') || 'Change request'}
               </h1>
               <p className="mt-3 max-w-4xl text-sm leading-6 text-on-surface-variant">
                 {textData(change, 'description')}
@@ -373,7 +418,7 @@ export default function ChangeDetail() {
                 className="secondary-button disabled:opacity-40"
               >
                 <Pencil className="h-4 w-4" />
-                Editar datos
+                Edit data
               </button>
             )}
           </div>
@@ -382,11 +427,7 @@ export default function ChangeDetail() {
             {availableTransitions.map((transition) => (
               <button
                 key={transition.key}
-                onClick={() => {
-                  transitionMutation.reset();
-                  setNotice('');
-                  transitionMutation.mutate(transition);
-                }}
+                onClick={() => requestTransition(transition)}
                 disabled={transitionMutation.isPending || isEditing}
                 className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-bold transition disabled:opacity-40 ${transitionStyle(transition.key)}`}
               >
@@ -419,7 +460,7 @@ export default function ChangeDetail() {
               {actionError instanceof ApiError &&
               actionError.status === 409 &&
               /cambi|concurr/i.test(actionError.message)
-                ? 'La RFC cambió mientras la editabas. Recarga la página antes de continuar.'
+                ? 'This RFC changed while you were editing it. Reload the page before continuing.'
                 : actionError.message}
             </span>
           </div>
@@ -432,16 +473,16 @@ export default function ChangeDetail() {
           >
             <div className="flex items-start justify-between border-b border-border/40 pb-4">
               <div>
-                <h2 className="font-black text-on-surface">Editar RFC</h2>
+                <h2 className="font-black text-on-surface">Edit RFC</h2>
                 <p className="mt-1 text-xs text-on-surface-variant">
-                  Campos interpretados desde la definición inmutable v{change.definitionVersion}.
+                  Fields interpreted from the immutable definition v{change.definitionVersion}.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsEditing(false)}
                 className="rounded-lg p-2 text-on-surface-variant hover:bg-on-surface/5"
-                aria-label="Cancelar edición"
+                aria-label="Cancel editing"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -514,7 +555,7 @@ export default function ChangeDetail() {
         <section className="mb-6 rounded-3xl border border-border/40 bg-surface-container-low p-6">
           <div className="mb-5 flex items-center gap-2">
             <FileCheck2 className="h-5 w-5 text-primary" />
-            <h2 className="font-black text-on-surface">Definición y plan del cambio</h2>
+            <h2 className="font-black text-on-surface">Change definition and plan</h2>
           </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {detailFields.map(({ field, placement }) => (
@@ -537,19 +578,19 @@ export default function ChangeDetail() {
           <section className="rounded-3xl border border-border/40 bg-surface-container-low p-6">
             <div className="mb-4 flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-primary" />
-              <h2 className="font-black text-on-surface">Trazabilidad</h2>
+              <h2 className="font-black text-on-surface">Traceability</h2>
             </div>
             <dl className="space-y-3 text-sm">
               <div className="flex justify-between gap-4">
-                <dt className="text-on-surface-variant">Definición ejecutable</dt>
+                <dt className="text-on-surface-variant">Executable definition</dt>
                 <dd className="font-mono text-on-surface">RFC v{change.definitionVersion}</dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-on-surface-variant">Creada</dt>
+                <dt className="text-on-surface-variant">Created</dt>
                 <dd className="text-right text-on-surface">{formatDateTime(change.createdAt)}</dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-on-surface-variant">Última actualización</dt>
+                <dt className="text-on-surface-variant">Last updated</dt>
                 <dd className="text-right text-on-surface">{formatDateTime(change.updatedAt)}</dd>
               </div>
               <div className="flex justify-between gap-4">
@@ -620,7 +661,7 @@ export default function ChangeDetail() {
                     </button>
                   ))}
                   {relatedIncidents.length === 0 && (
-                    <span className="text-sm text-on-surface">Sin INC relacionados</span>
+                    <span className="text-sm text-on-surface">No related INCs</span>
                   )}
                 </div>
               </div>
@@ -628,6 +669,37 @@ export default function ChangeDetail() {
           </section>
         </div>
       </div>
+      <ConfirmDialog
+        open={pendingTransition !== null}
+        onClose={() => setPendingTransition(null)}
+        onConfirm={(value) => {
+          if (pendingTransition) transitionMutation.mutate({ transition: pendingTransition, value });
+        }}
+        title={
+          pendingTransition?.key === 'reject'
+            ? 'Reject RFC'
+            : pendingTransition?.key === 'complete'
+              ? 'Complete implementation'
+              : 'Report implementation failure'
+        }
+        description={
+          pendingTransition?.key === 'reject'
+            ? 'A justification is required to reject this RFC.'
+            : 'Describe the result and validations performed.'
+        }
+        confirmLabel={pendingTransition?.label ?? 'Confirm'}
+        tone={pendingTransition?.key === 'reject' || pendingTransition?.key === 'fail' ? 'destructive' : 'default'}
+        loading={transitionMutation.isPending}
+        error={pendingTransition ? transitionMutation.error?.message : undefined}
+        reasonLabel={pendingTransition?.key === 'reject' ? 'Justification for rejection' : 'Implementation result'}
+        reasonPlaceholder={
+          pendingTransition?.key === 'reject'
+            ? 'Why is this RFC being rejected?'
+            : pendingTransition?.key === 'complete'
+              ? 'Describe the result and validations performed…'
+              : 'Describe the observed failure and current state…'
+        }
+      />
     </div>
   );
 }

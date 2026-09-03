@@ -102,7 +102,7 @@ function activityText(entry: TicketActivityEntry): string {
       return 'Stopped watching this ticket.';
     case 'fields_updated': {
       const fields = Array.isArray(payload.fields) ? payload.fields.map(String).join(', ') : '';
-      return fields ? `Actualizó los campos: ${fields}.` : 'Actualizó los datos del ticket.';
+      return fields ? `Updated fields: ${fields}.` : 'Updated the ticket data.';
     }
     default:
       return entry.kind;

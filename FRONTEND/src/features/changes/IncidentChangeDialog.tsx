@@ -31,7 +31,7 @@ function initialData(fields: FieldDefinition[], ticket: Ticket, currentUserName:
     requester: currentUserName,
     changeOwner: currentUserName,
     serviceAffected: ticket.category || data.serviceAffected || 'Servicio por determinar',
-    reason: `Ejecutar la acción necesaria para resolver ${ticket.humanId ?? ticket.id}.`,
+    reason: `Execute the action needed to resolve ${ticket.humanId ?? ticket.id}.`,
     impact: data.impact || (ticket.priority === 'Critical' ? 'high' : 'medium'),
     urgency: data.urgency || 'medium',
     probability: data.probability || 'medium',
@@ -68,7 +68,7 @@ export function IncidentChangeDialog({ open, ticket, currentUserName, onClose, o
     mutationFn: async () => {
       if (!ticket.entityId) throw new Error('El incidente no tiene una entidad INC vinculada.');
       const specification = definition.data?.specification;
-      if (!specification) throw new Error('La definición RFC no está disponible.');
+      if (!specification) throw new Error('The RFC definition is not available.');
       const data: Record<string, unknown> = {};
       for (const field of specification.fields) {
         if (field.key === 'riskLevel' || legacyRelationFields.has(field.key) || !isFieldVisible(field, formData)) continue;
@@ -106,7 +106,7 @@ export function IncidentChangeDialog({ open, ticket, currentUserName, onClose, o
           <div>
             <div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-300"><GitPullRequest className="h-4 w-4" /> INC → RFC</div>
             <h2 className="text-xl font-black text-on-surface">Crear cambio desde este incidente</h2>
-            <p className="mt-1 text-xs text-on-surface-variant">Change Management administrará la ejecución; ambos registros conservarán su relación y versiones.</p>
+            <p className="mt-1 text-xs text-on-surface-variant">Change Management will manage execution; both records will keep their relation and versions.</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-xl p-2 text-on-surface-variant" aria-label="Cerrar"><X className="h-5 w-5" /></button>
         </div>

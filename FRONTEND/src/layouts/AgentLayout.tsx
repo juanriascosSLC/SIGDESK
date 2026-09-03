@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -16,7 +16,6 @@ import {
   BarChart3,
   SearchCode,
   Timer,
-  BookOpen,
   Server,
   Users,
   PanelLeftClose,
@@ -230,7 +229,7 @@ function Sidebar({ collapsed }: { collapsed: boolean }) {
                   active={currentPath === '/app/changes/my-tasks'}
                   to="/app/changes/my-tasks"
                   icon={ListChecks}
-                  label="Mis tareas"
+                  label="My Tasks"
                 />
               )}
               {canViewProblems && (
@@ -333,24 +332,11 @@ function Sidebar({ collapsed }: { collapsed: boolean }) {
   );
 }
 
-const mockSearchResults = {
-  tickets: [
-    { id: 'INC-202601', label: 'Camera offline at Site #401' },
-    { id: 'INC-202603', label: 'Network latency issues in Building A' },
-  ],
-  assets: [
-    { id: 'CAM-12607', label: 'HIKVISION DS-2CD2143G0-I · Site #401' },
-  ],
-  knowledge: [
-    { id: 'KB-1024', label: 'How to power-cycle an offline HIKVISION camera' },
-  ],
-};
-
 export default function AgentLayout({ children }: { children: React.ReactNode }) {
-  const [searchFocused, setSearchFocused] = useState(false);
-  // La campana solo consulta cuando ya hay permisos resueltos: pedir la
-  // bandeja sin sesión útil produce un 401 que apiClient convierte en
-  // cierre de sesión, y eso rebotaría al login en cada arranque.
+  // The notification bell only queries once permissions have resolved:
+  // requesting the inbox without a usable session produces a 401 that
+  // apiClient turns into a sign-out, which would bounce back to login on
+  // every startup.
   const { canViewTickets } = useAuth();
   const collapsed = useNavStore((state) => state.collapsed);
   const toggleNav = useNavStore((state) => state.toggle);
@@ -378,8 +364,8 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
               onClick={toggleNav}
               aria-expanded={!collapsed}
               aria-controls="app-nav"
-              aria-label={collapsed ? 'Mostrar la navegación' : 'Ocultar la navegación'}
-              title={collapsed ? 'Mostrar la navegación' : 'Ocultar la navegación'}
+              aria-label={collapsed ? 'Show navigation' : 'Hide navigation'}
+              title={collapsed ? 'Show navigation' : 'Hide navigation'}
               data-testid="app-nav-toggle"
               className="hidden md:flex shrink-0 w-10 h-10 rounded-xl bg-surface-container-low border border-border/50 items-center justify-center text-on-surface-variant hover:text-cyan-400 hover:border-cyan-500/30 transition-colors"
             >
@@ -387,48 +373,20 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
             </button>
              <div className="relative w-full">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
+                {/* Global search across tickets/assets/knowledge has no backend
+                    yet — this used to fake a results dropdown with hardcoded
+                    entries regardless of what was typed. Per "honestly disable
+                    search if no real backend, never fake results", this is
+                    disabled rather than pretending to work. Re-enable once a
+                    real search endpoint exists. */}
                 <input
                   type="text"
-                  placeholder="Search tickets, assets, or knowledge base... (Press '/')"
-                  onFocus={() => setSearchFocused(true)}
-                  onBlur={() => setSearchFocused(false)}
-                  className="w-full bg-surface-container-low border border-border/50 text-on-surface text-sm rounded-xl pl-10 pr-4 py-2 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+                  disabled
+                  placeholder="Search isn't available yet"
+                  title="Global search isn't available yet"
+                  aria-label="Global search isn't available yet"
+                  className="w-full bg-surface-container-low border border-border/50 text-on-surface-variant text-sm rounded-xl pl-10 pr-4 py-2 cursor-not-allowed opacity-70 focus:outline-none"
                 />
-
-                {/* Search results panel (mock) */}
-                {searchFocused && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-surface-container-lowest/95 backdrop-blur-2xl border border-border/50 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden z-50">
-                    <div className="p-2">
-                      <p className="px-3 pt-2 pb-1 text-[9px] font-black uppercase tracking-[0.2em] text-cyan-500/80">Tickets</p>
-                      {mockSearchResults.tickets.map((r) => (
-                        <div key={r.id} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-on-surface/5 cursor-pointer">
-                          <TicketIcon className="w-4 h-4 text-on-surface-variant shrink-0" />
-                          <span className="font-mono text-[10px] text-cyan-400">{r.id}</span>
-                          <span className="text-sm text-on-surface-variant truncate">{r.label}</span>
-                        </div>
-                      ))}
-                      <p className="px-3 pt-3 pb-1 text-[9px] font-black uppercase tracking-[0.2em] text-cyan-500/80">Assets · SIGInventory</p>
-                      {mockSearchResults.assets.map((r) => (
-                        <div key={r.id} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-on-surface/5 cursor-pointer">
-                          <Server className="w-4 h-4 text-on-surface-variant shrink-0" />
-                          <span className="font-mono text-[10px] text-cyan-400">{r.id}</span>
-                          <span className="text-sm text-on-surface-variant truncate">{r.label}</span>
-                        </div>
-                      ))}
-                      <p className="px-3 pt-3 pb-1 text-[9px] font-black uppercase tracking-[0.2em] text-cyan-500/80">Knowledge Base</p>
-                      {mockSearchResults.knowledge.map((r) => (
-                        <div key={r.id} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-on-surface/5 cursor-pointer">
-                          <BookOpen className="w-4 h-4 text-on-surface-variant shrink-0" />
-                          <span className="font-mono text-[10px] text-cyan-400">{r.id}</span>
-                          <span className="text-sm text-on-surface-variant truncate">{r.label}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="px-4 py-2 border-t border-border/40 bg-surface-container-lowest/60 text-[10px] text-on-surface-variant font-mono">
-                      ↑↓ navigate · ↵ open · esc close
-                    </div>
-                  </div>
-                )}
              </div>
           </div>
           <div className="flex items-center gap-4">
@@ -445,11 +403,30 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
             <UserProfilePopover />
           </div>
         </header>
+        {/* `z-0` crea un CONTEXTO DE APILAMIENTO para todo el contenido de la
+            página, y hace falta: el diseñador de páginas apoya en él el
+            apilamiento de su capa de arrastre, y sin el contexto la cabecera
+            (z-10) se pinta por encima e intercepta los sueltos. Se comprobó
+            quitándolo: «una región fija rechaza todo lo que ofrece la paleta»
+            pasaba a expirar por un arrastre que nunca llegaba a su destino.
+
+            El precio de ese contexto es que TODO lo que hay dentro queda topado
+            en z-0. Por eso <RagChatbot/> se pinta AQUÍ DENTRO y no como hermano
+            de <main>: desde fuera, cualquier z positivo suyo ganaba a los
+            modales de la página —topados en 0— y su botón flotante interceptaba
+            los clics de todos ellos. Dentro, comparte contexto con los modales
+            y su z-40 pierde limpiamente contra el z-50 de un modal, que es el
+            orden correcto.
+
+            Sigue siendo `fixed`, así que se posiciona respecto al viewport y el
+            `overflow-y-auto` de este contenedor no lo recorta ni lo desplaza:
+            un elemento fijo solo queda atrapado por un ancestro con transform o
+            filter, y aquí no hay ninguno. */}
         <div className="flex-1 overflow-y-auto bg-surface relative z-0">
           {children}
+          <RagChatbot />
         </div>
       </main>
-      <RagChatbot />
     </div>
   );
 }

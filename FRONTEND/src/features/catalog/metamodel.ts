@@ -583,10 +583,22 @@ export interface ResourceBinding {
   kind?: string;
   module: string;
   resourceType: string;
+  /** Identidad ESTABLE del recurso: el resourceId de una política SLA, o el
+   *  workflow_family_id de una automatización. */
   resourceId: string;
+  /** Versión publicada EXACTA, cuando el módulo dueño le da identidad propia.
+   *
+   *  Existe por Automations (ADR-0039): allí `workflow_id` identifica una
+   *  versión y `workflow_family_id` la familia, al revés que en SLA. El runtime
+   *  necesita el id de la versión, así que la referencia lo lleva explícito. */
+  resourceInstanceId?: string;
   resourceVersion?: string;
   contractVersion?: string;
   required?: boolean;
+  /** Vinculada pero apagada. Distinto de quitarla: conserva la referencia —y la
+   *  intención de quien la puso— para poder reactivarla sin volver a buscarla.
+   *  Ausente significa habilitada. */
+  enabled?: boolean;
   version?: string;
 }
 
@@ -594,6 +606,7 @@ export interface ResourceReference {
   module: string;
   resourceType: string;
   resourceId: string;
+  resourceInstanceId?: string;
   resourceVersion: string;
   contractVersion: string;
   required: boolean;

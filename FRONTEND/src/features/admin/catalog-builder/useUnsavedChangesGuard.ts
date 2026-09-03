@@ -1,26 +1,55 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-// Avisa antes de perder cambios sin guardar, tanto al cerrar la pestaña como
-// al navegar DENTRO de la aplicación.
+// Warns before losing unsaved changes, both when closing the tab and when
+// navigating WITHIN the app.
 //
-// El Catalog Builder sólo tenía `beforeunload`, que el navegador dispara al
-// recargar o cerrar — nunca en una navegación de la SPA. Hacer clic en
-// cualquier entrada del menú lateral desmontaba el editor y se llevaba por
-// delante el borrador sin decir nada.
+// Catalog Builder used to only have `beforeunload`, which the browser fires
+// on reload/close — never on an SPA navigation. Clicking any sidebar entry
+// unmounted the editor and took the draft with it, silently.
 //
-// `useBlocker` de react-router sería lo natural, pero exige un data router
-// (`createBrowserRouter`) y esta aplicación monta `<BrowserRouter>`
-// (App.tsx). Migrar el router entero por esta pantalla sería desproporcionado,
-// así que se interceptan los dos caminos reales de salida:
+// `useBlocker` from react-router would be the natural fit, but it requires a
+// data router (`createBrowserRouter`) and this app mounts `<BrowserRouter>`
+// (App.tsx). Migrating the whole router for this one screen would be
+// disproportionate, so the two real exit paths are intercepted directly:
 //
-//   1. Clic en un enlace hacia otra ruta — cómo se sale de aquí en la
-//      práctica, vía el menú de AgentLayout.
-//   2. Atrás/adelante del navegador, deshaciendo el salto y volviendo a
-//      preguntar.
+//   1. Clicking a link to another route — how people actually leave here, via
+//      AgentLayout's sidebar.
+//   2. Browser back/forward, undoing the jump and asking again.
 //
-// El listener se registra en fase de captura y SÓLO mientras `enabled` es
-// true, de modo que con el borrador guardado no queda nada enganchado.
-export function useUnsavedChangesGuard(enabled: boolean, message: string): void {
+// # Why this can't just call `window.confirm` inline
+//
+// The click/popstate handlers need to decide SYNCHRONOUSLY whether to
+// `preventDefault()` the navigation, and a real `ConfirmDialog` is
+// asynchronous (it waits for a person to click a button). So instead of
+// blocking on a native confirm, every intercepted navigation is prevented
+// UNCONDITIONALLY up front, its "how to actually leave" callback is stashed,
+// and the caller renders a `ConfirmDialog` — hooked up via the object this
+// returns — that runs the stashed callback if the person confirms.
+//
+// `window.confirm` is not used anywhere in this file. The only native
+// dialog left is the browser's own "leave site?" prompt that `beforeunload`
+// triggers — and that one genuinely can't be replaced: per the MDN spec, a
+// page cannot customize or suppress that dialog, only ask the browser to
+// show it via `preventDefault()`/`returnValue`. It only fires on an actual
+// tab close or reload, never on the SPA navigation this hook otherwise
+// handles with a real dialog.
+export interface UnsavedChangesGuard {
+  /** True while a navigation is blocked, waiting for confirmation. Render a
+   *  `ConfirmDialog` bound to this. */
+  pending: boolean;
+  /** Person confirmed leaving — replays the navigation that was blocked. */
+  confirmLeave: () => void;
+  /** Person canceled — the navigation stays blocked; nothing happens. */
+  cancelLeave: () => void;
+}
+
+export function useUnsavedChangesGuard(enabled: boolean): UnsavedChangesGuard {
+  const [pending, setPending] = useState(false);
+  // The action to perform if the person confirms — set synchronously by
+  // whichever handler intercepted the navigation, read asynchronously when
+  // they click "Leave" in the dialog.
+  const resumeRef = useRef<(() => void) | null>(null);
+
   useEffect(() => {
     if (!enabled) return;
 
@@ -30,8 +59,8 @@ export function useUnsavedChangesGuard(enabled: boolean, message: string): void 
     };
 
     const interceptLinkClick = (event: MouseEvent) => {
-      // Respeta los gestos de "abrir en otra parte": el navegador no va a
-      // descartar nada en esos casos.
+      // Respects "open elsewhere" gestures: the browser isn't going to
+      // discard anything in those cases.
       if (event.defaultPrevented || event.button !== 0) return;
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
@@ -47,23 +76,27 @@ export function useUnsavedChangesGuard(enabled: boolean, message: string): void 
       if (destination.origin !== window.location.origin) return;
       if (destination.pathname === window.location.pathname) return;
 
-      if (window.confirm(message)) return;
       event.preventDefault();
       event.stopPropagation();
+      resumeRef.current = () => {
+        window.location.assign(destination.href);
+      };
+      setPending(true);
     };
 
-    // Atrás/adelante ya movieron la entrada del historial cuando esto corre.
-    // Se vuelve a empujar la actual para quedarse donde estábamos y luego se
-    // pregunta; si el usuario acepta, se repite el salto con la guardia ya
-    // desactivada por `leaving`.
+    // Back/forward already moved the history entry by the time this runs. The
+    // current entry is pushed back to stay put, and confirming replays the
+    // jump with the guard disabled via `leaving` so it doesn't re-trigger.
     let leaving = false;
     const interceptHistoryPop = () => {
       if (leaving) return;
       window.history.pushState(null, '', window.location.href);
-      if (!window.confirm(message)) return;
-      leaving = true;
-      window.removeEventListener('popstate', interceptHistoryPop);
-      window.history.back();
+      resumeRef.current = () => {
+        leaving = true;
+        window.removeEventListener('popstate', interceptHistoryPop);
+        window.history.back();
+      };
+      setPending(true);
     };
 
     window.addEventListener('beforeunload', warnBeforeUnload);
@@ -74,5 +107,18 @@ export function useUnsavedChangesGuard(enabled: boolean, message: string): void 
       document.removeEventListener('click', interceptLinkClick, true);
       window.removeEventListener('popstate', interceptHistoryPop);
     };
-  }, [enabled, message]);
+  }, [enabled]);
+
+  const confirmLeave = useCallback(() => {
+    setPending(false);
+    resumeRef.current?.();
+    resumeRef.current = null;
+  }, []);
+
+  const cancelLeave = useCallback(() => {
+    setPending(false);
+    resumeRef.current = null;
+  }, []);
+
+  return { pending, confirmLeave, cancelLeave };
 }

@@ -232,7 +232,7 @@ function toTicketFromEntityRecord(record: TicketEntityRecord): Ticket {
     id: record.id,
     humanId: record.humanId,
     entityId: record.id,
-    title: dataString(data, ['title', 'titulo', 'asunto']) ?? '(sin título)',
+    title: dataString(data, ['title', 'titulo', 'asunto']) ?? '(Untitled)',
     description: dataString(data, ['description', 'descripcion']) ?? '',
     // Both conversions are guarded: a single throw inside this mapper would
     // take down the whole list with "Could not load tickets", so a missing
@@ -278,7 +278,15 @@ function applyClientFilters(items: Ticket[], filters: TicketFilters): Ticket[] {
   });
 }
 
-export async function listTickets(filters: TicketFilters = {}): Promise<TicketPage> {
+/**
+ * `signal` is TanStack Query's per-query AbortSignal (passed through from
+ * `useTickets`'s `queryFn`), not a caller-owned one — forwarding it into
+ * `apiRequest` (which already accepts arbitrary `RequestInit`, `signal`
+ * included) is what makes an in-flight list request actually abort when
+ * the component unmounts or the query is superseded, instead of running to
+ * completion and having its result silently discarded.
+ */
+export async function listTickets(filters: TicketFilters = {}, signal?: AbortSignal): Promise<TicketPage> {
   const params = new URLSearchParams();
   if (filters.cursor) params.set('cursor', filters.cursor);
   if (filters.limit) params.set('limit', String(filters.limit));
@@ -293,6 +301,7 @@ export async function listTickets(filters: TicketFilters = {}): Promise<TicketPa
 
   const response = await apiRequest<TicketEntityListResponse>(
     `/entities/${TICKET_ENTITY_KEY}${query ? `?${query}` : ''}`,
+    { signal },
   );
   const items = (response.items ?? []).map(toTicketFromEntityRecord);
   return {
@@ -368,6 +377,19 @@ export async function updateTicketStatus(
   });
 }
 
+/**
+ * Legacy IT-agent assignment path. Still used by a couple of call sites that
+ * haven't moved to the organizational picker yet — new UI should call
+ * `assignTicketOrganizational` below instead, which is what the beta UX
+ * foundation pass introduced to close the debt this comment used to
+ * describe (a `window.prompt` collecting a raw agent id).
+ *
+ * «Take a ticket» stays two explicit commands, in this order (ADR-0040):
+ *   1. assign         POST /tickets/{id}/asignar
+ *   2. start work     POST /entities/INC/{id}/transitions/{key}
+ * so assigning never silently reopens or reassigns work, and starting work
+ * never silently assigns it.
+ */
 export async function assignTicket(
   id: string,
   assigneeName: string | null,
@@ -378,13 +400,80 @@ export async function assignTicket(
   if (!assigneeName?.trim()) {
     throw new Error('Debes seleccionar un agente para asignar el ticket.');
   }
-  const transition = transitionKey
-    ? { key: transitionKey } as LifecycleTransitionDefinition
-    : await transitionForTarget(id, 'In Progress');
-  return executeTicketTransition(id, transition.key, {
-    agenteItId: assigneeName.trim(),
-    tipoAsignacion: 'manual',
+
+  // 1) Asignar. Comando propio, con su propia ruta y su propia autorización.
+  await apiRequest<unknown>(`/tickets/${encodeURIComponent(id)}/asignar`, {
+    method: 'POST',
+    body: JSON.stringify({ agenteItId: assigneeName.trim(), tipo: 'manual' }),
   });
+
+  // 2) Iniciar trabajo. Se resuelve la transición DESPUÉS de asignar: el paso
+  // anterior pudo mover el estado, y buscarla antes daría una transición que ya
+  // no parte del estado actual.
+  const transition = transitionKey
+    ? ({ key: transitionKey } as LifecycleTransitionDefinition)
+    : await transitionForTargetOrNull(id, 'In Progress');
+  if (!transition) {
+    // El ticket ya está en progreso: el trabajo empezó y no hay nada que
+    // ejecutar. Se devuelve el estado real en vez de inventar un error.
+    return getTicket(id);
+  }
+  return executeTicketTransition(id, transition.key, {});
+}
+
+/**
+ * Real organizational assignment: department → team → assignee, resolved
+ * against Organization's directory (`AssignmentPicker`) instead of a
+ * `window.prompt` collecting a technical id. Same two-command composition as
+ * the legacy path above — assign, then separately try to start work — kept
+ * as two calls for the same reason: assigning must never silently move the
+ * ticket's state.
+ */
+export async function assignTicketOrganizational(
+  id: string,
+  target: { departmentId: string; teamId: string; assigneeId?: string },
+  options: { overwriteExisting?: boolean; startWork?: boolean } = {},
+): Promise<Ticket> {
+  await apiRequest<unknown>(`/entities/${TICKET_ENTITY_KEY}/${encodeURIComponent(id)}/assignment`, {
+    method: 'POST',
+    body: JSON.stringify({
+      department_id: target.departmentId,
+      team_id: target.teamId,
+      assignee_user_id: target.assigneeId || undefined,
+      overwrite_existing: options.overwriteExisting ?? false,
+    }),
+  });
+
+  if (options.startWork === false) {
+    return getTicket(id);
+  }
+
+  const transition = await transitionForTargetOrNull(id, 'In Progress');
+  if (!transition) {
+    // Already in progress, or the historical definition doesn't offer that
+    // transition from here — either way, assignment already succeeded.
+    return getTicket(id);
+  }
+  return executeTicketTransition(id, transition.key, {});
+}
+
+/**
+ * Como `transitionForTarget`, pero devuelve null en vez de lanzar cuando la
+ * definición no ofrece esa transición desde el estado actual.
+ *
+ * Lo necesita la composición de «tomar un ticket»: tras asignar, el ticket
+ * puede estar YA en progreso, y ahí «no hay transición» es el resultado
+ * correcto, no un fallo que haya que mostrarle a nadie.
+ */
+async function transitionForTargetOrNull(
+  id: string,
+  targetStatus: TicketStatus,
+): Promise<LifecycleTransitionDefinition | null> {
+  try {
+    return await transitionForTarget(id, targetStatus);
+  } catch {
+    return null;
+  }
 }
 
 interface ExecuteTransitionPayload {
@@ -396,13 +485,13 @@ interface ExecuteTransitionPayload {
 
 async function transitionForTarget(id: string, targetStatus: TicketStatus): Promise<LifecycleTransitionDefinition> {
   const ticket = await getTicket(id);
-  if (!ticket.entityId) throw new Error('El ticket no está vinculado a una definición de catálogo.');
+  if (!ticket.entityId) throw new Error('This ticket is not linked to a catalog definition.');
   const definition = await getResolvedDefinition(TICKET_ENTITY_KEY, ticket.entityId);
   const transition = definition.lifecycle.transitions.find(
     (candidate) => ticketStatesMatch(candidate.from, ticket.status) && ticketStatesMatch(candidate.to, targetStatus),
   );
   if (!transition) {
-    throw new Error(`La definición histórica no permite pasar de "${ticket.status}" a "${targetStatus}".`);
+    throw new Error(`The historical definition doesn't allow moving from "${ticket.status}" to "${targetStatus}".`);
   }
   return transition;
 }
@@ -497,7 +586,7 @@ export async function downloadAttachment(attachmentId: string, fileName: string)
     credentials: 'include',
     headers: authHeaders(),
   });
-  if (!response.ok) throw new Error(`No se pudo descargar el adjunto (${response.status}).`);
+  if (!response.ok) throw new Error(`Couldn't download the attachment (${response.status}).`);
   const url = URL.createObjectURL(await response.blob());
   const anchor = document.createElement('a');
   anchor.href = url;

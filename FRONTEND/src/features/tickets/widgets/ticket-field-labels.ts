@@ -1,8 +1,8 @@
 export const ticketFieldLabels: Record<string, string> = {
-  humanId: 'Número del ticket',
+  humanId: 'Ticket number',
   requester: 'Solicitante',
   assignee: 'Asignado a',
-  createdAt: 'Fecha de creación',
+  createdAt: 'Created date',
   status: 'Estado',
   mergedCount: 'Tickets combinados',
 };

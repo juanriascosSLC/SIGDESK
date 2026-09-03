@@ -21,7 +21,8 @@ import {
   type Role,
 } from './rbac.service';
 import { useAuth, initialsOf } from '../auth/useAuth';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { EmptyState, ErrorState, PermissionDeniedState } from '@/components/ui/states';
+import { ConfirmDialog } from '@/components/ui';
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
 
 /**
@@ -43,9 +44,9 @@ export default function UsersManager() {
 
   if (!canManageUsersAndRoles && !canReadCompanies) {
     return (
-      <EmptyState
-        title="Sin acceso a la administración"
-        description="Necesitas un permiso sobre usuarios, roles u organización para entrar aquí."
+      <PermissionDeniedState
+        title="No access to administration"
+        description="You need a permission over users, roles or organization to enter here."
       />
     );
   }
@@ -53,27 +54,27 @@ export default function UsersManager() {
   return (
     <div className="p-6 lg:p-8 space-y-6 w-full">
       <div>
-        <h1 className="text-2xl font-black text-on-surface">Usuarios, roles y organización</h1>
+        <h1 className="text-2xl font-black text-on-surface">Users, roles and organization</h1>
         <p className="text-sm text-on-surface-variant mt-1">
-          Controla quién entra, qué puede hacer y a qué unidad pertenece dentro de SIG-DESK.
+          Control who has access, what they can do, and which unit they belong to within SIG-DESK.
         </p>
       </div>
 
       <div className="flex items-start gap-3 p-4 rounded-2xl bg-cyan-500/5 border border-cyan-500/20">
         <Info className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
         <p className="text-xs text-on-surface-variant leading-relaxed">
-          El <strong className="text-on-surface">inicio de sesión</strong> es compartido con
-          SIGInstallations y SIGInventory (Active Directory), pero estos roles y permisos son
-          exclusivos de SIG-DESK y viven en su propia base de datos. Las identidades aparecen aquí
-          al ingresar por primera vez; un administrador decide cuándo darles acceso, rol y unidad.
+          <strong className="text-on-surface">Sign-in</strong> is shared with
+          SIGInstallations and SIGInventory (Active Directory), but these roles and permissions are
+          exclusive to SIG-DESK and live in its own database. Identities show up here
+          the first time they sign in; an administrator decides when to grant them access, a role and a unit.
         </p>
       </div>
 
       <div className="flex items-center gap-1 bg-surface-container-low border border-border/50 rounded-xl p-1 w-fit">
         {([
-          { id: 'roles' as const, label: 'Roles y permisos', icon: KeyRound },
-          { id: 'users' as const, label: 'Usuarios', icon: UsersIcon },
-          { id: 'organization' as const, label: 'Organización', icon: Building2 },
+          { id: 'roles' as const, label: 'Roles and permissions', icon: KeyRound },
+          { id: 'users' as const, label: 'Users', icon: UsersIcon },
+          { id: 'organization' as const, label: 'Organization', icon: Building2 },
         ])
           .filter(({ id }) =>
             id === 'roles' ? canReadRoles : id === 'users' ? canReadUsers : canReadCompanies,
@@ -147,26 +148,21 @@ function RolesTab() {
 
   const roles = rolesQuery.data ?? [];
   const selectedRole = roles.find((role) => role.id === selectedRoleId) ?? roles[0] ?? null;
+  const [showDeleteRoleDialog, setShowDeleteRoleDialog] = useState(false);
   const catalog: PermissionCatalog = catalogQuery.data ?? { entities: [], actions: [], scopes: [] };
 
   if (rolesQuery.isLoading || catalogQuery.isLoading) return <LoadingSkeleton type="list" />;
   if (rolesQuery.isError || catalogQuery.isError) {
     const error = rolesQuery.error ?? catalogQuery.error;
     return (
-      <EmptyState
-        title="No se pudieron cargar los roles"
-        description={error instanceof Error ? error.message : 'Error desconocido'}
-        action={
-          <button
-            onClick={() => {
-              void rolesQuery.refetch();
-              void catalogQuery.refetch();
-            }}
-            className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold"
-          >
-            Reintentar
-          </button>
-        }
+      <ErrorState
+        title="We could not load the roles"
+        description={error instanceof Error ? error.message : 'Unknown error'}
+        retryLabel="Retry"
+        onRetry={() => {
+          void rolesQuery.refetch();
+          void catalogQuery.refetch();
+        }}
       />
     );
   }
@@ -194,7 +190,7 @@ function RolesTab() {
               <button
                 onClick={() => setIsCreating((value) => !value)}
                 className="text-cyan-400 hover:text-cyan-300 transition-colors"
-                title="Crear rol"
+                title="Create role"
               >
                 <Plus className="w-4 h-4" />
               </button>
@@ -223,15 +219,15 @@ function RolesTab() {
       </div>
 
       {!selectedRole ? (
-        <EmptyState title="Sin roles" description="Crea el primer rol para empezar." />
+        <EmptyState title="No roles" description="Create the first role to get started." />
       ) : (
         <div className="bg-surface-container-low border border-border/40 rounded-3xl overflow-hidden">
           <div className="px-6 py-4 border-b border-border/40 bg-surface-container/50 flex items-center justify-between gap-4">
             <div className="min-w-0">
               <h2 className="font-bold text-on-surface">{selectedRole.name}</h2>
               <p className="text-xs text-on-surface-variant mt-0.5">
-                {selectedRole.description || 'Sin descripción'} ·{' '}
-                {selectedRole.permissions.length} permiso(s)
+                {selectedRole.description || 'No description'} ·{' '}
+                {selectedRole.permissions.length} permission(s)
               </p>
             </div>
             <div className="flex items-center gap-3 shrink-0">
@@ -240,13 +236,9 @@ function RolesTab() {
               )}
               {canDeleteRole && (
                 <button
-                  onClick={() => {
-                    if (window.confirm(`¿Eliminar el rol "${selectedRole.name}"?`)) {
-                      deleteRole.mutate(selectedRole.id);
-                    }
-                  }}
+                  onClick={() => setShowDeleteRoleDialog(true)}
                   className="text-on-surface-variant hover:text-red-400 transition-colors"
-                  title="Eliminar rol"
+                  title="Delete role"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -262,7 +254,7 @@ function RolesTab() {
                     any other error rather than a pre-emptive client-side flag. */}
                 {(savePermissions.error ?? deleteRole.error) instanceof Error
                   ? (savePermissions.error ?? deleteRole.error)!.message
-                  : 'No se pudo guardar el cambio.'}
+                  : 'The change could not be saved.'}
               </p>
             </div>
           )}
@@ -270,8 +262,8 @@ function RolesTab() {
           {catalog.entities.length === 0 ? (
             <div className="p-6">
               <EmptyState
-                title="Todavía no hay entidades con permisos"
-                description="El catálogo se llena con las entidades que ya tienen al menos un permiso otorgado en algún rol (ver el runbook de bootstrap del primer admin)."
+                title="No entities with permissions yet"
+                description="The catalog fills up with entities that already have at least one permission granted in some role (see the first-admin bootstrap runbook)."
               />
             </div>
           ) : (
@@ -286,7 +278,7 @@ function RolesTab() {
                       <thead>
                         <tr>
                           <th className="text-left pr-4 pb-2 text-[10px] font-bold uppercase text-on-surface-variant">
-                            Acción \ Alcance
+                            Action \ Scope
                           </th>
                           {catalog.scopes.map((scope) => (
                             <th
@@ -344,6 +336,21 @@ function RolesTab() {
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        open={showDeleteRoleDialog && selectedRole !== null}
+        onClose={() => setShowDeleteRoleDialog(false)}
+        onConfirm={() => {
+          if (!selectedRole) return;
+          setShowDeleteRoleDialog(false);
+          deleteRole.mutate(selectedRole.id);
+        }}
+        title="Delete role"
+        description={selectedRole ? `Delete the role "${selectedRole.name}"? This can't be undone.` : undefined}
+        confirmLabel="Delete role"
+        tone="destructive"
+        loading={deleteRole.isPending}
+      />
     </div>
   );
 }
@@ -402,7 +409,7 @@ function CreateRoleForm({
       <input
         value={name}
         onChange={(event) => setName(event.target.value)}
-        placeholder="Nombre (ej. Aprobador CAB)"
+        placeholder="Name (e.g. CAB Approver)"
         required
         className="w-full bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-2 text-on-surface outline-none focus:border-cyan-500/50"
       />
@@ -410,7 +417,7 @@ function CreateRoleForm({
         value={description}
         onChange={(event) => setDescription(event.target.value)}
         rows={2}
-        placeholder="¿Para qué sirve este rol?"
+        placeholder="What is this role for?"
         className="w-full bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-2 text-on-surface outline-none focus:border-cyan-500/50 resize-none"
       />
       {error && <p className="text-xs text-red-300">{error}</p>}
@@ -420,14 +427,14 @@ function CreateRoleForm({
           onClick={onCancel}
           className="flex-1 px-3 py-2 rounded-lg text-xs font-bold text-on-surface-variant hover:bg-on-surface/5"
         >
-          Cancelar
+          Cancel
         </button>
         <button
           type="submit"
           disabled={isPending}
           className="flex-1 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-bold disabled:opacity-50"
         >
-          {isPending ? 'Creando…' : 'Crear'}
+          {isPending ? 'Creating…' : 'Create'}
         </button>
       </div>
     </form>
@@ -465,11 +472,12 @@ function OrganizationTab() {
   if (companiesQuery.isLoading) return <LoadingSkeleton type="list" />;
   if (companiesQuery.isError) {
     return (
-      <EmptyState
-        title="No se pudo cargar la organización"
+      <ErrorState
+        title="We could not load the organization"
         description={
-          companiesQuery.error instanceof Error ? companiesQuery.error.message : 'Error desconocido'
+          companiesQuery.error instanceof Error ? companiesQuery.error.message : 'Unknown error'
         }
+        onRetry={() => void companiesQuery.refetch()}
       />
     );
   }
@@ -491,9 +499,9 @@ function OrganizationTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="font-bold text-on-surface">Estructura organizacional</h2>
+          <h2 className="font-bold text-on-surface">Organizational structure</h2>
           <p className="text-xs text-on-surface-variant mt-1">
-            Empresa → áreas/departamentos → equipos. Puedes ampliar esta estructura cuando la empresa lo necesite.
+            Company → areas/departments → teams. You can expand this structure as the company needs it.
           </p>
         </div>
         {canCreate && (
@@ -506,7 +514,7 @@ function OrganizationTab() {
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-bold"
           >
             <Plus className="w-4 h-4" />
-            Agregar área o equipo
+            Add area or team
           </button>
         )}
       </div>
@@ -520,7 +528,7 @@ function OrganizationTab() {
           className="grid gap-3 md:grid-cols-[1fr_190px_1fr_auto] items-end bg-surface-container-low border border-cyan-500/30 rounded-2xl p-4"
         >
           <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
-            Nombre del área o equipo
+            Area or team name
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
@@ -529,7 +537,7 @@ function OrganizationTab() {
             />
           </label>
           <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
-            Tipo
+            Type
             <select
               value={type}
               onChange={(event) => {
@@ -539,14 +547,14 @@ function OrganizationTab() {
               className="bg-surface-container border border-border/50 rounded-lg px-3 py-2 text-sm text-on-surface outline-none focus:border-cyan-500/50"
             >
               <option value="empresa" disabled={rootExists}>
-                Empresa{rootExists ? ' (ya existe)' : ''}
+                Company{rootExists ? ' (already exists)' : ''}
               </option>
-              <option value="departamento">Departamento</option>
-              <option value="equipo">Equipo</option>
+              <option value="departamento">Department</option>
+              <option value="equipo">Team</option>
             </select>
           </label>
           <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
-            Pertenece a
+            Belongs to
             <select
               value={parentId}
               onChange={(event) => setParentId(event.target.value)}
@@ -554,7 +562,7 @@ function OrganizationTab() {
               disabled={type === 'empresa'}
               className="bg-surface-container border border-border/50 rounded-lg px-3 py-2 text-sm text-on-surface outline-none focus:border-cyan-500/50 disabled:opacity-50"
             >
-              <option value="">{type === 'empresa' ? 'No aplica' : 'Selecciona una unidad'}</option>
+              <option value="">{type === 'empresa' ? 'Not applicable' : 'Select a unit'}</option>
               {validParents.map((company) => (
                 <option key={company.id} value={company.id}>
                   {company.name}
@@ -567,13 +575,13 @@ function OrganizationTab() {
             disabled={createCompany.isPending || !name.trim() || (type !== 'empresa' && !parentId)}
             className="px-4 py-2 rounded-lg bg-cyan-500 text-slate-950 text-sm font-black disabled:opacity-50"
           >
-            {createCompany.isPending ? 'Creando…' : 'Crear'}
+            {createCompany.isPending ? 'Creating…' : 'Create'}
           </button>
           {createCompany.isError && (
             <p className="md:col-span-4 text-xs text-red-300">
               {createCompany.error instanceof Error
                 ? createCompany.error.message
-                : 'No se pudo crear la unidad.'}
+                : 'The unit could not be created.'}
             </p>
           )}
         </form>
@@ -582,7 +590,7 @@ function OrganizationTab() {
       <div className="bg-surface-container-low border border-border/40 rounded-3xl overflow-hidden">
         {ordered.length === 0 ? (
           <p className="p-8 text-sm text-center text-on-surface-variant">
-            Crea la empresa raíz para comenzar la estructura organizacional.
+            Create the root company to start the organizational structure.
           </p>
         ) : (
           <div className="divide-y divide-border/20">
@@ -703,17 +711,11 @@ function UsersTab() {
   }
   if (usersQuery.isError) {
     return (
-      <EmptyState
-        title="No se pudo cargar la lista de usuarios"
-        description={usersQuery.error instanceof Error ? usersQuery.error.message : 'Error desconocido'}
-        action={
-          <button
-            onClick={() => void usersQuery.refetch()}
-            className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold"
-          >
-            Reintentar
-          </button>
-        }
+      <ErrorState
+        title="We could not load the user list"
+        description={usersQuery.error instanceof Error ? usersQuery.error.message : 'Unknown error'}
+        retryLabel="Retry"
+        onRetry={() => void usersQuery.refetch()}
       />
     );
   }
@@ -725,26 +727,26 @@ function UsersTab() {
         <input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Buscar por usuario, nombre o correo…"
+          placeholder="Search by username, name or email…"
           className="w-full bg-surface-container border border-border/50 text-sm rounded-lg pl-10 pr-4 py-2 text-on-surface outline-none focus:border-cyan-500/50"
         />
       </div>
 
       {setUserRole.isError && (
         <p className="text-xs text-red-300">
-          {setUserRole.error instanceof Error ? setUserRole.error.message : 'No se pudo guardar.'}
+          {setUserRole.error instanceof Error ? setUserRole.error.message : 'Could not save.'}
         </p>
       )}
       {updateUser.isError && (
         <p className="text-xs text-red-300">
-          {updateUser.error instanceof Error ? updateUser.error.message : 'No se pudo actualizar el usuario.'}
+          {updateUser.error instanceof Error ? updateUser.error.message : 'Could not update the user.'}
         </p>
       )}
       {provisionUser.isError && (
         <p className="text-xs text-red-300">
           {provisionUser.error instanceof Error
             ? provisionUser.error.message
-            : 'No se pudo aprovisionar el usuario.'}
+            : 'Could not provision the user.'}
         </p>
       )}
 
@@ -752,12 +754,12 @@ function UsersTab() {
         <table className="w-full text-sm text-left">
           <thead className="bg-surface-container text-on-surface-variant border-b border-border/40">
             <tr>
-              <th className="px-6 py-4 font-bold uppercase tracking-wider text-xs">Usuario</th>
+              <th className="px-6 py-4 font-bold uppercase tracking-wider text-xs">User</th>
               <th className="px-6 py-4 font-bold uppercase tracking-wider text-xs">
-                Área o equipo
+                Area or team
               </th>
               <th className="px-6 py-4 font-bold uppercase tracking-wider text-xs">
-                Rol en SIG-DESK
+                Role in SIG-DESK
               </th>
               <th className="px-6 py-4 font-bold uppercase tracking-wider text-xs text-right">
                 Acciones
@@ -792,8 +794,8 @@ function UsersTab() {
               <tr>
                 <td colSpan={4} className="px-6 py-8 text-center text-on-surface-variant italic">
                   {search
-                    ? 'Ningún usuario coincide con la búsqueda.'
-                    : 'Todavía nadie ha iniciado sesión en SIG-DESK.'}
+                    ? 'No user matches the search.'
+                    : 'Nobody has signed in to SIG-DESK yet.'}
                 </td>
               </tr>
             )}
@@ -852,12 +854,12 @@ function UserRow({
           {isEditing ? (
             <div className="min-w-56">
               <select
-                aria-label="Empresa, departamento o equipo"
+                aria-label="Company, department or team"
                 value={draftCompanyId}
                 onChange={(event) => setDraftCompanyId(event.target.value)}
                 className="bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-1.5 text-on-surface outline-none focus:border-cyan-500/50"
               >
-                <option value="">Selecciona una unidad organizacional</option>
+                <option value="">Select an organizational unit</option>
                 {companies.map((company) => (
                   <option key={company.id} value={company.id}>
                     {company.name} ({company.type})
@@ -866,18 +868,18 @@ function UserRow({
               </select>
             </div>
           ) : (
-            <span className="text-xs italic text-on-surface-variant">Sin unidad asignada</span>
+            <span className="text-xs italic text-on-surface-variant">No unit assigned</span>
           )}
         </td>
         <td className="px-6 py-4">
           {isEditing ? (
               <select
-                aria-label="Rol inicial"
+                aria-label="Initial role"
                 value={draftRoleId}
                 onChange={(event) => setDraftRoleId(event.target.value)}
                 className="bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-1.5 text-on-surface outline-none focus:border-cyan-500/50"
               >
-                <option value="">Selecciona un rol</option>
+                <option value="">Select a role</option>
                 {roles.map((role) => (
                   <option key={role.id} value={role.id}>
                     {role.name}
@@ -886,7 +888,7 @@ function UserRow({
               </select>
           ) : (
             <span className="text-xs italic text-on-surface-variant">
-              Identidad verificada; pendiente de acceso a SIG-DESK
+              Verified identity; pending access to SIG-DESK
             </span>
           )}
         </td>
@@ -897,14 +899,14 @@ function UserRow({
                 onClick={onCancel}
                 className="text-xs font-bold text-on-surface-variant hover:text-on-surface"
               >
-                Cancelar
+                Cancel
               </button>
               <button
                 onClick={() => onProvision(draftCompanyId, draftRoleId)}
                 disabled={isPending || !draftCompanyId || !draftRoleId}
                 className="text-xs font-bold text-cyan-400 hover:text-cyan-300 disabled:opacity-50"
               >
-                {isPending ? 'Aprovisionando…' : 'Dar acceso'}
+                {isPending ? 'Provisioning…' : 'Grant access'}
               </button>
             </div>
           ) : canEdit ? (
@@ -945,7 +947,7 @@ function UserRow({
       <td className="px-6 py-4">
         {isEditing && canEdit && companies.length > 0 ? (
           <select
-            aria-label="Área o equipo"
+            aria-label="Area or team"
             value={draftCompanyId}
             onChange={(event) => setDraftCompanyId(event.target.value)}
             className="bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-1.5 text-on-surface outline-none focus:border-cyan-500/50"
@@ -1001,14 +1003,14 @@ function UserRow({
               onClick={onCancel}
               className="text-xs font-bold text-on-surface-variant hover:text-on-surface"
             >
-              Cancelar
+              Cancel
             </button>
             <button
               onClick={() => onSave(draftCompanyId, draftRoleId)}
               disabled={isPending || !draftRoleId || (companies.length > 0 && !draftCompanyId)}
               className="text-xs font-bold text-cyan-400 hover:text-cyan-300 disabled:opacity-50"
             >
-              {isPending ? 'Guardando…' : 'Guardar'}
+              {isPending ? 'Saving…' : 'Save'}
             </button>
           </div>
         ) : canEdit ? (
@@ -1022,11 +1024,11 @@ function UserRow({
               disabled={roles.length === 0}
               className="text-xs font-bold text-cyan-500 hover:text-cyan-400 disabled:opacity-50 disabled:text-on-surface-variant"
             >
-              Editar acceso
+              Edit access
             </button>
           </div>
         ) : (
-          <span className="text-xs text-on-surface-variant">Solo lectura</span>
+          <span className="text-xs text-on-surface-variant">Read-only</span>
         )}
       </td>
     </tr>

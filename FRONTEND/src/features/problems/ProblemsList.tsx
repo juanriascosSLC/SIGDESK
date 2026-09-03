@@ -28,7 +28,7 @@ import { PERMISSIONS } from '@/features/auth/permissions';
 import { ApiError } from '@/lib/apiClient';
 
 const stateLabels: Record<string, string> = {
-  under_investigation: 'En investigación',
+  under_investigation: 'Under investigation',
   known_error: 'Error conocido',
   resolved: 'Resuelto',
 };
@@ -145,7 +145,7 @@ export default function ProblemsList() {
           <div>
             <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.22em] text-primary">
               <SearchCode className="h-4 w-4" />
-              Análisis de causa raíz
+              Root-cause analysis
             </div>
             <h1 className="text-3xl font-black text-on-surface">Problem Management</h1>
             <p className="mt-2 text-sm text-on-surface-variant">
@@ -166,7 +166,7 @@ export default function ProblemsList() {
 
         <div className="grid gap-4 sm:grid-cols-3">
           {[
-            { label: 'En investigación', value: investigating, Icon: FlaskConical, color: 'text-amber-400' },
+            { label: 'Under investigation', value: investigating, Icon: FlaskConical, color: 'text-amber-400' },
             { label: 'Errores conocidos', value: knownErrors, Icon: AlertOctagon, color: 'text-red-400' },
             { label: 'Resueltos', value: resolved, Icon: CheckCircle2, color: 'text-emerald-400' },
           ].map(({ label, value, Icon, color }) => (
@@ -185,14 +185,14 @@ export default function ProblemsList() {
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar por PRB, título o servicio…"
+            placeholder="Search by PRB, title or service…"
             className="w-full bg-transparent py-3 text-sm text-on-surface outline-none"
           />
         </label>
 
         {(problemsQuery.isError || definitionQuery.isError) && (
           <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-5 text-red-300">
-            No se pudo cargar Problem Management: {(problemsQuery.error ?? definitionQuery.error)?.message}
+            Couldn't load Problem Management: {(problemsQuery.error ?? definitionQuery.error)?.message}
           </div>
         )}
         {(problemsQuery.isLoading || definitionQuery.isLoading) && (
@@ -230,7 +230,7 @@ export default function ProblemsList() {
                     >
                       <td className="px-6 py-4 font-mono text-xs font-bold text-primary">{problem.humanId}</td>
                       <td className="max-w-[480px] truncate px-6 py-4 font-semibold text-on-surface">
-                        {text(problem, 'title') || 'Problema sin título'}
+                        {text(problem, 'title') || 'Untitled problem'}
                       </td>
                       <td className="px-6 py-4">
                         <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase ${stateStyle(problem.state)}`}>

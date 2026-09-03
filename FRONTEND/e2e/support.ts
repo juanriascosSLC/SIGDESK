@@ -216,10 +216,21 @@ async function mockAuthenticatedIdentity(
         return;
       }
 
-      const response = await route.fetch({
-        url: `${SIG_DESK_API_BASE}${requestURL.pathname}${requestURL.search}`,
-      });
-      await route.fulfill({ response });
+      // El try/catch NO oculta fallos del backend: un 4xx o 5xx llega como
+      // respuesta y se reenvia tal cual. Lo unico que atrapa es que el contexto
+      // se cierre con una peticion en vuelo al terminar la prueba —el navegador
+      // desaparece a mitad del reenvio—, que Playwright reportaba como «1 error
+      // was not a part of any test» y bastaba para devolver codigo 1 con todas
+      // las pruebas en verde.
+      try {
+        const response = await route.fetch({
+          url: `${SIG_DESK_API_BASE}${requestURL.pathname}${requestURL.search}`,
+        });
+        await route.fulfill({ response });
+      } catch {
+        // La ruta se abandona en silencio: nadie espera ya esa respuesta.
+        await route.abort().catch(() => {});
+      }
     },
   );
 }

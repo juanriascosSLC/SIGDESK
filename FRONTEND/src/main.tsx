@@ -5,6 +5,7 @@ import './index.css';
 import './store/themeStore';
 import App from './App.tsx';
 import AppErrorBoundary from './components/AppErrorBoundary.tsx';
+import { ToastProvider } from './components/ui';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -20,7 +21,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <App />
+        <ToastProvider>
+          <App />
+        </ToastProvider>
       </QueryClientProvider>
     </AppErrorBoundary>
   </StrictMode>

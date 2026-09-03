@@ -10,7 +10,6 @@ import {
   Paperclip,
   RotateCcw,
   Users,
-  X,
 } from 'lucide-react';
 import { ApiError } from '@/lib/apiClient';
 import { useAuth } from '@/features/auth/useAuth';
@@ -23,30 +22,32 @@ import {
   type ChangeTask,
 } from './api';
 import { taskStatusMeta } from './presentation';
+import { TaskActionDialog } from './dialogs/TaskActionDialog';
 
 /**
- * «Mis tareas» — la superficie de quien EJECUTA el trabajo, no de quien
- * gobierna el cambio.
+ * "My Tasks" — the surface for whoever EXECUTES the work, not whoever
+ * governs the change.
  *
- * Existe porque una Task de RFC puede dirigirse a un departamento distinto
- * del que abrió la RFC: alguien de Warehouse recibe trabajo de una RFC de
- * Services y necesita verlo, iniciarlo y cerrarlo con evidencia — sin que
- * eso le conceda lectura de todas las RFC de Services. Por eso consume
- * `/changes/tasks/assigned`, que devuelve la Task más el CONTEXTO MÍNIMO de
- * su RFC padre (código, estado y título), nunca la RFC entera.
+ * Exists because an RFC task can be directed to a department other than the
+ * one that opened the RFC: someone from Warehouse gets work from a Services
+ * RFC and needs to see it, start it, and close it with evidence — without
+ * that granting them read access to every Services RFC. That's why it
+ * consumes `/changes/tasks/assigned`, which returns the task plus the
+ * MINIMUM context of its parent RFC (code, status and title), never the
+ * whole RFC.
  */
 
 const filterTabs: Array<{ key: AssignedChangeTaskFilter; label: string; hint: string }> = [
-  { key: 'mine', label: 'Asignadas a mí', hint: 'Solo las tareas de las que eres responsable.' },
-  { key: 'team', label: 'De mi equipo', hint: 'El trabajo de tu equipo, si tu rol lo alcanza.' },
-  { key: 'scope', label: 'Todo mi alcance', hint: 'Todo lo que tu rol permite ver.' },
+  { key: 'mine', label: 'Assigned to me', hint: 'Only the tasks you are responsible for.' },
+  { key: 'team', label: 'My team', hint: "Your team's work, if your role reaches it." },
+  { key: 'scope', label: 'My full scope', hint: 'Everything your role lets you see.' },
 ];
 
 function nextActions(task: ChangeTask): Array<{ key: string; label: string; icon: typeof CirclePlay }> {
   switch (task.status) {
-    case 'ready': return [{ key: 'start', label: 'Iniciar', icon: CirclePlay }];
-    case 'in_progress': return [{ key: 'complete', label: 'Completar con evidencia', icon: CheckCircle2 }];
-    case 'blocked': return [{ key: 'unblock', label: 'Desbloquear', icon: RotateCcw }];
+    case 'ready': return [{ key: 'start', label: 'Start', icon: CirclePlay }];
+    case 'in_progress': return [{ key: 'complete', label: 'Complete with evidence', icon: CheckCircle2 }];
+    case 'blocked': return [{ key: 'unblock', label: 'Unblock', icon: RotateCcw }];
     default: return [];
   }
 }
@@ -57,7 +58,6 @@ export default function MyChangeTasks() {
   const [filter, setFilter] = useState<AssignedChangeTaskFilter>('mine');
   const [notice, setNotice] = useState('');
   const [evidenceFor, setEvidenceFor] = useState<ChangeTask | null>(null);
-  const [evidence, setEvidence] = useState('');
   const canExecute = can(PERMISSIONS.changeTasksExecute);
 
   const query = useQuery({
@@ -72,9 +72,8 @@ export default function MyChangeTasks() {
         evidence: evidenceText ? [evidenceText] : undefined,
       }),
     onSuccess: (task) => {
-      setNotice(`${task.humanId} ahora está ${taskStatusMeta[task.status].label.toLowerCase()}.`);
+      setNotice(`${task.humanId} is now ${taskStatusMeta[task.status].label.toLowerCase()}.`);
       setEvidenceFor(null);
-      setEvidence('');
       void queryClient.invalidateQueries({ queryKey: ['changes', 'assigned-tasks'] });
     },
   });
@@ -82,11 +81,10 @@ export default function MyChangeTasks() {
   function run(task: ChangeTask, key: string) {
     setNotice('');
     transition.reset();
-    // Completar SIN evidencia deja una tarea cerrada que nadie puede
-    // auditar, así que ese caso pasa por un diálogo y no por un prompt.
+    // Completing WITHOUT evidence leaves a closed task nobody can audit,
+    // so that case goes through a dialog, never a native prompt.
     if (key === 'complete') {
       setEvidenceFor(task);
-      setEvidence('');
       return;
     }
     transition.mutate({ task, key });
@@ -97,14 +95,14 @@ export default function MyChangeTasks() {
       <header className="flex items-start gap-3">
         <div className="rounded-xl bg-primary/10 p-2.5 text-primary"><ListChecks className="h-6 w-6" /></div>
         <div>
-          <h1 className="text-2xl font-black text-on-surface">Mis tareas de cambio</h1>
+          <h1 className="text-2xl font-black text-on-surface">My change tasks</h1>
           <p className="mt-1 text-sm text-on-surface-variant">
-            Trabajo dirigido a ti o a tu equipo desde una RFC. Ver una tarea no concede acceso a la RFC completa.
+            Work directed to you or your team from an RFC. Viewing a task doesn't grant access to the full RFC.
           </p>
         </div>
       </header>
 
-      <div className="mt-6 flex flex-wrap items-center gap-2" role="tablist" aria-label="Filtro de tareas asignadas">
+      <div className="mt-6 flex flex-wrap items-center gap-2" role="tablist" aria-label="Assigned task filter">
         {filterTabs.map((tab) => (
           <button
             key={tab.key}
@@ -132,16 +130,16 @@ export default function MyChangeTasks() {
       )}
 
       {query.isLoading ? (
-        <p className="mt-8 text-sm text-on-surface-variant">Cargando tu trabajo asignado…</p>
+        <p className="mt-8 text-sm text-on-surface-variant">Loading your assigned work…</p>
       ) : query.isError ? (
         <p className="mt-8 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
-          No se pudo cargar tu trabajo asignado: {query.error.message}
+          We couldn't load your assigned work: {query.error.message}
         </p>
       ) : items.length === 0 ? (
         <div className="mt-8 rounded-3xl border border-dashed border-border/50 p-12 text-center">
           <ListChecks className="mx-auto h-10 w-10 text-on-surface-variant" />
           <p className="mt-4 font-bold text-on-surface">
-            {filter === 'mine' ? 'No tienes tareas asignadas' : 'No hay tareas en este alcance'}
+            {filter === 'mine' ? 'You have no assigned tasks' : 'No tasks in this scope'}
           </p>
           <p className="mt-1 text-xs text-on-surface-variant">{filterTabs.find((tab) => tab.key === filter)?.hint}</p>
         </div>
@@ -159,46 +157,16 @@ export default function MyChangeTasks() {
         </div>
       )}
 
-      {evidenceFor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true">
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              transition.mutate({ task: evidenceFor, key: 'complete', evidenceText: evidence.trim() });
-            }}
-            className="w-full max-w-lg rounded-3xl border border-border/50 bg-surface-container-low p-6 shadow-2xl"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-black text-on-surface">Completar {evidenceFor.humanId}</h2>
-                <p className="mt-1 text-xs text-on-surface-variant">{evidenceFor.title}</p>
-              </div>
-              <button type="button" onClick={() => setEvidenceFor(null)} className="rounded-lg p-2 text-on-surface-variant hover:bg-on-surface/5"><X className="h-5 w-5" /></button>
-            </div>
-            <label className="mt-5 block text-xs font-bold text-on-surface-variant">
-              Evidencia del trabajo realizado
-              <textarea
-                required
-                autoFocus
-                value={evidence}
-                onChange={(event) => setEvidence(event.target.value)}
-                placeholder="Qué se hizo, dónde quedó registrado, número de guía…"
-                className="input-field mt-2 min-h-28 w-full"
-              />
-            </label>
-            <p className="mt-2 flex items-center gap-1.5 text-[11px] text-on-surface-variant">
-              <Paperclip className="h-3.5 w-3.5" />
-              Queda en el historial de la tarea y lo ve quien gobierna la RFC.
-            </p>
-            <div className="mt-6 flex justify-end gap-3 border-t border-border/40 pt-5">
-              <button type="button" onClick={() => setEvidenceFor(null)} className="secondary-button">Cancelar</button>
-              <button type="submit" disabled={transition.isPending} className="primary-button disabled:opacity-40">
-                <CheckCircle2 className="h-4 w-4" />{transition.isPending ? 'Guardando…' : 'Completar tarea'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      <TaskActionDialog
+        open={evidenceFor !== null}
+        onClose={() => setEvidenceFor(null)}
+        onConfirm={(evidenceText) => {
+          if (evidenceFor) transition.mutate({ task: evidenceFor, key: 'complete', evidenceText });
+        }}
+        actionKey={evidenceFor ? 'complete' : null}
+        loading={transition.isPending}
+        error={evidenceFor ? transition.error?.message : undefined}
+      />
     </div>
   );
 }
@@ -216,9 +184,9 @@ function AssignedTaskCard({
 }) {
   const { task, change } = item;
   const meta = taskStatusMeta[task.status];
-  // Los nombres vienen del snapshot congelado al crear la tarea, no de una
-  // consulta a Organization por fila: si a alguien lo mueven de equipo, la
-  // tarea sigue diciendo a qué equipo se dirigió cuando se creó.
+  // The names come from the snapshot frozen when the task was created, not
+  // a per-row Organization lookup: if someone changes teams, the task still
+  // says which team it was directed to when it was created.
   const department = task.organization?.departmentName || task.area || '—';
   const team = task.organization?.teamName || task.team || '—';
   const assignee = task.organization?.assigneeName || task.assigneeId;
@@ -235,31 +203,31 @@ function AssignedTaskCard({
 
       {task.description && <p className="mt-3 line-clamp-3 text-xs leading-5 text-on-surface-variant">{task.description}</p>}
 
-      {/* Contexto MÍNIMO de la RFC padre: para qué cambio es y en qué punto
-          va. Sin enlace al detalle, porque esta vista no presupone que quien
-          ejecuta pueda leer la RFC. */}
+      {/* MINIMUM context of the parent RFC: which change it's for and where
+          it stands. No link to the detail page, because this view doesn't
+          assume whoever executes it can read the RFC. */}
       <div className="mt-4 rounded-xl border border-border/30 bg-surface-container-low p-3">
-        <div className="text-[10px] font-black uppercase tracking-wider text-on-surface-variant">RFC de origen</div>
+        <div className="text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Source RFC</div>
         <div className="mt-1 font-mono text-[11px] font-bold text-on-surface">{change.humanId}</div>
-        <p className="mt-0.5 line-clamp-2 text-xs text-on-surface-variant">{change.title || 'Sin título'}</p>
+        <p className="mt-0.5 line-clamp-2 text-xs text-on-surface-variant">{change.title || 'Untitled'}</p>
         <span className="mt-2 inline-block rounded-md bg-on-surface/5 px-2 py-0.5 text-[10px] font-bold text-on-surface-variant">{change.state}</span>
       </div>
 
       <dl className="mt-4 grid grid-cols-2 gap-2 text-[11px]">
-        <div><dt className="text-on-surface-variant">Departamento</dt><dd className="font-bold text-on-surface">{department}</dd></div>
-        <div><dt className="text-on-surface-variant">Equipo</dt><dd className="font-bold text-on-surface">{team}</dd></div>
+        <div><dt className="text-on-surface-variant">Department</dt><dd className="font-bold text-on-surface">{department}</dd></div>
+        <div><dt className="text-on-surface-variant">Team</dt><dd className="font-bold text-on-surface">{team}</dd></div>
         <div className="col-span-2">
-          <dt className="text-on-surface-variant">Responsable</dt>
+          <dt className="text-on-surface-variant">Assignee</dt>
           <dd className="flex items-center gap-1.5 font-bold text-on-surface">
             <Users className="h-3.5 w-3.5 text-on-surface-variant" />
-            {assignee || 'Dirigida al equipo, sin responsable individual'}
+            {assignee || 'Directed to the team, no individual assignee'}
           </dd>
         </div>
       </dl>
 
       {task.dueAt && (
         <div className="mt-3 flex items-center gap-1.5 text-[11px] text-on-surface-variant">
-          <Clock3 className="h-3.5 w-3.5" />Vence {new Date(task.dueAt).toLocaleString()}
+          <Clock3 className="h-3.5 w-3.5" />Due {new Date(task.dueAt).toLocaleString()}
         </div>
       )}
       {task.blockedReason && (

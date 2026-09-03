@@ -159,7 +159,10 @@ function ExistingWorkflow({ id }: { id: string }) {
       {esBorrador
         ? <DraftEditor definition={workflow.data} />
         : <PublishedViewer definition={workflow.data} />}
-      <button type="button" onClick={() => setShowHistory(true)} className="primary-button fixed bottom-7 right-7 z-30 shadow-2xl"><Clock3 className="h-4 w-4" /> Ver ejecuciones</button>
+      <button type="button" onClick={() => setShowHistory(true)} /* Por encima del botón flotante del asistente RAG, que ocupa la
+             misma esquina (bottom-6 right-6). Compartir el sitio dejaba «Ver
+             ejecuciones» tapado y sin poder pulsarse. */
+          className="primary-button fixed bottom-24 right-7 z-30 shadow-2xl"><Clock3 className="h-4 w-4" /> Ver ejecuciones</button>
       {showHistory && <ExecutionHistory workflowID={id} definition={workflow.data} onClose={() => setShowHistory(false)} />}
     </div>
   );

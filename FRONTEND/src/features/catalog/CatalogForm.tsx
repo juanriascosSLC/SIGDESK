@@ -250,7 +250,7 @@ export default function CatalogForm() {
     setAttachmentError('');
     const tooLarge = files.find((file) => file.size > MAX_FORM_ATTACHMENT_BYTES);
     if (tooLarge) {
-      setAttachmentError(`«${tooLarge.name}» supera el máximo de 10 MB.`);
+      setAttachmentError(`"${tooLarge.name}" is over the 10 MB limit.`);
       return;
     }
     setPendingAttachments((current) => {
@@ -258,7 +258,7 @@ export default function CatalogForm() {
       for (const file of files) byId.set(pendingAttachmentId(file), file);
       const next = Array.from(byId.values());
       if (next.length > MAX_FORM_ATTACHMENTS) {
-        setAttachmentError(`Puedes adjuntar máximo ${MAX_FORM_ATTACHMENTS} archivos.`);
+        setAttachmentError(`You can attach up to ${MAX_FORM_ATTACHMENTS} files.`);
         return current;
       }
       return next;
@@ -378,7 +378,7 @@ export default function CatalogForm() {
       return value === null || value === undefined || (typeof value === 'string' && !value.trim());
     });
     if (missing) {
-      setSubmitError(`Completa el campo obligatorio «${missing.label}».`);
+      setSubmitError(`Fill in the required field "${missing.label}".`);
       return;
     }
     // Los topes de un campo multi-dispositivo tienen su propio mensaje: caer
@@ -393,7 +393,7 @@ export default function CatalogForm() {
       }))
       .find((entry) => entry.issue);
     if (outOfRange) {
-      setSubmitError(`«${outOfRange.field.label}»: ${outOfRange.issue}`);
+      setSubmitError(`"${outOfRange.field.label}": ${outOfRange.issue}`);
       return;
     }
     setSubmitError('');
@@ -507,8 +507,8 @@ export default function CatalogForm() {
           onRemove: (id) => setPendingAttachments((current) => current.filter((file) => pendingAttachmentId(file) !== id)),
         },
         submit: {
-          submitLabel: `Crear ${definition.entityKey}`,
-          cancelLabel: 'Cancelar',
+          submitLabel: `Create ${definition.entityKey}`,
+          cancelLabel: 'Cancel',
           pending: createMutation.isPending,
           errorMessage: createMutation.isError ? createMutation.error.message : undefined,
           warningMessage: !createMutation.isError && submitError ? submitError : undefined,
@@ -519,14 +519,14 @@ export default function CatalogForm() {
     : null;
 
   if (definitionQuery.isLoading) {
-    return <div className="p-8 text-on-surface-variant">Interpretando definición…</div>;
+    return <div className="p-8 text-on-surface-variant">Loading definition…</div>;
   }
   if (definitionQuery.isError || !definition) {
     return (
       <div className="p-8 max-w-2xl mx-auto">
-        <button onClick={() => navigate(-1)} className="text-primary mb-6">← Volver</button>
+        <button onClick={() => navigate(-1)} className="text-primary mb-6">← Back</button>
         <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-6 text-red-300">
-          No existe una definición publicada para <strong>{categoryId.toUpperCase()}</strong>.
+          There is no published definition for <strong>{categoryId.toUpperCase()}</strong>.
         </div>
       </div>
     );
@@ -548,19 +548,19 @@ export default function CatalogForm() {
         <div className="bg-surface-container-low border border-emerald-500/30 rounded-3xl p-10 text-center">
           <CheckCircle2 className="w-14 h-14 text-emerald-400 mx-auto mb-5" />
           <div className="text-xs font-black uppercase tracking-[0.2em] text-emerald-300 mb-2">
-            Registro creado
+            Record created
           </div>
           <h1 className="text-3xl font-black text-on-surface">{createdEntity.humanId}</h1>
           <p className="text-on-surface-variant mt-3">
-            Ejecutando {definition.entityKey} v{createdEntity.definitionVersion} en estado{' '}
+            Running {definition.entityKey} v{createdEntity.definitionVersion} in state{' '}
             <strong className="text-on-surface">{createdEntity.state}</strong>.
           </p>
           <p className="text-[11px] font-mono text-on-surface-variant mt-2">
-            definición {createdEntity.definitionVersionId} · esquema {createdEntity.schemaVersion}
+            definition {createdEntity.definitionVersionId} · schema {createdEntity.schemaVersion}
           </p>
           {(createMutation.data?.attachmentErrors.length ?? 0) > 0 && (
             <div role="alert" className="mt-5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-left text-sm text-amber-200">
-              El registro se creó, pero algunos adjuntos no pudieron cargarse. Puedes volver a agregarlos desde el detalle.
+              The record was created, but some attachments could not be uploaded. You can add them again from the detail view.
               <ul className="mt-2 list-disc pl-5">
                 {createMutation.data?.attachmentErrors.map((message) => <li key={message}>{message}</li>)}
               </ul>
@@ -570,15 +570,15 @@ export default function CatalogForm() {
             <div className="mt-5 rounded-xl border border-border/40 bg-surface-container p-4">
               {ticketProjectionQuery.data ? (
                 <p className="text-sm text-emerald-300">
-                  El registro ya está disponible en Tickets.
+                  The record is already available in Tickets.
                 </p>
               ) : ticketProjectionQuery.isError ? (
                 <p className="text-sm text-amber-300">
-                  El registro fue creado. La proyección en Tickets continúa en segundo plano.
+                  The record was created. Its projection into Tickets is still catching up in the background.
                 </p>
               ) : (
                 <p className="text-sm text-on-surface-variant">
-                  Sincronizando con el módulo Tickets…
+                  Syncing with the Tickets module…
                 </p>
               )}
             </div>
@@ -611,7 +611,7 @@ export default function CatalogForm() {
                 onClick={() => navigate(detailPath)}
                 className="px-5 py-3 rounded-xl bg-emerald-500 text-slate-950 font-black"
               >
-                Ver {definition.entityKey}
+                View {definition.entityKey}
               </button>
             )}
             {ticketProjectionQuery.data && (
@@ -623,7 +623,7 @@ export default function CatalogForm() {
                 }
                 className="px-5 py-3 rounded-xl bg-emerald-500 text-slate-950 font-black"
               >
-                Ver ticket
+                View ticket
               </button>
             )}
             <button
@@ -637,13 +637,13 @@ export default function CatalogForm() {
               }}
               className="px-5 py-3 rounded-xl bg-primary text-primary-foreground font-black"
             >
-              Crear otro
+              Create another
             </button>
             <button
               onClick={() => navigate(-1)}
               className="px-5 py-3 rounded-xl border border-border/50 text-on-surface font-bold"
             >
-              Volver al catálogo
+              Back to catalog
             </button>
           </div>
         </div>
@@ -658,7 +658,7 @@ export default function CatalogForm() {
         className="flex items-center gap-2 text-on-surface-variant hover:text-primary mb-6 transition-colors w-fit"
       >
         <ArrowLeft className="w-4 h-4" />
-        Volver al catálogo
+        Back to catalog
       </button>
 
       {createPage && formContext && (

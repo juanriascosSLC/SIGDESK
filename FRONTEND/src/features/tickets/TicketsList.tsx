@@ -18,9 +18,12 @@ import {
 } from 'lucide-react';
 import { BulkActionBar } from './components/BulkActionBar';
 import { MergeTicketsModal } from './components/MergeTicketsModal';
-import { useAssignTicket, useUpdateTicketStatus, useTickets } from './hooks';
+import { useAssignTicketOrganizational, useUpdateTicketStatus, useTickets } from './hooks';
+import { BulkAssignDialog } from './dialogs/TicketDialogs';
+import type { AssignmentTarget } from '@/features/organization/AssignmentPicker';
+import { useToast } from '@/components/ui';
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/states';
 import { useAuth } from '@/features/auth/useAuth';
 import {
   listSlaAssessments,
@@ -230,8 +233,10 @@ export default function TicketsList() {
       tickets,
     ],
   );
-  const assignTicket = useAssignTicket();
+  const assignTicketOrganizational = useAssignTicketOrganizational();
   const updateStatus = useUpdateTicketStatus();
+  const toast = useToast();
+  const [showBulkAssignDialog, setShowBulkAssignDialog] = useState(false);
 
   useEffect(() => {
     const interval = window.setInterval(() => setSlaNow(Date.now()), 60_000);
@@ -265,24 +270,42 @@ export default function TicketsList() {
     setCursorStack([]);
   }
 
-  async function handleBulkAssign() {
-    const name = window.prompt('Assign selected tickets to:', currentUserName);
-    if (!name) return;
-    await Promise.all(
-      Array.from(selected).map((id) =>
-        assignTicket.mutateAsync({ id, assigneeName: name, actorName: currentUserName }),
-      ),
-    );
-    setSelected(new Set());
+  function handleBulkAssign() {
+    setShowBulkAssignDialog(true);
+  }
+
+  async function confirmBulkAssign(target: AssignmentTarget) {
+    try {
+      await Promise.all(
+        Array.from(selected).map((id) => assignTicketOrganizational.mutateAsync({ id, target })),
+      );
+      setSelected(new Set());
+      setShowBulkAssignDialog(false);
+      toast.show({ tone: 'success', title: `Assigned ${selected.size} ticket${selected.size === 1 ? '' : 's'}` });
+    } catch (err) {
+      toast.show({
+        tone: 'error',
+        title: 'Bulk assignment failed',
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
   }
 
   async function handleBulkResolve() {
-    await Promise.all(
-      Array.from(selected).map((id) =>
-        updateStatus.mutateAsync({ id, status: 'Resolved', actorName: currentUserName }),
-      ),
-    );
-    setSelected(new Set());
+    try {
+      await Promise.all(
+        Array.from(selected).map((id) =>
+          updateStatus.mutateAsync({ id, status: 'Resolved', actorName: currentUserName }),
+        ),
+      );
+      setSelected(new Set());
+    } catch (err) {
+      toast.show({
+        tone: 'error',
+        title: 'Bulk resolve failed',
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
   }
 
   if (isLoading) {
@@ -290,20 +313,7 @@ export default function TicketsList() {
   }
 
   if (isError) {
-    return (
-      <EmptyState
-        title="Could not load tickets"
-        description={error.message}
-        action={
-          <button
-            onClick={() => void refetch()}
-            className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold"
-          >
-            Try again
-          </button>
-        }
-      />
-    );
+    return <ErrorState title="Could not load tickets" description={error.message} onRetry={() => void refetch()} />;
   }
 
   const views: { id: QuickView; label: string; count: number; accent?: string }[] = [
@@ -351,10 +361,17 @@ export default function TicketsList() {
 
   return (
     <div data-testid="tickets-list" className="flex flex-col flex-1 min-h-0 relative">
-      <MergeTicketsModal 
-        isOpen={isMergeModalOpen} 
-        onClose={() => { setIsMergeModalOpen(false); setSelected(new Set()); }} 
-        selectedTickets={Array.from(selected)} 
+      <MergeTicketsModal
+        isOpen={isMergeModalOpen}
+        onClose={() => { setIsMergeModalOpen(false); setSelected(new Set()); }}
+        selectedTickets={Array.from(selected)}
+      />
+      <BulkAssignDialog
+        open={showBulkAssignDialog}
+        onClose={() => setShowBulkAssignDialog(false)}
+        onConfirm={confirmBulkAssign}
+        count={selected.size}
+        loading={assignTicketOrganizational.isPending}
       />
       <BulkActionBar
         selectedCount={selected.size}
@@ -375,7 +392,7 @@ export default function TicketsList() {
             data-testid="ticket-search"
             value={search}
             onChange={(e) => { setSearch(e.target.value); resetPage(); }}
-            placeholder="Buscar por título, descripción o ID…"
+            placeholder="Search by title, description or ID…"
             className="w-full bg-surface-container/80 border border-border/50 text-sm rounded-xl pl-9 pr-3.5 py-2 text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 transition-all"
           />
         </div>
@@ -469,7 +486,7 @@ export default function TicketsList() {
                 <th className="px-4 py-3.5">SLA</th>
                 <th className="px-4 py-3.5">
                   <span className="inline-flex items-center gap-1.5 cursor-pointer text-primary transition-colors">
-                    Fecha Creación <ArrowDown className="w-3.5 h-3.5" />
+                    Created date <ArrowDown className="w-3.5 h-3.5" />
                   </span>
                 </th>
                 <th className="px-4 py-3.5">Sitio</th>
@@ -590,7 +607,7 @@ export default function TicketsList() {
 
         {/* Pagination Footer */}
         <div className="mt-auto p-4 border-t border-border/40 bg-surface-container/80 backdrop-blur-md flex items-center justify-between text-xs text-on-surface-variant font-medium">
-          <div>Mostrando <span className="font-bold text-on-surface">{visibleTickets.length}</span> tickets{ticketPage?.hasMore ? ' · más disponibles' : ''}</div>
+          <div>Showing <span className="font-bold text-on-surface">{visibleTickets.length}</span> tickets{ticketPage?.hasMore ? ' · more available' : ''}</div>
           <div className="flex items-center gap-2">
             <button
               onClick={goToPrevPage}

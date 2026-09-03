@@ -26,6 +26,11 @@ export function GuidedProgress({
           return (
             <div key={step.id} className="flex items-center min-w-0 flex-1">
               <button
+                // El mismo testid que la barra lateral del editor completo:
+                // los pasos del asistente SON esa navegación, solo que dibujada
+                // como progreso. Sin esto, el modo guiado —el unico camino para
+                // crear una entidad nueva— no era direccionable por pruebas.
+                data-testid={`catalog-section-${step.id}`}
                 onClick={() => onSelect(step.id)}
                 className="group flex items-center gap-3 min-w-max text-left"
               >

@@ -17,7 +17,7 @@ export function ChangeTasksWidget({ context }: { context: TicketPageContext }) {
           </div>
         </div>
         <div className="mt-4 rounded-2xl border border-dashed border-border/40 p-5 text-sm text-on-surface-variant">
-          La vista real mostrará aquí las tareas administradas por Change Management.
+          The real view will show tasks managed by Change Management here.
         </div>
       </div>
     );

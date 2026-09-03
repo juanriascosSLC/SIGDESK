@@ -36,7 +36,7 @@ import { ProblemChangeDialog } from './ProblemChangeDialog';
 import { ConfiguredRecordDetail } from '@/features/tickets/ConfiguredRecordDetail';
 
 const stateLabels: Record<string, string> = {
-  under_investigation: 'En investigación',
+  under_investigation: 'Under investigation',
   known_error: 'Error conocido',
   resolved: 'Resuelto',
 };
@@ -46,7 +46,7 @@ function displayValue(field: FieldDefinition, value: unknown): string {
   if (field.type === 'select') {
     return field.options?.find((option) => option.value === value)?.label ?? String(value);
   }
-  if (field.type === 'boolean') return value ? 'Sí' : 'No';
+  if (field.type === 'boolean') return value ? 'Yes' : 'No';
   return String(value);
 }
 
@@ -116,7 +116,7 @@ export default function ProblemDetail() {
       queryClient.setQueryData(['problems', id], updated);
       void queryClient.invalidateQueries({ queryKey: ['problems'] });
       setEditing(false);
-      setNotice('Investigación actualizada.');
+      setNotice('Investigation updated.');
     },
   });
   const transitionMutation = useMutation({
@@ -140,7 +140,7 @@ export default function ProblemDetail() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['problems', id, 'relations'] });
       void queryClient.invalidateQueries({ queryKey: ['problems'] });
-      setNotice('Relación creada y validada contra la definición publicada.');
+      setNotice('Relation created and validated against the published definition.');
     },
   });
   const deleteRelationMutation = useMutation({
@@ -213,8 +213,8 @@ export default function ProblemDetail() {
   const configuredEditPanel = editing ? (
     <form onSubmit={submitEdit} className="rounded-3xl border border-primary/30 bg-surface-container-low">
       <div className="flex items-center justify-between border-b border-border/40 p-6">
-        <h2 className="text-lg font-black text-on-surface">Actualizar análisis</h2>
-        <button type="button" onClick={() => setEditing(false)} className="p-2 text-on-surface-variant" aria-label="Cancelar edición">
+        <h2 className="text-lg font-black text-on-surface">Update analysis</h2>
+        <button type="button" onClick={() => setEditing(false)} className="p-2 text-on-surface-variant" aria-label="Cancel editing">
           <X className="h-5 w-5" />
         </button>
       </div>
@@ -331,10 +331,10 @@ export default function ProblemDetail() {
                 {problem.humanId} · PRB v{problem.definitionVersion}
               </div>
               <h1 className="text-3xl font-black text-on-surface">
-                {String(problem.data.title || 'Problema sin título')}
+                {String(problem.data.title || 'Untitled problem')}
               </h1>
               <p className="mt-2 text-sm text-on-surface-variant">
-                Registro de causa raíz separado de los incidentes y cambios vinculados.
+                Root-cause record, separate from the linked incidents and changes.
               </p>
             </div>
             <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-black uppercase text-primary">
@@ -351,7 +351,7 @@ export default function ProblemDetail() {
                 }}
                 className="secondary-button"
               >
-                <Pencil className="h-4 w-4" /> Editar investigación
+                <Pencil className="h-4 w-4" /> Edit investigation
               </button>
             )}
             {can(PERMISSIONS.problemsEdit) &&
@@ -393,7 +393,7 @@ export default function ProblemDetail() {
         {editing ? (
           <form onSubmit={submitEdit} className="rounded-3xl border border-primary/30 bg-surface-container-low">
             <div className="flex items-center justify-between border-b border-border/40 p-6">
-              <h2 className="text-lg font-black text-on-surface">Actualizar análisis</h2>
+              <h2 className="text-lg font-black text-on-surface">Update analysis</h2>
               <button type="button" onClick={() => setEditing(false)} className="p-2 text-on-surface-variant">
                 <X className="h-5 w-5" />
               </button>
@@ -436,7 +436,7 @@ export default function ProblemDetail() {
             <h2 className="text-lg font-black text-on-surface">Relaciones de negocio</h2>
           </div>
           <p className="mb-5 text-sm text-on-surface-variant">
-            Los vínculos conservan ambos IDs, las versiones de definición y el contrato relacional con que fueron creados.
+            Links keep both IDs, the definition versions, and the relational contract they were created with.
           </p>
 
           {can(PERMISSIONS.problemsEdit) && (
@@ -494,7 +494,7 @@ export default function ProblemDetail() {
                     <button
                       onClick={() => deleteRelationMutation.mutate(relation.id)}
                       className="rounded-xl p-2 text-on-surface-variant hover:bg-red-500/10 hover:text-red-300"
-                      aria-label="Eliminar relación"
+                      aria-label="Remove relation"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -504,7 +504,7 @@ export default function ProblemDetail() {
             })}
             {relations.length === 0 && (
               <div className="md:col-span-2 rounded-2xl border border-dashed border-border/40 p-8 text-center text-sm text-on-surface-variant">
-                Aún no hay INC ni RFC vinculados a este problema.
+                No INCs or RFCs are linked to this problem yet.
               </div>
             )}
           </div>

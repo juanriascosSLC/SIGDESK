@@ -93,7 +93,7 @@ function SlaBar({ title, metric }: { title: string; metric: SlaMetricView }) {
         />
       </div>
       <span className="block mt-1 text-[10px] text-on-surface-variant">
-        Límite: {metric.deadline} · {Math.round(metric.pct)}% consumido
+        Deadline: {metric.deadline} · {Math.round(metric.pct)}% consumed
       </span>
     </div>
   );
@@ -134,15 +134,15 @@ export function SlaWidget({ context }: { context: TicketPageContext }) {
       ) : assessment ? (
         <div className="flex flex-wrap gap-8">
           <SlaBar title="Primera respuesta" metric={slaMetric(assessment, 'response')} />
-          <SlaBar title="Resolución" metric={slaMetric(assessment, 'resolution')} />
+          <SlaBar title="Resolution" metric={slaMetric(assessment, 'resolution')} />
         </div>
       ) : (
         <div className="flex items-start gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
           <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
           <div>
-            <p className="text-sm font-bold text-amber-300">Sin evaluación SLA</p>
+            <p className="text-sm font-bold text-amber-300">No SLA assessment</p>
             <p className="text-xs text-on-surface-variant mt-1">
-              La versión de catálogo usada por este ticket no vinculó una política SLA ejecutable.
+              The catalog version used by this ticket didn't link an executable SLA policy.
             </p>
           </div>
         </div>

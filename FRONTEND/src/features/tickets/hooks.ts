@@ -8,6 +8,7 @@ import {
   addComment,
   addWatcher,
   assignTicket,
+  assignTicketOrganizational,
   createTicket,
   getTicket,
   listActivity,
@@ -36,7 +37,10 @@ export const ticketKeys = {
 export function useTickets(filters: TicketFilters = {}) {
   return useQuery({
     queryKey: ticketKeys.list(filters),
-    queryFn: () => listTickets(filters),
+    // Forwards TanStack Query's own AbortSignal so a superseded or
+    // unmounted request actually cancels at the network level instead of
+    // running to completion with its result discarded.
+    queryFn: ({ signal }) => listTickets(filters, signal),
     // Only `cursor`/`limit` reach the server now — every other filter is
     // applied to the page inside listTickets (see its comments), so a filter
     // change still needs a new query key even though the request URL is
@@ -120,6 +124,21 @@ export function useAssignTicket() {
       actorName?: string;
       transitionKey?: string;
     }) => assignTicket(id, assigneeName, actorName, transitionKey),
+    onSuccess: invalidate,
+  });
+}
+
+/** Real organizational assignment (department -> team -> assignee) —
+ *  replaces the `window.prompt` collecting a raw agent id. */
+export function useAssignTicketOrganizational() {
+  const invalidate = useInvalidateTicket();
+  return useMutation({
+    mutationFn: ({ id, target, overwriteExisting, startWork }: {
+      id: string;
+      target: { departmentId: string; teamId: string; assigneeId?: string };
+      overwriteExisting?: boolean;
+      startWork?: boolean;
+    }) => assignTicketOrganizational(id, target, { overwriteExisting, startWork }),
     onSuccess: invalidate,
   });
 }

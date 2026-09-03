@@ -127,9 +127,15 @@
   --outline-variant: #3c494e;
 }
 
-/* ─── Global Fix for Native Select Dropdowns & Options in Dark Mode ────── */
-html, body, select, option, input, textarea {
-  color-scheme: dark;
+/* ─── Native form-control color-scheme, theme-aware ──────────────────────
+   Was unconditionally `dark` (forced even in light mode) — the browser's own
+   chrome for selects/scrollbars/date pickers stayed dark-styled regardless of
+   the active theme. `.dark { color-scheme: dark }` above already covers dark
+   mode; this just gives light mode its own native rendering instead of
+   inheriting dark's. The option background/color rules below are independent
+   (class-selector based, not color-scheme) and unaffected. */
+:root:not(.dark) {
+  color-scheme: light;
 }
 
 select option,

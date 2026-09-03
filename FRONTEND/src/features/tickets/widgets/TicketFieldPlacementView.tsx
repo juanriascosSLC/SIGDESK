@@ -8,7 +8,7 @@ function formatCatalogValue(
   field?: { type: string; options?: Array<{ value: string; label: string }> },
 ): string {
   if (value === null || value === undefined || value === '') return '—';
-  if (field?.type === 'boolean') return value ? 'Sí' : 'No';
+  if (field?.type === 'boolean') return value ? 'Yes' : 'No';
   if (field?.type === 'date') {
     const date = new Date(String(value));
     return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();

@@ -41,6 +41,14 @@ function GapDropZone({ id, active }: { id: string; active: boolean }) {
       <div ref={setNodeRef} className="pointer-events-none absolute inset-y-0 -inset-x-2.5" />
       <div
         data-testid={`page-designer-drop-${id}`}
+        // `data-over` expone el estado que antes solo se veía en el color.
+        //
+        // Sin él, una prueba de arrastre no tiene nada determinista que
+        // esperar antes de soltar: hay que adivinar un tiempo, y bajo carga el
+        // tiempo elegido se queda corto y el suelto cae en el vacío. Pasó — dos
+        // pruebas de este archivo fallaban alternándose según lo cargada que
+        // estuviera la suite.
+        data-over={isOver ? 'true' : 'false'}
         className={`h-full w-full rounded-full transition-colors ${
           !active ? 'bg-transparent' : isOver ? 'bg-primary ring-4 ring-primary/25' : 'bg-primary/25'
         }`}
@@ -56,6 +64,7 @@ function NewRowDropZone({ id, active }: { id: string; active: boolean }) {
       <div ref={setNodeRef} className="pointer-events-none absolute inset-x-0 -inset-y-3" />
       <div
         data-testid={`page-designer-drop-${id}`}
+        data-over={isOver ? 'true' : 'false'}
         className={`h-full w-full rounded-full border-2 border-dashed transition-colors ${
           !active
             ? 'border-transparent'
@@ -113,6 +122,7 @@ export function DesignerRegionCanvas({
       <div
         ref={setNodeRef}
         data-testid={`page-designer-region-${regionName}`}
+        data-over={isOver ? 'true' : 'false'}
         className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-8 text-center text-xs transition-colors ${
           isOver
             ? 'border-primary bg-primary/10 text-primary'

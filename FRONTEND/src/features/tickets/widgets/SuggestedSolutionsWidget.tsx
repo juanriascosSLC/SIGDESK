@@ -24,8 +24,8 @@ export function SuggestedSolutionsWidget({ context }: { context: TicketPageConte
       </h3>
       {problemRelations.length === 0 ? (
         <p className="text-sm italic text-on-surface-variant">
-          Sin problemas relacionados todavía — cuando se vincule uno, su solución conocida
-          aparecerá aquí.
+          No related problems yet — once one is linked, its known solution
+          will appear here.
         </p>
       ) : (
         <div className="space-y-2">
@@ -38,7 +38,7 @@ export function SuggestedSolutionsWidget({ context }: { context: TicketPageConte
               <div className="text-[10px] font-black uppercase text-amber-300">Problema relacionado</div>
               <div className="mt-1 font-mono text-sm font-bold text-on-surface">{humanId}</div>
               <p className="mt-1 text-xs text-on-surface-variant">
-                Revisa su solución conocida antes de investigar desde cero.
+                Review its known solution before investigating from scratch.
               </p>
             </button>
           ))}
