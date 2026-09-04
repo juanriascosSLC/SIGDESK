@@ -8,6 +8,14 @@ export type SiteTicketAnswer = {
   sources: AssistantSource[];
 };
 
+const STATUS_ALIASES: Array<{ pattern: RegExp; status: string }> = [
+  { pattern: /\b(in[ _-]?progress|en[ _-]?progreso)\b/i, status: 'In Progress' },
+  { pattern: /\b(pending[ _-]?review|en[ _-]?espera)\b/i, status: 'Pending Review' },
+  { pattern: /\b(resolved|resuelto)\b/i, status: 'Resolved' },
+  { pattern: /\b(closed|cerrado)\b/i, status: 'Closed' },
+  { pattern: /\b(open|abierto)\b/i, status: 'Open' },
+];
+
 function normalized(value: string): string {
   return value
     .normalize('NFD')
@@ -86,5 +94,30 @@ export async function answerLatestTicketForSite(message: string): Promise<SiteTi
       { type: 'site', id: site.id, score: 1 },
       { type: 'ticket', id: latest.humanId ?? latest.id, score: 1 },
     ],
+  };
+}
+
+/** Answers operational status lists through the ticket API, never via RAG. */
+export async function answerTicketsByStatus(message: string): Promise<SiteTicketAnswer | null> {
+  if (!/\b(tickets?|incidentes?|incs?)\b/i.test(message) || !/\bestado\b/i.test(message)) {
+    return null;
+  }
+  const status = STATUS_ALIASES.find(({ pattern }) => pattern.test(message))?.status;
+  if (!status) return null;
+
+  const page = await listTickets({ status, limit: 100 });
+  if (page.items.length === 0) {
+    return { answer: `No hay tickets en estado ${status}.`, sources: [] };
+  }
+  const shown = page.items.slice(0, 10);
+  const tickets = shown
+    .map((ticket) => `${ticket.humanId ?? `INC-${ticket.id}`}: «${ticket.title}»`)
+    .join('; ');
+  const remainder = page.hasMore || page.items.length > shown.length
+    ? ` Muestro los primeros ${shown.length}.`
+    : '';
+  return {
+    answer: `Hay ${page.items.length}${page.hasMore ? '+' : ''} tickets en estado ${status}: ${tickets}.${remainder}`,
+    sources: shown.map((ticket) => ({ type: 'ticket', id: ticket.humanId ?? ticket.id, score: 1 })),
   };
 }

@@ -11,7 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { ApiError, apiRequest } from "../../lib/apiClient";
-import { answerLatestTicketForSite } from './site-ticket-lookup';
+import { answerLatestTicketForSite, answerTicketsByStatus } from './site-ticket-lookup';
 
 type ChatSource = { type: string; id: string; score: number };
 type ChatMessage = {
@@ -76,6 +76,19 @@ export default function RagChatbot() {
             text: siteTicketAnswer.answer,
             time: "Ahora",
             sources: siteTicketAnswer.sources,
+          },
+        ]);
+        return;
+      }
+      const statusTicketAnswer = await answerTicketsByStatus(text);
+      if (statusTicketAnswer) {
+        setMessages((current) => [
+          ...current,
+          {
+            from: "assistant",
+            text: statusTicketAnswer.answer,
+            time: "Ahora",
+            sources: statusTicketAnswer.sources,
           },
         ]);
         return;
