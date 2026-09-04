@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   Bot,
   BookOpen,
@@ -8,17 +8,22 @@ import {
   ShieldCheck,
   Sparkles,
   Ticket,
+  ThumbsDown,
+  ThumbsUp,
+  RotateCcw,
   X,
 } from "lucide-react";
 import { ApiError, apiRequest } from "../../lib/apiClient";
-import { answerLatestTicketForSite, answerTicketsByStatus } from './site-ticket-lookup';
+import { answerLatestTicketForSite, answerTicketByCode, answerTicketFollowUp, answerTicketsByStatus } from './site-ticket-lookup';
 
-type ChatSource = { type: string; id: string; score: number };
+type ChatSource = { type: string; id: string; score: number; citation?: string };
 type ChatMessage = {
   from: "assistant" | "user";
   text: string;
   time: string;
   sources?: ChatSource[];
+  question?: string;
+  feedback?: "useful" | "not_useful";
 };
 type ChatResponse = {
   answer: string;
@@ -49,30 +54,150 @@ const suggestions = [
   },
 ];
 
+const FOCUSED_TICKET_STORAGE_KEY = "sig-desk.assistant.focused-ticket";
+const SESSION_STORAGE_KEY = "sig-desk.assistant.session.v1";
+const compact = (items: ChatMessage[]) => items.slice(-20);
+
+function renderInline(text: string): ReactNode[] {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={index} className="font-bold text-on-surface">{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+}
+
+/** Renders the small, safe Markdown subset returned by the assistant. */
+function AssistantMessageContent({ text }: { text: string }) {
+  const normalized = text
+    .replace(/\r\n/g, "\n")
+    .replace(/\s+(#{1,3}\s+)/g, "\n$1")
+    .replace(/\s+(-{3,}|\*{3,}|_{3,})\s+/g, "\n$1\n");
+  const lines = normalized.split("\n");
+  const blocks: ReactNode[] = [];
+  let listItems: { text: string; ordered: boolean }[] = [];
+
+  const flushList = () => {
+    if (!listItems.length) return;
+    const ordered = listItems[0].ordered;
+    const Tag = ordered ? "ol" : "ul";
+    blocks.push(
+      <Tag key={`list-${blocks.length}`} className={`my-2 space-y-1 pl-5 ${ordered ? "list-decimal" : "list-disc"}`}>
+        {listItems.map((item, index) => <li key={index}>{renderInline(item.text)}</li>)}
+      </Tag>,
+    );
+    listItems = [];
+  };
+
+  for (const [index, rawLine] of lines.entries()) {
+    const line = rawLine.trim();
+    const listMatch = line.match(/^([-*+])\s+(.+)$/);
+    const orderedMatch = line.match(/^\d+[.)]\s+(.+)$/);
+    if (listMatch || orderedMatch) {
+      listItems.push({ text: listMatch?.[2] ?? orderedMatch![1], ordered: Boolean(orderedMatch) });
+      continue;
+    }
+    flushList();
+    if (!line) continue;
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(line)) {
+      blocks.push(<hr key={`rule-${index}`} className="my-3 border-border/60" />);
+      continue;
+    }
+    const headingMatch = line.match(/^#{1,3}\s+(.+)$/);
+    if (headingMatch) {
+      blocks.push(<p key={`heading-${index}`} className="mt-3 text-sm font-bold text-on-surface">{renderInline(headingMatch[1])}</p>);
+      continue;
+    }
+    blocks.push(<p key={`paragraph-${index}`} className="mb-2 last:mb-0">{renderInline(line)}</p>);
+  }
+  flushList();
+  return <div className="break-words">{blocks}</div>;
+}
+
 export default function RagChatbot() {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>(starterMessages);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(SESSION_STORAGE_KEY) ?? "null");
+      return Array.isArray(saved?.messages) && saved.messages.length ? saved.messages.slice(-20) : starterMessages;
+    } catch { return starterMessages; }
+  });
+  const [focusedTicketId, setFocusedTicketId] = useState<string | null>(() => {
+    try {
+      return sessionStorage.getItem(FOCUSED_TICKET_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  });
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    try { sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ messages: compact(messages), focusedTicketId })); } catch { /* optional */ }
+  }, [messages, focusedTicketId]);
+
+  const rememberTicket = (ticketId: string | null) => {
+    setFocusedTicketId(ticketId);
+    try {
+      if (ticketId) sessionStorage.setItem(FOCUSED_TICKET_STORAGE_KEY, ticketId);
+      else sessionStorage.removeItem(FOCUSED_TICKET_STORAGE_KEY);
+    } catch {
+      // Session storage is optional; in-memory context still works.
+    }
+  };
 
   const sendMessage = async () => {
     const text = draft.trim();
     if (!text || isSending) return;
     setDraft("");
     setError(null);
+    const priorHistory = messages.slice(-6).map((item) => ({ role: item.from === "user" ? "user" : "assistant", content: item.text }));
     setMessages((current) => [
       ...current,
       { from: "user", text, time: "Ahora" },
     ]);
     setIsSending(true);
     try {
+      const exactTicketAnswer = await answerTicketByCode(text);
+      if (exactTicketAnswer) {
+        rememberTicket(exactTicketAnswer.focusedTicketId ?? null);
+        setMessages((current) => [
+          ...current,
+          {
+            from: "assistant",
+            question: text,
+            text: exactTicketAnswer.answer,
+            time: "Ahora",
+            sources: exactTicketAnswer.sources,
+          },
+        ]);
+        return;
+      }
+      if (focusedTicketId) {
+        const followUpAnswer = await answerTicketFollowUp(text, focusedTicketId);
+        if (followUpAnswer) {
+          rememberTicket(followUpAnswer.focusedTicketId ?? focusedTicketId);
+          setMessages((current) => [
+            ...current,
+            {
+              from: "assistant",
+              question: text,
+              text: followUpAnswer.answer,
+              time: "Ahora",
+              sources: followUpAnswer.sources,
+            },
+          ]);
+          return;
+        }
+      }
       const siteTicketAnswer = await answerLatestTicketForSite(text);
       if (siteTicketAnswer) {
         setMessages((current) => [
           ...current,
           {
             from: "assistant",
+            question: text,
             text: siteTicketAnswer.answer,
             time: "Ahora",
             sources: siteTicketAnswer.sources,
@@ -86,6 +211,7 @@ export default function RagChatbot() {
           ...current,
           {
             from: "assistant",
+            question: text,
             text: statusTicketAnswer.answer,
             time: "Ahora",
             sources: statusTicketAnswer.sources,
@@ -95,12 +221,13 @@ export default function RagChatbot() {
       }
       const response = await apiRequest<ChatResponse>("/ia_advisor/chat", {
         method: "POST",
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, history: priorHistory }),
       });
       setMessages((current) => [
         ...current,
         {
           from: "assistant",
+          question: text,
           text: response.answer,
           time: "Ahora",
           sources: response.sources,
@@ -123,6 +250,19 @@ export default function RagChatbot() {
     } finally {
       setIsSending(false);
     }
+  };
+
+  const clearConversation = () => {
+    setMessages(starterMessages); rememberTicket(null); setError(null);
+    try { sessionStorage.removeItem(SESSION_STORAGE_KEY); } catch { /* optional */ }
+  };
+  const sendFeedback = async (message: ChatMessage, rating: "useful" | "not_useful") => {
+    if (!message.question || message.feedback) return;
+    const comment = rating === "not_useful" ? window.prompt("¿Qué faltó o cómo mejorarías esta respuesta? (opcional)") ?? "" : "";
+    try {
+      await apiRequest("/ia_advisor/feedback", { method: "POST", body: JSON.stringify({ rating, comment, question: message.question, answer: message.text, sources: message.sources ?? [] }) });
+      setMessages((current) => current.map((item) => item === message ? { ...item, feedback: rating } : item));
+    } catch { setError("No se pudo registrar tu valoración."); }
   };
 
   if (!open)
@@ -160,6 +300,9 @@ export default function RagChatbot() {
             </div>
           </div>
           <div className="flex gap-1">
+            <button type="button" onClick={clearConversation} aria-label="Nueva conversación" title="Nueva conversación" className="rounded-lg p-2 text-on-surface-variant hover:bg-on-surface/5">
+              <RotateCcw size={15} />
+            </button>
             <button
               type="button"
               onClick={() => setOpen(false)}
@@ -195,7 +338,7 @@ export default function RagChatbot() {
               <div
                 className={`rounded-2xl px-3.5 py-3 text-sm leading-relaxed ${message.from === "user" ? "rounded-br-md bg-cyan-400 text-slate-950" : "rounded-bl-md border border-border/50 bg-surface-container text-on-surface"}`}
               >
-                {message.text}
+                {message.from === "assistant" ? <AssistantMessageContent text={message.text} /> : message.text}
               </div>
               {message.sources && message.sources.length > 0 && (
                 <div className="flex flex-wrap gap-1 px-1">
@@ -210,6 +353,14 @@ export default function RagChatbot() {
                       {source.type}/{source.id}
                     </span>
                   ))}
+                </div>
+              )}
+              {message.from === "assistant" && message.question && (
+                <div className="flex items-center gap-1 px-1 text-[10px] text-on-surface-variant">
+                  <span>¿Te sirvió?</span>
+                  <button type="button" onClick={() => void sendFeedback(message, "useful")} disabled={Boolean(message.feedback)} className={message.feedback === "useful" ? "text-emerald-400" : "hover:text-emerald-400"} aria-label="Respuesta útil"><ThumbsUp size={12} /></button>
+                  <button type="button" onClick={() => void sendFeedback(message, "not_useful")} disabled={Boolean(message.feedback)} className={message.feedback === "not_useful" ? "text-red-400" : "hover:text-red-400"} aria-label="Respuesta no útil"><ThumbsDown size={12} /></button>
+                  {message.feedback && <span>Gracias</span>}
                 </div>
               )}
               <span className="px-1 text-[9px] text-on-surface-variant">

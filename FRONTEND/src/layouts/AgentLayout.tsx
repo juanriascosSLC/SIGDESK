@@ -280,6 +280,7 @@ function Sidebar({ collapsed }: { collapsed: boolean }) {
             <div className="mb-2">
               <SectionHeader collapsed={collapsed} title="Administration" />
               {canManageUsersAndRoles && <NavButton collapsed={collapsed} active={currentPath.startsWith('/app/admin/users')} to="/app/admin/users" icon={Users} label="Users & Roles" />}
+              {canManageUsersAndRoles && <NavButton collapsed={collapsed} active={currentPath.startsWith('/app/admin/assistant-feedback')} to="/app/admin/assistant-feedback" icon={MessageSquare} label="Assistant Feedback" />}
               {canAuthorCatalog && <NavButton collapsed={collapsed} active={currentPath.startsWith('/app/admin/catalog-builder')} to="/app/admin/catalog-builder" icon={FolderKanban} label="Catalog Builder" />}
               {canViewAutomations && <NavButton collapsed={collapsed} active={currentPath.startsWith('/app/automations')} to="/app/automations" icon={Workflow} label="Automations" />}
               {canViewSla && <NavButton collapsed={collapsed} active={currentPath.startsWith('/app/settings/sla')} to="/app/settings/sla" icon={Timer} label="SLA Policies" />}

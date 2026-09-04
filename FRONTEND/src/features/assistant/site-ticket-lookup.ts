@@ -1,11 +1,13 @@
 import { listAssetSites, type AssetProjection } from '@/features/assets/api';
-import { listTickets } from '@/features/tickets/api';
+import { getTicket, listTickets } from '@/features/tickets/api';
+import type { Ticket } from '@/features/tickets/types';
 
 export type AssistantSource = { type: string; id: string; score: number };
 
 export type SiteTicketAnswer = {
   answer: string;
   sources: AssistantSource[];
+  focusedTicketId?: string;
 };
 
 const STATUS_ALIASES: Array<{ pattern: RegExp; status: string }> = [
@@ -45,6 +47,112 @@ function siteMatches(site: AssetProjection, query: string): boolean {
     .filter((value): value is string => Boolean(value))
     .map(normalized);
   return candidates.some((value) => value === expected) || candidates.some((value) => value.includes(expected));
+}
+
+function ticketCodeQuery(message: string): string | null {
+  const match = message.match(/\bINC\s*[-_ ]?\s*(\d{3,})\b/i);
+  return match ? `INC-${match[1]}` : null;
+}
+
+function ticketCodeMatches(ticket: { humanId?: string; id: string }, requested: string): boolean {
+  const compact = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return compact(ticket.humanId ?? '') === compact(requested);
+}
+
+function ticketSummary(ticket: Ticket): string {
+  const createdAt = Number.isNaN(Date.parse(ticket.createdAt))
+    ? ticket.createdAt
+    : new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(ticket.createdAt));
+  return [
+    `**${ticket.humanId ?? `INC-${ticket.id}`}** — ${ticket.title}.`,
+    `Estado actual: **${ticket.status || 'sin estado'}**.`,
+    ticket.priority ? `Prioridad: **${ticket.priority}**.` : '',
+    `Creado: ${createdAt}.`,
+    ticket.assignee ? `Responsable: ${ticket.assignee}.` : '',
+  ].filter(Boolean).join('\n');
+}
+
+function siteDetails(ticket: Ticket): { name: string; location?: string } | null {
+  const link = ticket.assetContext?.links.find((candidate) => candidate.role === 'site');
+  if (!link) return null;
+  const snapshot = link.snapshot;
+  const name = typeof snapshot.displayName === 'string' ? snapshot.displayName : link.assetId;
+  const attributes = snapshot.attributes;
+  const location = attributes && typeof attributes === 'object' && typeof (attributes as Record<string, unknown>).location === 'string'
+    ? (attributes as Record<string, unknown>).location as string
+    : undefined;
+  return { name, location };
+}
+
+/** Answers follow-up questions against the ticket currently in chat focus. */
+export async function answerTicketFollowUp(message: string, ticketId: string): Promise<SiteTicketAnswer | null> {
+  const question = normalized(message);
+  const asksForSite = /\b(site|sitio|ubicacion|location|donde)\b/.test(question);
+  const asksForStatus = /\b(estado|estatus|status)\b/.test(question);
+  const asksForPriority = /\b(prioridad|priority|urgencia)\b/.test(question);
+  const asksForOwner = /\b(responsable|asignado|asignada|owner)\b/.test(question);
+  const asksForSummary = /\b(informacion|informacion|detalle|detalles|resumen|cuentame)\b/.test(question);
+  if (!asksForSite && !asksForStatus && !asksForPriority && !asksForOwner && !asksForSummary) return null;
+
+  // Re-read on every turn: memory selects the record, but never becomes a
+  // stale or authorization-bypassing copy of its data.
+  const ticket = await getTicket(ticketId);
+  const source = [{ type: 'ticket', id: ticket.humanId ?? ticket.id, score: 1 }];
+  if (asksForSite) {
+    const site = siteDetails(ticket);
+    return {
+      answer: site
+        ? `El ticket **${ticket.humanId ?? `INC-${ticket.id}`}** pertenece al sitio **${site.name}**.${site.location ? ` Ubicación: ${site.location}.` : ''}`
+        : `No hay un sitio vinculado en los datos autorizados de **${ticket.humanId ?? `INC-${ticket.id}`}**.`,
+      sources: source,
+      focusedTicketId: ticket.id,
+    };
+  }
+  if (asksForStatus) return { answer: `El estado actual de **${ticket.humanId ?? `INC-${ticket.id}`}** es **${ticket.status || 'sin estado'}**.`, sources: source, focusedTicketId: ticket.id };
+  if (asksForPriority) return { answer: `La prioridad de **${ticket.humanId ?? `INC-${ticket.id}`}** es **${ticket.priority || 'sin prioridad'}**.`, sources: source, focusedTicketId: ticket.id };
+  if (asksForOwner) return { answer: ticket.assignee ? `El responsable actual de **${ticket.humanId ?? `INC-${ticket.id}`}** es **${ticket.assignee}**.` : `**${ticket.humanId ?? `INC-${ticket.id}`}** no tiene un responsable asignado.`, sources: source, focusedTicketId: ticket.id };
+  return { answer: ticketSummary(ticket), sources: source, focusedTicketId: ticket.id };
+}
+
+/**
+ * Resolves an explicit INC code through the user-authorized Tickets API.
+ * Codes are identifiers, not semantic questions: vector search is neither
+ * necessary nor reliable for this path.
+ */
+export async function answerTicketByCode(message: string): Promise<SiteTicketAnswer | null> {
+  const code = ticketCodeQuery(message);
+  if (!code) return null;
+
+  let page = await listTickets({ q: code, limit: 100 });
+  let ticket = page.items.find((item) => ticketCodeMatches(item, code));
+  // Some legacy card views show one extra trailing zero. Only fall back to
+  // that normalized form after the exact code returned no match, so a real
+  // ticket such as INC-0000050 always wins over INC-000005.
+  if (!ticket && /0$/.test(code)) {
+    const normalizedCode = code.slice(0, -1);
+    page = await listTickets({ q: normalizedCode, limit: 100 });
+    ticket = page.items.find((item) => ticketCodeMatches(item, normalizedCode));
+  }
+  if (!ticket) {
+    return {
+      answer: `No encontrÃ© un ticket autorizado con el cÃ³digo ${code}. Verifica el nÃºmero e intÃ©ntalo de nuevo.`,
+      sources: [],
+    };
+  }
+
+  const requestedDetail = await answerTicketFollowUp(message, ticket.id);
+  const nextQuestion = "¿Qué información te gustaría saber sobre este ticket: sitio, estado, prioridad, responsable o detalles?";
+  if (requestedDetail) {
+    return {
+      ...requestedDetail,
+      answer: `${requestedDetail.answer}\n\n${nextQuestion}`,
+    };
+  }
+  return {
+    answer: `${ticketSummary(ticket)}\n\n${nextQuestion}`,
+    sources: [{ type: 'ticket', id: ticket.humanId ?? ticket.id, score: 1 }],
+    focusedTicketId: ticket.id,
+  };
 }
 
 /**
