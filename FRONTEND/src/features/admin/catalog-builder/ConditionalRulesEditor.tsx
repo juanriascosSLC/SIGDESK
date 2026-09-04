@@ -24,15 +24,15 @@ export function ConditionalRulesEditor({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <p className="text-sm font-bold text-on-surface">Comportamiento condicional</p>
+              <p className="text-sm font-bold text-on-surface">Conditional behavior</p>
               {hasActiveCondition && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] font-bold text-violet-300 border border-violet-500/30">
-                  <Sparkles className="w-2.5 h-2.5" /> Reglas activas
+                  <Sparkles className="w-2.5 h-2.5" /> Active rules
                 </span>
               )}
             </div>
             <p className="text-xs text-on-surface-variant mt-0.5">
-              Cambia la visibilidad u obligatoriedad de este campo según el valor de otro campo.
+              Changes the visibility or requirement of this field based on another field's value.
             </p>
           </div>
         </div>
@@ -40,16 +40,16 @@ export function ConditionalRulesEditor({
       <div className="space-y-3">
         <ConditionRule
           testId={`catalog-condition-visible-${field.key}`}
-          label="Mostrar solo cuando"
-          emptyLabel="Siempre visible"
+          label="Show only when"
+          emptyLabel="Always visible"
           condition={field.visibleWhen}
           sources={sources}
           onChange={(visibleWhen) => onChange({ visibleWhen })}
         />
         <ConditionRule
           testId={`catalog-condition-required-${field.key}`}
-          label="Hacer obligatorio cuando"
-          emptyLabel={field.required ? 'Ya es obligatorio siempre' : 'No agregar obligación condicional'}
+          label="Make required when"
+          emptyLabel={field.required ? 'Already required by default' : 'Do not add conditional requirement'}
           condition={field.requiredWhen}
           sources={sources}
           disabled={field.required}

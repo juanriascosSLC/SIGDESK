@@ -3,7 +3,7 @@ import type { TicketPageContext } from './context';
 import { Button } from '@/components/ui';
 
 export function TicketActionsWidget({ context }: { context: TicketPageContext }) {
-  const { ticket, currentUserName, actions, fieldsLoading } = context;
+  const { ticket, currentUserId, actions, fieldsLoading } = context;
   return (
     <div className="flex flex-wrap items-center gap-2 pb-6 border-b border-border/40">
       {actions.canEditFields && (
@@ -26,7 +26,9 @@ export function TicketActionsWidget({ context }: { context: TicketPageContext })
           leadingIcon={<UserPlus className="w-3.5 h-3.5" />}
           className="bg-primary/10 border-primary/30 text-primary hover:bg-primary/20"
         >
-          {ticket.assignee === currentUserName ? 'Reassign' : 'Assign'}
+          {/* Compares by ID, never by display name — two people can share a
+              displayed name, and a name is never a reliable identity key. */}
+          {ticket.assigneeId && ticket.assigneeId === currentUserId ? 'Reassign' : 'Assign'}
         </Button>
       )}
       <div className="relative">

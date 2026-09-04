@@ -37,29 +37,29 @@ export function ComponentPalette({
         data-testid="template-designer-add-section"
         className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-primary/40 bg-primary/5 px-4 py-2.5 text-sm font-bold text-primary hover:bg-primary/10"
       >
-        <Plus className="h-4 w-4" /> Nueva sección
+        <Plus className="h-4 w-4" /> New section
       </button>
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant" />
         <input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Buscar campo…"
+          placeholder="Search fields…"
           className="w-full rounded-xl border border-border/40 bg-surface-container-low py-2 pl-9 pr-3 text-sm text-on-surface"
         />
       </div>
       <PaletteGroup
-        title="Campos de esta entidad"
+        title="Fields in this entity"
         items={catalogItems.filter((item) => matches(item.label))}
         onDragStart={onDragStart}
       />
       <PaletteGroup
-        title="Campos internos del sistema"
+        title="Internal system fields"
         items={ticketItems.filter((item) => matches(item.label))}
         onDragStart={onDragStart}
       />
       <PaletteGroup
-        title="Elementos del ticket"
+        title="Ticket elements"
         items={widgetItems.filter((item) => matches(item.label))}
         onDragStart={onDragStart}
       />

@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { ApiError } from '@/lib/apiClient';
+import { USER_UNAVAILABLE_LABEL } from '@/features/tickets/identity-labels';
 import {
   createChangeTask,
   getChangeAssignmentDirectory,
@@ -207,7 +208,10 @@ export function ChangeTasksBoard({
               <dl className="mt-4 grid grid-cols-2 gap-2 text-[11px]">
                 <div><dt className="text-on-surface-variant">Area</dt><dd className="font-bold text-on-surface">{task.organization?.departmentName || task.area}</dd></div>
                 <div><dt className="text-on-surface-variant">Team</dt><dd className="font-bold text-on-surface">{task.organization?.teamName || task.team || 'Not set'}</dd></div>
-                <div><dt className="text-on-surface-variant">Assignee</dt><dd className="font-bold text-on-surface">{task.organization?.assigneeName || task.assigneeId || 'Unassigned'}</dd></div>
+                {/* Never the raw id: an id with no resolved name reads as
+                    "User unavailable", distinct from genuinely no individual
+                    assignee ("Unassigned"). */}
+                <div><dt className="text-on-surface-variant">Assignee</dt><dd className="font-bold text-on-surface">{task.organization?.assigneeName || (task.assigneeId ? USER_UNAVAILABLE_LABEL : 'Unassigned')}</dd></div>
                 <div><dt className="text-on-surface-variant">Priority</dt><dd className="font-bold capitalize text-on-surface">{task.priority}</dd></div>
               </dl>
               {task.dependencyIds.length > 0 && (

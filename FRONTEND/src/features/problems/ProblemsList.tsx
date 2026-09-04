@@ -29,8 +29,8 @@ import { ApiError } from '@/lib/apiClient';
 
 const stateLabels: Record<string, string> = {
   under_investigation: 'Under investigation',
-  known_error: 'Error conocido',
-  resolved: 'Resuelto',
+  known_error: 'Known error',
+  resolved: 'Resolved',
 };
 
 function initialFormData(fields: FieldDefinition[]): Record<string, unknown> {
@@ -149,7 +149,7 @@ export default function ProblemsList() {
             </div>
             <h1 className="text-3xl font-black text-on-surface">Problem Management</h1>
             <p className="mt-2 text-sm text-on-surface-variant">
-              PRB independientes que investigan incidentes recurrentes y coordinan los RFC necesarios.
+              Independent PRBs investigating recurring incidents and coordinating necessary RFCs.
             </p>
           </div>
           {can(PERMISSIONS.problemsCreate) && (
@@ -159,7 +159,7 @@ export default function ProblemsList() {
               className="primary-button disabled:opacity-40"
             >
               <Plus className="h-4 w-4" />
-              Nuevo problema
+              New problem
             </button>
           )}
         </div>
@@ -167,8 +167,8 @@ export default function ProblemsList() {
         <div className="grid gap-4 sm:grid-cols-3">
           {[
             { label: 'Under investigation', value: investigating, Icon: FlaskConical, color: 'text-amber-400' },
-            { label: 'Errores conocidos', value: knownErrors, Icon: AlertOctagon, color: 'text-red-400' },
-            { label: 'Resueltos', value: resolved, Icon: CheckCircle2, color: 'text-emerald-400' },
+            { label: 'Known errors', value: knownErrors, Icon: AlertOctagon, color: 'text-red-400' },
+            { label: 'Resolved', value: resolved, Icon: CheckCircle2, color: 'text-emerald-400' },
           ].map(({ label, value, Icon, color }) => (
             <div key={label} className="rounded-2xl border border-border/40 bg-surface-container-low p-5">
               <div className="flex items-center justify-between">
@@ -197,7 +197,7 @@ export default function ProblemsList() {
         )}
         {(problemsQuery.isLoading || definitionQuery.isLoading) && (
           <div className="rounded-2xl border border-border/40 bg-surface-container-low p-12 text-center text-on-surface-variant">
-            Cargando problemas…
+            Loading problems…
           </div>
         )}
         {!problemsQuery.isLoading && !problemsQuery.isError && (
@@ -206,12 +206,12 @@ export default function ProblemsList() {
               <thead className="border-b border-border/40 bg-surface-container/50 text-xs uppercase tracking-wider text-on-surface-variant">
                 <tr>
                   <th className="px-6 py-4">ID</th>
-                  <th className="px-6 py-4">Problema</th>
-                  <th className="px-6 py-4">Estado</th>
-                  <th className="px-6 py-4">Incidentes</th>
+                  <th className="px-6 py-4">Problem</th>
+                  <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4">Incidents</th>
                   <th className="px-6 py-4">Workaround</th>
-                  <th className="px-6 py-4">Impacto</th>
-                  <th className="px-6 py-4">Responsable</th>
+                  <th className="px-6 py-4">Impact</th>
+                  <th className="px-6 py-4">Owner</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/20">
@@ -245,18 +245,18 @@ export default function ProblemsList() {
                       </td>
                       <td className="px-6 py-4 text-xs text-on-surface-variant">
                         {text(problem, 'workaround') ? (
-                          <span className="inline-flex items-center gap-1 text-emerald-400"><Wrench className="h-3 w-3" /> Disponible</span>
-                        ) : 'Sin registrar'}
+                          <span className="inline-flex items-center gap-1 text-emerald-400"><Wrench className="h-3 w-3" /> Available</span>
+                        ) : 'Not recorded'}
                       </td>
                       <td className="px-6 py-4 uppercase text-on-surface-variant">{text(problem, 'impact') || '—'}</td>
-                      <td className="px-6 py-4 text-on-surface-variant">{text(problem, 'owner') || 'Sin asignar'}</td>
+                      <td className="px-6 py-4 text-on-surface-variant">{text(problem, 'owner') || 'Unassigned'}</td>
                     </tr>
                   );
                 })}
                 {filteredProblems.length === 0 && (
                   <tr>
                     <td colSpan={7} className="px-6 py-14 text-center text-on-surface-variant">
-                      No hay problemas que coincidan. Crea un PRB cuando exista una causa recurrente que investigar.
+                      No matching problems. Create a PRB when there is a recurring root cause to investigate.
                     </td>
                   </tr>
                 )}
@@ -271,12 +271,12 @@ export default function ProblemsList() {
           <form onSubmit={submitProblem} className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-primary/30 bg-surface-container-low">
             <div className="sticky top-0 z-10 flex items-start justify-between border-b border-border/40 bg-surface-container-low/95 p-6">
               <div>
-                <h2 className="text-xl font-black text-on-surface">Crear problema</h2>
+                <h2 className="text-xl font-black text-on-surface">Create problem</h2>
                 <p className="mt-1 text-xs text-on-surface-variant">
-                  Formulario generado desde PRB v{definitionQuery.data?.version}.
+                  Form generated from PRB v{definitionQuery.data?.version}.
                 </p>
               </div>
-              <button type="button" onClick={() => setShowCreate(false)} aria-label="Cerrar" className="p-2 text-on-surface-variant">
+              <button type="button" onClick={() => setShowCreate(false)} aria-label="Close" className="p-2 text-on-surface-variant">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -295,13 +295,13 @@ export default function ProblemsList() {
             {createMutation.isError && (
               <div className="mx-6 mb-4 flex gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
-                {createMutation.error instanceof ApiError ? createMutation.error.message : 'No se pudo crear el problema.'}
+                {createMutation.error instanceof ApiError ? createMutation.error.message : 'Could not create problem.'}
               </div>
             )}
             <div className="sticky bottom-0 flex justify-end gap-3 border-t border-border/40 bg-surface-container-low/95 p-6">
-              <button type="button" onClick={() => setShowCreate(false)} className="secondary-button">Cancelar</button>
+              <button type="button" onClick={() => setShowCreate(false)} className="secondary-button">Cancel</button>
               <button type="submit" disabled={createMutation.isPending} className="primary-button disabled:opacity-50">
-                {createMutation.isPending ? 'Creando…' : 'Crear PRB'}
+                {createMutation.isPending ? 'Creating…' : 'Create PRB'}
               </button>
             </div>
           </form>

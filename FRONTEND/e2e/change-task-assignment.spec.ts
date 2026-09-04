@@ -87,7 +87,7 @@ test('el asignado entra a su bandeja aunque no pueda leer las RFC', async ({ pag
   await expect(page).toHaveURL(/\/app\/changes\/my-tasks$/);
 
   const nav = page.locator('#app-nav');
-  await expect(nav.getByText('Mis tareas')).toBeVisible();
+  await expect(nav.getByText('My Tasks')).toBeVisible();
   await expect(nav.getByText('Change Mgmt')).toHaveCount(0);
 });
 
@@ -114,13 +114,20 @@ test('la tarjeta muestra nombres del snapshot y solo el contexto minimo de la RF
 });
 
 test('completar exige evidencia y la envia en la transicion', async ({ page }) => {
+  const consoleErrors: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') consoleErrors.push(msg.text());
+  });
+
   await mockAuthenticatedTaskExecutor(page, { forwardUnmatched: false });
   await stubAssignedTasks(page, [warehouseTask]);
 
   let sent: Record<string, unknown> | null = null;
+  let requestCount = 0;
   await page.route(
     (url) => url.port === apiPort && url.pathname.endsWith('/tasks/9/transitions/complete'),
     async (route) => {
+      requestCount++;
       sent = route.request().postDataJSON() as Record<string, unknown>;
       await route.fulfill({
         status: 200,
@@ -131,19 +138,37 @@ test('completar exige evidencia y la envia en la transicion', async ({ page }) =
   );
 
   await page.goto('/app/changes/my-tasks');
-  await page.getByRole('button', { name: /Completar con evidencia/ }).click();
+  await page.getByRole('button', { name: 'Complete with evidence' }).click();
 
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
-  // El textarea es `required`: enviar vacio no dispara la peticion.
-  await dialog.getByRole('button', { name: /Completar tarea/ }).click();
+
+  // 1. Empty evidence: confirmation is disabled and sends no request
+  await expect(dialog.getByRole('button', { name: 'Complete' })).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Complete' }).click({ force: true });
   expect(sent).toBeNull();
+  expect(requestCount).toBe(0);
 
+  // 2. Whitespace-only evidence: confirmation remains disabled and sends no request
+  await dialog.getByRole('textbox').fill('   ');
+  await expect(dialog.getByRole('button', { name: 'Complete' })).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Complete' }).click({ force: true });
+  expect(sent).toBeNull();
+  expect(requestCount).toBe(0);
+
+  // 3. Valid evidence: button is enabled and sends exactly one request with exact payload
   await dialog.getByRole('textbox').fill('Stock alistado');
-  await dialog.getByRole('button', { name: /Completar tarea/ }).click();
+  await expect(dialog.getByRole('button', { name: 'Complete' })).toBeEnabled();
+  await dialog.getByRole('button', { name: 'Complete' }).click();
 
-  await expect(page.getByText(/TSK-000009 ahora está completada/i)).toBeVisible();
+  expect(requestCount).toBe(1);
   expect(sent).toEqual({ evidence: ['Stock alistado'] });
+
+  // 4. Successful completion displays the English success message
+  await expect(page.getByText(/TSK-000009 is now completed/i)).toBeVisible();
+
+  // 5. No console errors occur
+  expect(consoleErrors).toEqual([]);
 });
 
 test('el filtro por defecto pide solo lo asignado a quien pregunta', async ({ page }) => {
@@ -154,7 +179,7 @@ test('el filtro por defecto pide solo lo asignado a quien pregunta', async ({ pa
   await expect(page.locator('article').filter({ hasText: 'TSK-000009' })).toBeVisible();
   expect(requested[0]).toBe('?assignedToMe=true');
 
-  await page.getByRole('tab', { name: 'De mi equipo' }).click();
+  await page.getByRole('tab', { name: 'My team' }).click();
   await expect.poll(() => requested).toContain('?scope=team');
 });
 
@@ -163,7 +188,7 @@ test('la bandeja vacia se distingue de un fallo de carga', async ({ page }) => {
   await stubAssignedTasks(page, []);
 
   await page.goto('/app/changes/my-tasks');
-  await expect(page.getByText('No tienes tareas asignadas')).toBeVisible();
+  await expect(page.getByText('You have no assigned tasks')).toBeVisible();
 });
 
 test('un administrador global ve la bandeja y tambien el tablero de RFC', async ({ page }) => {

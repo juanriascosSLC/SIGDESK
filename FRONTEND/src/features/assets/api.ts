@@ -68,13 +68,13 @@ async function collectAssetPages(path: string, query: URLSearchParams): Promise<
       return { items: [...items.values()], hasMore: false, stale };
     }
     if (seenCursors.has(page.nextCursor)) {
-      throw new Error('Resources devolvió un cursor repetido al consultar Inventory.');
+      throw new Error('Resources returned a repeated cursor while querying Inventory.');
     }
     seenCursors.add(page.nextCursor);
     cursor = page.nextCursor;
   }
 
-  throw new Error('La consulta de Inventory excedió el límite seguro de paginación.');
+  throw new Error('Inventory query exceeded the safe pagination limit.');
 }
 
 export function listAssetSites(search = ''): Promise<AssetPage> {

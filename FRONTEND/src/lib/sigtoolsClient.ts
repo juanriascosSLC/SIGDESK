@@ -81,10 +81,10 @@ async function request<T>(
   } catch (error) {
     clearTimeout(timer);
     if ((error as { name?: string })?.name === 'AbortError') {
-      throw new SigtoolsError('El servidor de autenticación tardó demasiado en responder.', 408, null);
+      throw new SigtoolsError('Authentication server took too long to respond.', 408, null);
     }
     throw new SigtoolsError(
-      'No se pudo contactar al servidor de autenticación. Revisa tu conexión.',
+      'Could not reach the authentication server. Please check your connection.',
       0,
       null,
     );
@@ -99,7 +99,7 @@ async function request<T>(
       window.dispatchEvent(new CustomEvent(AUTH_FAILURE_EVENT));
     }
     throw new SigtoolsError(
-      (data as { detail?: string })?.detail ?? 'Tu sesión expiró.',
+      (data as { detail?: string })?.detail ?? 'Your session has expired.',
       response.status,
       data,
     );

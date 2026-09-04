@@ -109,55 +109,55 @@ export function ReviewEditor({
   const changedAreas = published
     ? (
         [
-          [specification.fields, published.specification.fields, 'Campos y reglas de captura'],
-          [specification.lifecycle, published.specification.lifecycle, 'Flujo de trabajo'],
-          [specification.relations ?? [], published.specification.relations ?? [], 'Relaciones'],
-          [specification.bindings ?? [], published.specification.bindings ?? [], 'Recursos conectados'],
-          [specification.layouts ?? null, published.specification.layouts ?? null, 'Formularios de creación y edición'],
-          [specification.detailPage ?? null, published.specification.detailPage ?? null, 'Diseño de la página de detalle'],
-          [specification.detailLayout ?? null, published.specification.detailLayout ?? null, 'Vista de detalle (formato anterior)'],
+          [specification.fields, published.specification.fields, 'Fields and capture rules'],
+          [specification.lifecycle, published.specification.lifecycle, 'Workflow'],
+          [specification.relations ?? [], published.specification.relations ?? [], 'Relationships'],
+          [specification.bindings ?? [], published.specification.bindings ?? [], 'Connected resources'],
+          [specification.layouts ?? null, published.specification.layouts ?? null, 'Creation and edit forms'],
+          [specification.detailPage ?? null, published.specification.detailPage ?? null, 'Detail page layout'],
+          [specification.detailLayout ?? null, published.specification.detailLayout ?? null, 'Detail view (legacy format)'],
         ] as Array<[unknown, unknown, string]>
       )
         .filter(([current, previous]) => !sameContent(current, previous))
         .map(([, , label]) => label)
-    : ['Primera publicación de la entidad'];
+    : ['First publication of the entity'];
   return (
     <section className="panel-card p-6 lg:p-8">
       <SectionHeading
         icon={<CheckCircle2 className="w-5 h-5" />}
-        title="Todo listo para guardar"
-        description="Comprueba el resultado. Puedes guardar varias veces sobre el mismo borrador antes de publicar."
+        title="Ready to save"
+        description="Review the result. You can save multiple times to the same draft before publishing."
       />
       <div className="grid md:grid-cols-2 gap-4 mt-7">
         <ReviewCard
-          title="Entidad"
-          value={selected.name || 'Sin nombre'}
-          detail={`${selected.entityKey || '—'} · registros ${specification.identity.prefix || '—'}-000001`}
+          title="Entity"
+          value={selected.name || 'Untitled'}
+          detail={`${selected.entityKey || '—'} · records ${specification.identity.prefix || '—'}-000001`}
         />
         <ReviewCard
-          title="Datos"
-          value={`${specification.fields.length} campos`}
-          detail={`${requiredFields} obligatorios · ${conditionalFields} condicionales`}
+          title="Fields"
+          value={`${specification.fields.length} fields`}
+          detail={`${requiredFields} required · ${conditionalFields} conditional`}
         />
         <ReviewCard
-          title="Comportamiento"
-          value={`${specification.lifecycle.states.length} estados`}
+          title="Behavior"
+          value={`${specification.lifecycle.states.length} states`}
           detail={
             specification.lifecycle.transitions.length > 0
-              ? `${specification.lifecycle.transitions.length} movimientos configurados`
-              : `Empieza y permanece en “${initialState?.label ?? 'Sin definir'}”`
+              ? `${specification.lifecycle.transitions.length} configured transitions`
+              : `Starts and stays in “${initialState?.label ?? 'Undefined'}”`
           }
         />
         <ReviewCard
-          title="Capacidades adicionales"
-          value={bindings.length > 0 ? `${bindings.length} recursos conectados` : 'Ninguna'}
-          detail={bindings.length > 0 ? 'Se fijarán sus versiones al publicar' : 'Puedes agregarlas más adelante'}
+          title="Additional capabilities"
+          value={bindings.length > 0 ? `${bindings.length} connected resources` : 'None'}
+          detail={bindings.length > 0 ? 'Versions will be pinned upon publishing' : 'You can add them later'}
         />
       </div>
       <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/5 p-5">
         <div className="flex items-center gap-2">
           <History className="h-4 w-4 text-primary" />
-          <h3 className="font-bold text-on-surface">Resumen antes de publicar</h3>
+          <h3 className="font-bold text-on-surface">Pre-publish summary</h3>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           {changedAreas.length > 0 ? changedAreas.map((area) => (
@@ -165,21 +165,21 @@ export function ReviewEditor({
               {area}
             </span>
           )) : (
-            <span className="text-sm text-on-surface-variant">No hay diferencias frente a lo publicado.</span>
+            <span className="text-sm text-on-surface-variant">No differences compared to published version.</span>
           )}
         </div>
         {(addedFields.length > 0 || removedFields.length > 0) && (
           <div className="mt-4 grid gap-3 text-xs md:grid-cols-2">
             <div>
-              <span className="font-black uppercase text-emerald-300">Campos agregados</span>
+              <span className="font-black uppercase text-emerald-300">Added fields</span>
               <p className="mt-1 text-on-surface-variant">
-                {addedFields.map((field) => field.label).join(', ') || 'Ninguno'}
+                {addedFields.map((field) => field.label).join(', ') || 'None'}
               </p>
             </div>
             <div>
-              <span className="font-black uppercase text-red-300">Campos retirados</span>
+              <span className="font-black uppercase text-red-300">Removed fields</span>
               <p className="mt-1 text-on-surface-variant">
-                {removedFields.map((field) => field.label).join(', ') || 'Ninguno'}
+                {removedFields.map((field) => field.label).join(', ') || 'None'}
               </p>
             </div>
           </div>
@@ -190,13 +190,13 @@ export function ReviewEditor({
         <div>
           <h3 className="font-bold text-on-surface">
             {selected.status === 'draft'
-              ? 'Estás trabajando sobre el borrador activo'
+              ? 'Working on active draft'
               : selected.status === 'published'
-                ? 'Los cambios se copiarán al borrador activo'
-                : 'Esta versión histórica se restaurará como borrador'}
+                ? 'Changes will be copied to active draft'
+                : 'This historical version will be restored as a draft'}
           </h3>
           <p className="text-sm text-on-surface-variant mt-1">
-            Guardar no afecta a los usuarios. La entidad solo estará disponible cuando decidas publicarla.
+            Saving does not affect users. The entity will only be available when you decide to publish it.
           </p>
         </div>
       </div>
@@ -235,12 +235,12 @@ export function AdvancedEditor({
     <section className="panel-card p-6 lg:p-8">
       <SectionHeading
         icon={<Braces className="w-5 h-5" />}
-        title="Modo avanzado"
-        description="Acceso opcional a la definición técnica completa."
+        title="Advanced mode"
+        description="Optional access to the full technical definition."
       />
       <div className="mt-6 rounded-2xl border border-amber-500/20 bg-amber-500/8 p-4 text-sm text-amber-100/80">
-        Esta sección está pensada para administradores técnicos. Los cambios incorrectos serán rechazados
-        por el backend antes de guardar.
+        This section is intended for technical administrators. Invalid changes will be rejected
+        by the backend before saving.
       </div>
       <textarea
         data-testid="catalog-advanced-json"
@@ -251,7 +251,7 @@ export function AdvancedEditor({
       />
       <div className="flex justify-end mt-4">
         <button onClick={onApply} className="secondary-button">
-          <Code2 className="w-4 h-4" /> Aplicar cambios avanzados
+          <Code2 className="w-4 h-4" /> Apply advanced changes
         </button>
       </div>
     </section>

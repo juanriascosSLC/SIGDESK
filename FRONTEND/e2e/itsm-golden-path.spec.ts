@@ -397,7 +397,11 @@ test('executes and traces the metadata-driven INC → PRB → RFC golden path', 
     }),
   ).toBeVisible();
   await expect(page.getByText(problem.humanId, { exact: true })).toBeVisible();
-  await expect(page.getByText('Riesgo Alto', { exact: true }).first()).toBeVisible();
+  // ChangeDetail renders this badge as "Risk: {label}" in English today
+  // (riskLabel maps 'high' -> 'High') — this test asserted the stale
+  // Spanish "Riesgo Alto", which no longer exists anywhere in the
+  // component and made the assertion fail instead of finding the real text.
+  await expect(page.getByText('Risk: High', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Validate replacement stock', { exact: true })).toBeVisible();
   await expect(page.getByText('Deploy and validate remediation', { exact: true })).toBeVisible();
 });

@@ -72,13 +72,13 @@ test('solo se ofrecen automatizaciones publicadas, con su versión', async ({ pa
 
   const selector = page.getByTestId('automations-available');
   await expect(selector.locator('option')).toContainText([
-    'Selecciona una automatización publicada',
+    'Select a published automation',
     'INC v3 · asignar_automatico · v3',
     'INC v1 · notificar_interesados · v1',
   ]);
   // El catálogo de capacidades solo devuelve lo publicado; un borrador no llega
   // hasta aquí, y el texto lo dice para que nadie lo busque.
-  await expect(page.getByTestId('automations-bindings')).toContainText('un borrador no puede vincularse');
+  await expect(page.getByTestId('automations-bindings')).toContainText('a draft cannot be bound');
 });
 
 test('se pueden vincular varias y cada una se puede apagar sin perderla', async ({ page }) => {
@@ -91,7 +91,7 @@ test('se pueden vincular varias y cada una se puede apagar sin perderla', async 
   // La primera muestra su versión y su familia: la referencia es a una versión
   // publicada exacta, no «la última».
   const primera = page.getByTestId('automation-binding').first();
-  await expect(primera).toContainText('Versión 3');
+  await expect(primera).toContainText('Version 3');
   await expect(primera).toContainText('fam-asignacion');
 
   // Apagar NO la quita: la referencia se conserva.
@@ -135,10 +135,10 @@ test('una referencia que ya no está publicada se marca y no se borra sola', asy
 
   await expect(page.getByTestId('automation-binding')).toHaveCount(1);
   await expect(page.getByTestId('automation-binding-missing')).toBeVisible();
-  await expect(page.getByTestId('automation-binding-missing')).toContainText('archivada');
+  await expect(page.getByTestId('automation-binding-missing')).toContainText('archived');
   // La referencia sigue ahí, con su versión y su familia: quitarla sola
   // cambiaría el comportamiento de la plantilla sin que nadie lo decidiera.
-  await expect(page.getByTestId('automation-binding')).toContainText('Versión 2');
+  await expect(page.getByTestId('automation-binding')).toContainText('Version 2');
   await expect(page.getByTestId('automation-binding')).toContainText('fam-archivada');
 });
 
@@ -155,5 +155,5 @@ test('si el catálogo de automatizaciones no responde, se avisa y no se pierde n
   await page.getByTestId('catalog-section-resources').click();
 
   await expect(page.getByTestId('automations-bindings-error')).toBeVisible();
-  await expect(page.getByTestId('automations-bindings-error')).toContainText('se bloqueará');
+  await expect(page.getByTestId('automations-bindings-error')).toContainText('will be blocked');
 });

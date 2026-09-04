@@ -77,7 +77,7 @@ test.describe('duplicar', () => {
     const copia = duplicateField(original, ['prioridad']);
 
     expect(copia.key).not.toBe(original.key);
-    expect(copia.label).toBe('Prioridad (copia)');
+    expect(copia.label).toBe('Prioridad (copy)');
     expect(copia.required).toBe(true);
   });
 
@@ -213,7 +213,7 @@ test.describe('pegado de opciones', () => {
   });
 
   test('una etiqueta sin caracteres usables recibe una clave, no una vacía', () => {
-    expect(parseOptionsFromText('###')[0].value).toBe('opcion');
+    expect(parseOptionsFromText('###')[0].value).toBe('option');
   });
 
   test('texto en blanco no produce opciones', () => {
@@ -301,10 +301,10 @@ test.describe('resumen de la tarjeta colapsada', () => {
       campo({ type: 'number', required: true, min: 1, max: 99, step: 1 }),
     );
 
-    expect(resumen).toContain('obligatorio');
+    expect(resumen).toContain('required');
     expect(resumen).toContain('1…99');
-    expect(resumen).toContain('pasos de 1');
-    expect(resumen.some((rule) => rule.includes('caracteres'))).toBe(false);
+    expect(resumen).toContain('step of 1');
+    expect(resumen.some((rule) => rule.includes('characters'))).toBe(false);
   });
 
   test('un campo sin reglas no inventa ninguna', () => {
@@ -312,7 +312,7 @@ test.describe('resumen de la tarjeta colapsada', () => {
   });
 
   test('un tipo con opciones siempre dice cuántas tiene, incluso cero', () => {
-    expect(fieldRuleSummary(campo({ type: 'select' }))).toContain('0 opciones');
+    expect(fieldRuleSummary(campo({ type: 'select' }))).toContain('0 options');
   });
 
   test('las condiciones se distinguen del obligatorio simple', () => {
@@ -320,8 +320,8 @@ test.describe('resumen de la tarjeta colapsada', () => {
       campo({ requiredWhen: { field: 'x', operator: 'exists' } }),
     );
 
-    expect(resumen).toContain('obligatorio condicional');
-    expect(resumen).not.toContain('obligatorio');
+    expect(resumen).toContain('conditionally required');
+    expect(resumen).not.toContain('required');
   });
 });
 

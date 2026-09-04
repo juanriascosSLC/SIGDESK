@@ -35,11 +35,11 @@ function initialChangeData(
   return {
     ...data,
     title: `Resolve ${problem.humanId}: ${String(problem.data.title || 'root cause')}`,
-    description: `Cambio controlado para resolver ${problem.humanId}. ${rootCause}`,
+    description: `Controlled change to resolve ${problem.humanId}. ${rootCause}`,
     changeType: data.changeType || 'normal',
     requester: currentUserName,
     changeOwner: currentUserName,
-    serviceAffected: problem.data.serviceAffected || 'Servicio por determinar',
+    serviceAffected: problem.data.serviceAffected || 'Service to be determined',
     reason: `Eliminate the root cause documented in ${problem.humanId}: ${rootCause}`,
     impact: problem.data.impact || data.impact || 'medium',
     urgency: data.urgency || 'medium',
@@ -143,7 +143,7 @@ export function ProblemChangeDialog({
               Change Management will calculate risk and manage the RFC; the PRB will only keep the typed relation.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-xl p-2 text-on-surface-variant hover:bg-surface-container" aria-label="Cerrar">
+          <button type="button" onClick={onClose} className="rounded-xl p-2 text-on-surface-variant hover:bg-surface-container" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -168,10 +168,10 @@ export function ProblemChangeDialog({
           </div>
         )}
         <div className="sticky bottom-0 flex justify-end gap-3 border-t border-border/40 bg-surface-container-low/95 p-6">
-          <button type="button" onClick={onClose} className="secondary-button">Cancelar</button>
+          <button type="button" onClick={onClose} className="secondary-button">Cancel</button>
           <button type="submit" disabled={workflowMutation.isPending || !definitionQuery.data} className="primary-button disabled:opacity-50">
             <CheckCircle2 className="h-4 w-4" />
-            {workflowMutation.isPending ? 'Creando y vinculando…' : 'Crear RFC y vincular'}
+            {workflowMutation.isPending ? 'Creating and linking…' : 'Create RFC and link'}
           </button>
         </div>
       </form>

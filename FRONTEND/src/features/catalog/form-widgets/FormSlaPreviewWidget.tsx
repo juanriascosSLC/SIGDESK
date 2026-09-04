@@ -21,7 +21,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     >
       <h3 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-on-surface-variant">
         <Timer className="h-4 w-4 text-primary" />
-        SLA esperado
+        Expected SLA
       </h3>
       {children}
     </div>
@@ -35,7 +35,7 @@ function Target({ label, minutes, dueAt }: { label: string; minutes: number; due
       <p className="text-lg font-black text-on-surface">{formatMinutes(minutes)}</p>
       {dueAt && (
         <p className="text-[11px] text-on-surface-variant">
-          aprox. {new Date(dueAt).toLocaleString()}
+          approx. {new Date(dueAt).toLocaleString()}
         </p>
       )}
     </div>
@@ -47,12 +47,12 @@ function Ready({ preview }: { preview: FormSlaPreview }) {
     <>
       <div className="grid grid-cols-2 gap-4">
         <Target
-          label="Respuesta"
+          label="Response"
           minutes={preview.responseTargetMinutes}
           dueAt={preview.responseDueAt}
         />
         <Target
-          label="Resolución"
+          label="Resolution"
           minutes={preview.resolutionTargetMinutes}
           dueAt={preview.resolutionDueAt}
         />
@@ -62,8 +62,7 @@ function Ready({ preview }: { preview: FormSlaPreview }) {
           deadlines, and the clock keeps running between this render and the
           submit — saying so is cheaper than being wrong later. */}
       <p className="mt-4 border-t border-border/40 pt-3 text-[11px] leading-4 text-on-surface-variant">
-        Calculado para la prioridad elegida, sobre el calendario laboral de la política. Las fechas son
-        una estimación desde ahora; los tiempos son los que aplicarán.
+        Calculated for the selected priority under the policy's business calendar. Dates are an estimate from now; target durations will apply.
       </p>
     </>
   );
@@ -95,14 +94,14 @@ export function FormSlaPreviewWidget({ context }: { context: FormPageContext }) 
     return (
       <Shell>
         <p className="text-sm text-amber-300">
-          {sla.message ?? 'No pudimos calcular el SLA esperado.'}
+          {sla.message ?? 'We could not calculate the expected SLA.'}
         </p>
         <button
           type="button"
           onClick={sla.onRetry}
           className="mt-3 rounded-lg border border-border/50 px-3 py-1.5 text-xs font-bold text-on-surface"
         >
-          Reintentar
+          Retry
         </button>
       </Shell>
     );
@@ -111,7 +110,7 @@ export function FormSlaPreviewWidget({ context }: { context: FormPageContext }) 
     return (
       <Shell>
         <p className="text-sm text-on-surface-variant">
-          {sla.message ?? 'Este servicio no tiene una política de SLA asociada.'}
+          {sla.message ?? 'This service does not have an associated SLA policy.'}
         </p>
       </Shell>
     );
@@ -119,7 +118,7 @@ export function FormSlaPreviewWidget({ context }: { context: FormPageContext }) 
   return (
     <Shell>
       <p className="text-sm text-on-surface-variant">
-        Elige una prioridad para ver los tiempos que aplicarán.
+        Select a priority to view the SLA targets that will apply.
       </p>
     </Shell>
   );

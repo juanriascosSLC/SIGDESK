@@ -24,6 +24,7 @@ import type { AssignmentTarget } from '@/features/organization/AssignmentPicker'
 import { canonicalTicketState, listTickets, statusFromApi, statusToApi, ticketStatesMatch } from './api';
 import type { TicketStatus } from './types';
 import { KNOWN_TICKET_STATUSES } from './types';
+import { assigneeText, isTicketAssigned } from './identity-labels';
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
 import { ErrorState } from '@/components/ui/states';
 import { useAuth } from '@/features/auth/useAuth';
@@ -525,7 +526,7 @@ export default function TicketDetail() {
         entityKey: 'INC',
         kind: 'edit',
         preview: false,
-        definitionName: 'Editar datos del incidente',
+        definitionName: 'Edit Incident Details',
         definitionVersion: entityRecord.data?.definitionVersion,
         description: 'Form interpreted from the definition this ticket was created with.',
         humanId: ticket?.humanId ?? ticket?.id,
@@ -544,7 +545,7 @@ export default function TicketDetail() {
         // A record that already exists has a real SLA assessment; the widget
         // that estimates one for a record that does not exist yet has nothing
         // to say here.
-        sla: { state: 'unavailable', message: 'El SLA de un ticket existente se muestra en su propia tarjeta.', onRetry: () => {} },
+        sla: { state: 'unavailable', message: 'The SLA of an existing ticket is displayed on its own card.', onRetry: () => {} },
         attachments: {
           items: (attachments.data ?? []).map((item) => ({
             id: item.id,
@@ -562,8 +563,8 @@ export default function TicketDetail() {
           onRemove: () => {},
         },
         submit: {
-          submitLabel: 'Guardar cambios',
-          cancelLabel: 'Cancelar',
+          submitLabel: 'Save changes',
+          cancelLabel: 'Cancel',
           pending: updateEntityMutation.isPending,
           errorMessage: updateEntityMutation.isError
             ? updateEntityMutation.error instanceof ApiError && updateEntityMutation.error.status === 409
@@ -581,6 +582,7 @@ export default function TicketDetail() {
         preview: false,
         ticket,
         currentUserName,
+        currentUserId: deskUserId,
         can,
         onNavigate: navigate,
         fields: specification.fields,
@@ -685,9 +687,9 @@ export default function TicketDetail() {
         <div className="mb-8 rounded-3xl border border-primary/40 bg-surface-container-low/95 backdrop-blur-md p-6 sm:p-8 shadow-[0_10px_35px_rgba(0,0,0,0.3)] transition-all">
           <div className="flex items-start justify-between gap-4 border-b border-border/40 pb-4">
             <div>
-              <h2 className="text-lg font-black text-on-surface">Editar datos del incidente</h2>
+              <h2 className="text-lg font-black text-on-surface">Edit Incident Details</h2>
               <p className="mt-1 text-xs text-on-surface-variant font-medium">
-                Formulario interpretado desde INC v{entityRecord.data?.definitionVersion}.
+                Form interpreted from INC v{entityRecord.data?.definitionVersion}.
               </p>
             </div>
             <button
@@ -723,7 +725,7 @@ export default function TicketDetail() {
           and then swapped in a moment later. */}
       {entityRecord.isLoading || definitionManifest.isLoading || resolvedDefinition.isLoading ? (
         <div className="rounded-2xl border border-border/40 bg-surface-container-low p-5 text-sm text-on-surface-variant">
-          Cargando la vista definida en Catalog Builder…
+          Loading view defined in Catalog Builder…
         </div>
       ) : entityRecord.isError || definitionManifest.isError ? (
         <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-5">
@@ -793,7 +795,7 @@ export default function TicketDetail() {
         open={showAssignDialog}
         onClose={() => setShowAssignDialog(false)}
         onConfirm={confirmAssign}
-        currentAssignee={ticket.assignee}
+        currentAssignee={isTicketAssigned(ticket) ? assigneeText(ticket) : null}
         loading={assignTicketOrganizational.isPending}
         error={assignTicketOrganizational.error?.message}
       />

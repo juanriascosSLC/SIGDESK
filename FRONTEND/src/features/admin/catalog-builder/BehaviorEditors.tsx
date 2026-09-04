@@ -33,7 +33,7 @@ export function WorkflowEditor({
       const number = current.lifecycle.states.length + 1;
       current.lifecycle.states.push({
         key: `state${number}`,
-        label: `Nuevo estado ${number}`,
+        label: `New state ${number}`,
         initial: current.lifecycle.states.length === 0,
       });
       return current;
@@ -61,7 +61,7 @@ export function WorkflowEditor({
       const number = current.lifecycle.transitions.length + 1;
       current.lifecycle.transitions.push({
         key: `transition${number}`,
-        label: `Nueva transición ${number}`,
+        label: `New transition ${number}`,
         from,
         to,
       });
@@ -73,19 +73,18 @@ export function WorkflowEditor({
     <section className="space-y-5">
       {guided && (
         <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm text-on-surface-variant">
-          Si tus registros no necesitan aprobaciones ni cambios de etapa, puedes dejar el único estado
-          inicial y continuar.
+          If your records do not require approvals or stage changes, you can keep the single initial state and continue.
         </div>
       )}
       <div className="panel-card p-6 lg:p-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <SectionHeading
             icon={<CircleDot className="w-5 h-5" />}
-            title="Estados"
-            description="Representan las etapas por las que pasa un registro."
+            title="States"
+            description="Represent the stages a record moves through."
           />
           <button onClick={addState} className="primary-button">
-            <Plus className="w-4 h-4" /> Agregar estado
+            <Plus className="w-4 h-4" /> Add state
           </button>
         </div>
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3 mt-7">
@@ -113,10 +112,10 @@ export function WorkflowEditor({
                     }
                     className="accent-emerald-400"
                   />
-                  {state.initial ? 'Estado inicial' : 'Marcar como inicial'}
+                  {state.initial ? 'Initial state' : 'Set as initial'}
                 </label>
                 <IconButton
-                  label="Eliminar estado"
+                  label="Delete state"
                   danger
                   disabled={states.length === 1}
                   onClick={() => removeState(index)}
@@ -149,7 +148,7 @@ export function WorkflowEditor({
                 className="friendly-input font-bold"
               />
               <div className="mt-2 text-[11px] text-on-surface-variant">
-                Clave: <span className="font-mono">{state.key}</span>
+                Key: <span className="font-mono">{state.key}</span>
               </div>
             </div>
           ))}
@@ -160,19 +159,19 @@ export function WorkflowEditor({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <SectionHeading
             icon={<GitBranch className="w-5 h-5" />}
-            title="Transiciones"
-            description="Define cómo puede avanzar o retroceder un registro."
+            title="Transitions"
+            description="Define how a record can advance or move back."
           />
           <button
             onClick={addTransition}
             disabled={states.length < 2}
             className="primary-button disabled:opacity-40"
           >
-            <Plus className="w-4 h-4" /> Agregar transición
+            <Plus className="w-4 h-4" /> Add transition
           </button>
         </div>
         {specification.lifecycle.transitions.length === 0 ? (
-          <EmptyMessage text="Agrega al menos dos estados para crear movimientos entre ellos." />
+          <EmptyMessage text="Add at least two states to create transitions between them." />
         ) : (
           <div className="space-y-3 mt-7">
             {specification.lifecycle.transitions.map((transition, index) => (
@@ -180,7 +179,7 @@ export function WorkflowEditor({
                 key={`${transition.key}-${index}`}
                 className="grid lg:grid-cols-[minmax(160px,1fr)_minmax(140px,1fr)_24px_minmax(140px,1fr)_40px] items-end gap-3 rounded-2xl border border-border/50 bg-surface-container p-4"
               >
-                <FriendlyField label="Nombre de la acción">
+                <FriendlyField label="Action name">
                   <input
                     value={transition.label}
                     onChange={(event) =>
@@ -192,7 +191,7 @@ export function WorkflowEditor({
                     className="friendly-input"
                   />
                 </FriendlyField>
-                <FriendlyField label="Desde">
+                <FriendlyField label="From">
                   <select
                     value={transition.from}
                     onChange={(event) =>
@@ -210,7 +209,7 @@ export function WorkflowEditor({
                   </select>
                 </FriendlyField>
                 <ArrowRight className="w-5 h-5 text-primary mb-3 hidden lg:block" />
-                <FriendlyField label="Hacia">
+                <FriendlyField label="To">
                   <select
                     value={transition.to}
                     onChange={(event) =>
@@ -228,7 +227,7 @@ export function WorkflowEditor({
                   </select>
                 </FriendlyField>
                 <IconButton
-                  label="Eliminar transición"
+                  label="Delete transition"
                   danger
                   onClick={() =>
                     updateSpecification((current) => {
@@ -273,10 +272,10 @@ export function RelationsEditor({
       const number = current.relations.length + 1;
       current.relations.push({
         key: `relation${number}`,
-        label: `Relación ${number}`,
+        label: `Relation ${number}`,
         targetEntityKey: entityKeys[0] ?? 'INC',
         inverseKey: `relatedFrom${number}`,
-        inverseLabel: `Relacionado desde ${number}`,
+        inverseLabel: `Related from ${number}`,
         cardinality: 'many',
         contractVersion: '1',
       });
@@ -289,11 +288,11 @@ export function RelationsEditor({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <SectionHeading
           icon={<GitBranch className="w-5 h-5" />}
-          title="Relaciones entre entidades"
-          description="Define qué tipos de registros puede vincular esta entidad. El runtime validará cada enlace contra la versión publicada."
+          title="Entity relationships"
+          description="Define which record types this entity can link to. The runtime will validate each link against the published version."
         />
         <button onClick={addRelation} className="primary-button">
-          <Plus className="w-4 h-4" /> Agregar relación
+          <Plus className="w-4 h-4" /> Add relationship
         </button>
       </div>
 
@@ -301,7 +300,7 @@ export function RelationsEditor({
         {relations.map((relation, index) => (
           <div key={`${relation.key}-${index}`} className="rounded-2xl border border-border/50 bg-surface-container p-5">
             <div className="grid gap-4 md:grid-cols-2">
-              <FriendlyField label="Nombre visible" help="Cómo se verá desde esta entidad.">
+              <FriendlyField label="Display name" help="How it will appear from this entity.">
                 <input
                   value={relation.label}
                   onChange={(event) => {
@@ -313,10 +312,10 @@ export function RelationsEditor({
                     });
                   }}
                   className="friendly-input"
-                  placeholder="Ej. Incidentes investigados"
+                  placeholder="e.g. Investigated incidents"
                 />
               </FriendlyField>
-              <FriendlyField label="Entidad destino">
+              <FriendlyField label="Target entity">
                 <select
                   value={relation.targetEntityKey}
                   onChange={(event) => updateRelation(index, { targetEntityKey: event.target.value })}
@@ -330,7 +329,7 @@ export function RelationsEditor({
                   ))}
                 </select>
               </FriendlyField>
-              <FriendlyField label="Cómo se verá desde el destino" help="Etiqueta inversa del mismo vínculo.">
+              <FriendlyField label="How it will appear from the target" help="Inverse label for the same link.">
                 <input
                   value={relation.inverseLabel}
                   onChange={(event) => {
@@ -345,10 +344,10 @@ export function RelationsEditor({
                     });
                   }}
                   className="friendly-input"
-                  placeholder="Ej. Investigado por problema"
+                  placeholder="e.g. Investigated by problem"
                 />
               </FriendlyField>
-              <FriendlyField label="Cantidad permitida">
+              <FriendlyField label="Allowed quantity">
                 <select
                   value={relation.cardinality ?? 'many'}
                   onChange={(event) => updateRelation(index, {
@@ -357,11 +356,11 @@ export function RelationsEditor({
                   className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
                   style={{ colorScheme: 'dark' }}
                 >
-                  <option value="many">Varios registros</option>
-                  <option value="one">Un solo registro</option>
+                  <option value="many">Multiple records</option>
+                  <option value="one">Single record</option>
                 </select>
               </FriendlyField>
-              <FriendlyField label="Versión del contrato" help="Permite evolucionar el vínculo sin romper registros históricos.">
+              <FriendlyField label="Contract version" help="Allows evolving the link without breaking historical records.">
                 <input
                   value={relation.contractVersion ?? '1'}
                   onChange={(event) => updateRelation(index, { contractVersion: event.target.value })}
@@ -373,12 +372,12 @@ export function RelationsEditor({
             </div>
             <div className="mt-4 flex items-center justify-between gap-4 text-[11px] text-on-surface-variant">
               <span>
-                Contrato: <code className="text-on-surface">{relation.key}</code>
+                Contract: <code className="text-on-surface">{relation.key}</code>
                 {' ↔ '}
                 <code className="text-on-surface">{relation.inverseKey}</code>
               </span>
               <IconButton
-                label="Eliminar relación"
+                label="Delete relationship"
                 danger
                 onClick={() =>
                   updateSpecification((current) => {
@@ -394,7 +393,7 @@ export function RelationsEditor({
         ))}
         {relations.length === 0 && (
           <div className="rounded-2xl border border-dashed border-border/40 p-10 text-center text-sm text-on-surface-variant">
-            Esta entidad todavía no declara relaciones. Puedes agregar contratos estables hacia INC, PRB, RFC u otra definición.
+            This entity does not declare relationships yet. You can add stable contracts to INC, PRB, RFC, or another definition.
           </div>
         )}
       </div>

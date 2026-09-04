@@ -37,13 +37,13 @@ function initialProblemData(
   const priority = ticket.priority.toLowerCase();
   return {
     ...data,
-    title: `Problema recurrente: ${ticket.title}`,
+    title: `Recurring problem: ${ticket.title}`,
     description: `Root-cause investigation started from ${ticket.id}. ${ticket.description}`,
     impact: ['low', 'medium', 'high', 'critical'].includes(priority)
       ? priority
       : 'medium',
     serviceAffected:
-      ticket.site || ticket.assetId || ticket.category || 'Servicio por determinar',
+      ticket.site || ticket.assetId || ticket.category || 'Service to be determined',
     owner: currentUserName,
   };
 }
@@ -147,12 +147,12 @@ export function IncidentProblemDialog({
             <div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-primary">
               <GitBranch className="h-4 w-4" /> INC → PRB
             </div>
-            <h2 className="text-xl font-black text-on-surface">Gestionar problema asociado</h2>
+            <h2 className="text-xl font-black text-on-surface">Manage Linked Problem</h2>
             <p className="mt-1 text-xs text-on-surface-variant">
               The incident stays in Tickets; the root-cause investigation is managed as a PRB.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-xl p-2 text-on-surface-variant hover:bg-surface-container" aria-label="Cerrar">
+          <button type="button" onClick={onClose} className="rounded-xl p-2 text-on-surface-variant hover:bg-surface-container" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -172,7 +172,7 @@ export function IncidentProblemDialog({
                   : 'border-transparent text-on-surface-variant'
               }`}
             >
-              {tab === 'create' ? 'Crear nuevo PRB' : 'Vincular PRB existente'}
+              {tab === 'create' ? 'Create new PRB' : 'Link existing PRB'}
             </button>
           ))}
         </div>
@@ -194,17 +194,17 @@ export function IncidentProblemDialog({
               ))}
             </div>
             <div className="sticky bottom-0 flex justify-end gap-3 border-t border-border/40 bg-surface-container-low/95 p-6">
-              <button type="button" onClick={onClose} className="secondary-button">Cancelar</button>
+              <button type="button" onClick={onClose} className="secondary-button">Cancel</button>
               <button type="submit" disabled={workflowMutation.isPending || !definitionQuery.data} className="primary-button disabled:opacity-50">
                 <CheckCircle2 className="h-4 w-4" />
-                {workflowMutation.isPending ? 'Creando y vinculando…' : 'Crear PRB y vincular'}
+                {workflowMutation.isPending ? 'Creating and linking…' : 'Create PRB and link'}
               </button>
             </div>
           </form>
         ) : (
           <div className="p-6">
             <SearchableEntityPicker
-              label="Selecciona el problema que investiga este incidente"
+              label="Select the problem investigating this incident"
               entityKey="PRB"
               items={problemsQuery.data ?? []}
               excludedIds={linkedProblemIds}
@@ -224,7 +224,7 @@ export function IncidentProblemDialog({
         {mode === 'link' && !workflowMutation.isPending && (
           <div className="flex justify-end border-t border-border/40 p-6">
             <button type="button" onClick={onClose} className="secondary-button">
-              <Link2 className="h-4 w-4" /> Cerrar
+              <Link2 className="h-4 w-4" /> Close
             </button>
           </div>
         )}

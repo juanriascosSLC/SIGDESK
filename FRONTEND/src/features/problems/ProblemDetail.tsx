@@ -37,8 +37,8 @@ import { ConfiguredRecordDetail } from '@/features/tickets/ConfiguredRecordDetai
 
 const stateLabels: Record<string, string> = {
   under_investigation: 'Under investigation',
-  known_error: 'Error conocido',
-  resolved: 'Resuelto',
+  known_error: 'Known error',
+  resolved: 'Resolved',
 };
 
 function displayValue(field: FieldDefinition, value: unknown): string {
@@ -64,7 +64,7 @@ export default function ProblemDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { can, displayName } = useAuth();
+  const { can, displayName, deskUserId } = useAuth();
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<Record<string, unknown>>({});
   const [showChangeDialog, setShowChangeDialog] = useState(false);
@@ -161,7 +161,7 @@ export default function ProblemDetail() {
   }, [editData, manifestQuery.data]);
 
   if (problemQuery.isLoading || manifestQuery.isLoading || relationsQuery.isLoading) {
-    return <div className="p-8 text-on-surface-variant">Cargando problema…</div>;
+    return <div className="p-8 text-on-surface-variant">Loading problem…</div>;
   }
   if (
     problemQuery.isError ||
@@ -174,10 +174,10 @@ export default function ProblemDetail() {
     return (
       <div className="p-8">
         <button onClick={() => navigate('/app/problems')} className="secondary-button mb-5">
-          <ArrowLeft className="h-4 w-4" /> Volver
+          <ArrowLeft className="h-4 w-4" /> Back
         </button>
         <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-5 text-red-300">
-          No se pudo cargar el problema: {error?.message}
+          Could not load problem: {error?.message}
         </div>
       </div>
     );
@@ -231,9 +231,9 @@ export default function ProblemDetail() {
         ))}
       </div>
       <div className="flex justify-end gap-3 border-t border-border/40 p-6">
-        <button type="button" onClick={() => setEditing(false)} className="secondary-button">Cancelar</button>
+        <button type="button" onClick={() => setEditing(false)} className="secondary-button">Cancel</button>
         <button type="submit" disabled={updateMutation.isPending} className="primary-button disabled:opacity-50">
-          <Save className="h-4 w-4" /> Guardar
+          <Save className="h-4 w-4" /> Save
         </button>
       </div>
     </form>
@@ -275,6 +275,7 @@ export default function ProblemDetail() {
           record={problem}
           specification={specification}
           currentUserName={displayName}
+          currentUserId={deskUserId}
           relations={relations}
           transitions={availableTransitions}
           onTransition={(transition) => transitionMutation.mutate(transition.key)}
@@ -294,7 +295,7 @@ export default function ProblemDetail() {
             <>
               {can(PERMISSIONS.problemsEdit) && can(PERMISSIONS.changesView) && can(PERMISSIONS.changesCreate) && (
                 <button onClick={() => setShowChangeDialog(true)} className="primary-button">
-                  <Plus className="h-4 w-4" /> Crear RFC para resolver
+                  <Plus className="h-4 w-4" /> Create RFC to resolve
                 </button>
               )}
               {configuredEditPanel}
@@ -320,7 +321,7 @@ export default function ProblemDetail() {
     <div className="min-h-screen bg-surface-container-lowest p-6 lg:p-8">
       <div className="w-full space-y-6">
         <button onClick={() => navigate('/app/problems')} className="secondary-button">
-          <ArrowLeft className="h-4 w-4" /> Volver a problemas
+          <ArrowLeft className="h-4 w-4" /> Back to problems
         </button>
 
         <section className="rounded-3xl border border-border/40 bg-surface-container-low p-6">
@@ -361,7 +362,7 @@ export default function ProblemDetail() {
                   onClick={() => setShowChangeDialog(true)}
                   className="primary-button"
                 >
-                  <Plus className="h-4 w-4" /> Crear RFC para resolver
+                  <Plus className="h-4 w-4" /> Create RFC to resolve
                 </button>
               )}
             {availableTransitions.map((transition) => (
@@ -411,9 +412,9 @@ export default function ProblemDetail() {
               ))}
             </div>
             <div className="flex justify-end gap-3 border-t border-border/40 p-6">
-              <button type="button" onClick={() => setEditing(false)} className="secondary-button">Cancelar</button>
+              <button type="button" onClick={() => setEditing(false)} className="secondary-button">Cancel</button>
               <button type="submit" disabled={updateMutation.isPending} className="primary-button disabled:opacity-50">
-                <Save className="h-4 w-4" /> Guardar
+                <Save className="h-4 w-4" /> Save
               </button>
             </div>
           </form>

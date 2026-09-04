@@ -38,7 +38,7 @@ export function FormActionsWidget({ context }: { context: FormPageContext }) {
           data-testid="catalog-form-submit"
           className="rounded-xl bg-primary px-8 py-3 font-black text-primary-foreground disabled:opacity-50"
         >
-          {submit.pending ? 'Guardando…' : submit.submitLabel}
+          {submit.pending ? 'Saving…' : submit.submitLabel}
         </button>
       </div>
     </div>

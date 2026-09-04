@@ -22,12 +22,12 @@ export function TaskActionDialog({ open, onClose, onConfirm, actionKey, loading,
         onClose={onClose}
         onConfirm={(value) => onConfirm(value)}
         title="Complete task"
-        description="Optionally record evidence or the result of this task."
+        description="Record evidence or the result of this task."
         confirmLabel="Complete"
         loading={loading}
         error={error}
-        reasonRequired={false}
-        reasonLabel="Evidence or result (optional)"
+        reasonRequired={true}
+        reasonLabel="Evidence or result"
         reasonPlaceholder="What was done, where it's documented, a ticket number…"
       />
     );

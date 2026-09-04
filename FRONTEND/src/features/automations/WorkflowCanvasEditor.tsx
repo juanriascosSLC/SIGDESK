@@ -76,20 +76,20 @@ const nodeTypes = {
   parser: ParserNode,
 };
 
-const groups: CatalogGroup[] = ['Disparadores', 'Condiciones', 'Control', 'Acciones'];
+const groups: CatalogGroup[] = ['Triggers', 'Conditions', 'Control', 'Actions'];
 
 const groupIcons = {
-  Disparadores: Zap,
-  Condiciones: GitBranch,
+  Triggers: Zap,
+  Conditions: GitBranch,
   Control: Clock3,
-  Acciones: Sparkles,
+  Actions: Sparkles,
 };
 
 const priorityLabels = {
-  baja: 'Baja',
-  media: 'Media',
-  alta: 'Alta',
-  critica: 'Crítica',
+  baja: 'Low',
+  media: 'Medium',
+  alta: 'High',
+  critica: 'Critical',
 };
 
 function initialGraph(definition?: WorkflowDefinition) {
@@ -240,9 +240,9 @@ function CanvasEditor({
     return nodes.map((node) => {
       if (!esAccionDeAsignacion(node.data.catalogKey)) return node;
       const ausentes: string[] = [];
-      if (node.data.departmentId && !areas.has(String(node.data.departmentId))) ausentes.push('un área');
-      if (node.data.teamId && !equipos.has(String(node.data.teamId))) ausentes.push('un equipo');
-      if (node.data.assignmentMode === 'user' && node.data.assigneeUserId && !personas.has(String(node.data.assigneeUserId))) ausentes.push('una persona');
+      if (node.data.departmentId && !areas.has(String(node.data.departmentId))) ausentes.push('an area');
+      if (node.data.teamId && !equipos.has(String(node.data.teamId))) ausentes.push('a team');
+      if (node.data.assignmentMode === 'user' && node.data.assigneeUserId && !personas.has(String(node.data.assigneeUserId))) ausentes.push('a person');
       const previas = (node.data.missingReferences ?? []) as string[];
       if (previas.length === ausentes.length && previas.every((valor, indice) => valor === ausentes[indice])) return node;
       return { ...node, data: { ...node.data, missingReferences: ausentes } };
@@ -376,14 +376,14 @@ function CanvasEditor({
     <div className="flex h-full min-h-[700px] flex-col bg-background" data-testid="workflow-visual-editor">
       <header className="z-20 flex min-h-[76px] flex-wrap items-center justify-between gap-3 border-b border-border/50 bg-surface-container-low px-5 py-3">
         <div className="flex min-w-0 items-center gap-3">
-          <button type="button" onClick={() => navigate('/app/automations')} className="secondary-button px-3" aria-label="Volver">
+          <button type="button" onClick={() => navigate('/app/automations')} className="secondary-button px-3" aria-label="Back">
             <ArrowLeft className="h-4 w-4" />
           </button>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <Workflow className="h-5 w-5 shrink-0 text-primary" />
               <h1 className="truncate text-lg font-black text-on-surface">
-                {definition ? `Workflow ${definition.categoria_id}` : 'Diseñador de automatización'}
+                {definition ? `Workflow ${definition.categoria_id}` : 'Automation Designer'}
               </h1>
               {definition && (
                 <span
@@ -394,25 +394,25 @@ function CanvasEditor({
                       ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
                       : 'border-slate-500/30 bg-slate-500/10 text-slate-300'}`}
                 >
-                  {definition.estado} · v{definition.version}
+                  {(definition.estado === 'publicado' ? 'Published' : definition.estado === 'borrador' ? 'Draft' : 'Disabled')} · v{definition.version}
                 </span>
               )}
             </div>
-            <p className="mt-0.5 truncate text-xs text-on-surface-variant">Arrastra, conecta y configura bloques. El grafo publicado se ejecuta en el runtime real.</p>
+            <p className="mt-0.5 truncate text-xs text-on-surface-variant">Drag, connect, and configure blocks. The published graph executes in the live runtime.</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {!readOnly && (
             <label className="flex items-center gap-2 rounded-xl border border-border/50 bg-on-surface/5 px-3 py-2 text-xs font-bold text-on-surface-variant">
-              Versión
+              Version
               <input className="w-14 bg-transparent text-center font-mono text-on-surface outline-none" type="number" min={1} value={version} onChange={(event) => setVersion(Math.max(1, Number(event.target.value)))} />
             </label>
           )}
           {!readOnly && (
             <>
               <div className="flex items-center gap-1 rounded-xl border border-border/50 bg-on-surface/5 p-1">
-                <button type="button" data-testid="canvas-undo" aria-label="Deshacer" title="Deshacer" disabled={pasado.length === 0} onClick={deshacer} className="rounded-lg px-2 py-1.5 text-on-surface-variant transition hover:bg-on-surface/10 disabled:opacity-35"><Undo2 className="h-4 w-4" /></button>
-                <button type="button" data-testid="canvas-redo" aria-label="Rehacer" title="Rehacer" disabled={futuro.length === 0} onClick={rehacer} className="rounded-lg px-2 py-1.5 text-on-surface-variant transition hover:bg-on-surface/10 disabled:opacity-35"><Redo2 className="h-4 w-4" /></button>
+                <button type="button" data-testid="canvas-undo" aria-label="Undo" title="Undo" disabled={pasado.length === 0} onClick={deshacer} className="rounded-lg px-2 py-1.5 text-on-surface-variant transition hover:bg-on-surface/10 disabled:opacity-35"><Undo2 className="h-4 w-4" /></button>
+                <button type="button" data-testid="canvas-redo" aria-label="Redo" title="Redo" disabled={futuro.length === 0} onClick={rehacer} className="rounded-lg px-2 py-1.5 text-on-surface-variant transition hover:bg-on-surface/10 disabled:opacity-35"><Redo2 className="h-4 w-4" /></button>
               </div>
               <span
                 data-testid="canvas-dirty"
@@ -420,15 +420,15 @@ function CanvasEditor({
                   ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
                   : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}
               >
-                {sinGuardar ? 'Cambios sin guardar' : 'Guardado'}
+                {sinGuardar ? 'Unsaved changes' : 'Saved'}
               </span>
             </>
           )}
           <button type="button" data-testid="canvas-validate" onClick={() => setShowValidation(true)} className="secondary-button">
             {compilation.errors.length ? <AlertTriangle className="h-4 w-4 text-amber-300" /> : <CheckCircle2 className="h-4 w-4 text-emerald-300" />}
-            Validar {compilation.errors.length ? `(${compilation.errors.length})` : ''}
+            Validate {compilation.errors.length ? `(${compilation.errors.length})` : ''}
           </button>
-          <button type="button" onClick={() => setShowJSON(true)} className="secondary-button"><Braces className="h-4 w-4" /> Contrato</button>
+          <button type="button" onClick={() => setShowJSON(true)} className="secondary-button"><Braces className="h-4 w-4" /> Contract</button>
           {!readOnly && onSaveDraft && (
             // Guardar NO exige que el diseño esté completo: para eso existe un
             // borrador. Lo que exige completitud es publicar.
@@ -439,7 +439,7 @@ function CanvasEditor({
               onClick={() => { onSaveDraft(borradorActual()); setSinGuardar(false); }}
               className="secondary-button"
             >
-              <Save className="h-4 w-4" /> {saving ? 'Guardando…' : 'Guardar borrador'}
+              <Save className="h-4 w-4" /> {saving ? 'Saving…' : 'Save draft'}
             </button>
           )}
           {readOnly && onCrearBorrador && (
@@ -453,7 +453,7 @@ function CanvasEditor({
               onClick={onCrearBorrador}
               className="primary-button"
             >
-              <GitBranch className="h-4 w-4" /> {creandoBorrador ? 'Creando…' : 'Crear nuevo borrador desde esta versión'}
+              <GitBranch className="h-4 w-4" /> {creandoBorrador ? 'Creating…' : 'Create new draft from this version'}
             </button>
           )}
           {!readOnly && (
@@ -471,7 +471,7 @@ function CanvasEditor({
               }}
               className="primary-button"
             >
-              <Rocket className="h-4 w-4" /> {publishing ? 'Publicando…' : 'Publicar versión'}
+              <Rocket className="h-4 w-4" /> {publishing ? 'Publishing…' : 'Publish version'}
             </button>
           )}
         </div>
@@ -486,14 +486,14 @@ function CanvasEditor({
       <div className="flex min-h-0 flex-1">
         <aside className="z-10 flex w-[290px] shrink-0 flex-col border-r border-border/50 bg-surface-container-low">
           <div className="border-b border-border/40 p-4">
-            <div className="flex items-center gap-2 text-sm font-black text-on-surface"><Library className="h-4 w-4 text-primary" /> Biblioteca</div>
+            <div className="flex items-center gap-2 text-sm font-black text-on-surface"><Library className="h-4 w-4 text-primary" /> Library</div>
             <label className="mt-3 flex items-center gap-2 rounded-xl border border-border/50 bg-on-surface/5 px-3 py-2">
               <Search className="h-4 w-4 text-on-surface-variant" />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar bloque…" className="min-w-0 flex-1 bg-transparent text-xs text-on-surface outline-none" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search block…" className="min-w-0 flex-1 bg-transparent text-xs text-on-surface outline-none" />
             </label>
             <div className="mt-3 flex gap-2 text-[9px] font-black uppercase">
-              <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-emerald-300">{operationalCount} operativos</span>
-              <span className="rounded-full bg-slate-500/10 px-2 py-1 text-slate-300">{workflowCatalog.length - operationalCount} próximos</span>
+              <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-emerald-300">{operationalCount} operational</span>
+              <span className="rounded-full bg-slate-500/10 px-2 py-1 text-slate-300">{workflowCatalog.length - operationalCount} planned</span>
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -531,7 +531,7 @@ function CanvasEditor({
                       >
                         <div className="flex items-start justify-between gap-2">
                           <span className="text-xs font-black text-on-surface">{item.title}</span>
-                          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[7px] font-black uppercase ${item.support === 'operational' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-slate-500/10 text-slate-300'}`}>{item.support === 'operational' ? 'Listo' : 'Próximo'}</span>
+                          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[7px] font-black uppercase ${item.support === 'operational' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-slate-500/10 text-slate-300'}`}>{item.support === 'operational' ? 'Ready' : 'Planned'}</span>
                         </div>
                         <p className="mt-1 text-[10px] leading-relaxed text-on-surface-variant">{item.description}</p>
                       </button>
@@ -569,10 +569,10 @@ function CanvasEditor({
             <Controls position="bottom-left" />
             <MiniMap position="bottom-right" pannable zoomable nodeColor={(node) => node.data.supportStatus === 'planned' ? '#64748b' : '#06b6d4'} maskColor="rgba(2, 6, 23, 0.72)" />
             <div className="absolute left-4 top-4 z-10 flex gap-2">
-              <button type="button" onClick={() => { recordar(); setNodes((current) => autoLayout(current, edges)); window.setTimeout(() => void fitView({ duration: 350, padding: 0.18 }), 20); }} className="secondary-button bg-surface-container-low/95 px-3"><Grid3X3 className="h-4 w-4" /> Ordenar</button>
+              <button type="button" onClick={() => { recordar(); setNodes((current) => autoLayout(current, edges)); window.setTimeout(() => void fitView({ duration: 350, padding: 0.18 }), 20); }} className="secondary-button bg-surface-container-low/95 px-3"><Grid3X3 className="h-4 w-4" /> Arrange</button>
               <div className={`flex items-center gap-2 rounded-xl border bg-surface-container-low/95 px-3 py-2 text-xs font-bold ${compilation.errors.length ? 'border-amber-500/30 text-amber-300' : 'border-emerald-500/30 text-emerald-300'}`}>
                 {compilation.errors.length ? <AlertTriangle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                {compilation.errors.length ? 'Diseño incompleto' : 'Listo para publicar'}
+                {compilation.errors.length ? 'Incomplete design' : 'Ready to publish'}
               </div>
             </div>
           </ReactFlow>
@@ -581,29 +581,29 @@ function CanvasEditor({
         {selectedNode && (
           <aside className="z-10 w-[320px] shrink-0 overflow-y-auto border-l border-border/50 bg-surface-container-low p-5">
             <div className="flex items-start justify-between gap-3">
-              <div><p className="text-[9px] font-black uppercase tracking-[0.18em] text-primary">Propiedades</p><h2 className="mt-1 font-black text-on-surface">{String(selectedNode.data.label)}</h2></div>
+              <div><p className="text-[9px] font-black uppercase tracking-[0.18em] text-primary">Properties</p><h2 className="mt-1 font-black text-on-surface">{String(selectedNode.data.label)}</h2></div>
               <button type="button" onClick={() => setSelectedID(undefined)} className="rounded-lg p-2 text-on-surface-variant hover:bg-on-surface/5"><X className="h-4 w-4" /></button>
             </div>
             <div className={`mt-4 rounded-xl border p-3 text-xs ${selectedNode.data.supportStatus === 'planned' ? 'border-amber-500/30 bg-amber-500/10 text-amber-200' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'}`}>
-              <p className="font-black">{selectedNode.data.supportStatus === 'planned' ? 'Capacidad próxima' : 'Capacidad operativa'}</p>
+              <p className="font-black">{selectedNode.data.supportStatus === 'planned' ? 'Planned capability' : 'Operational capability'}</p>
               <p className="mt-1 opacity-75">{selectedNode.data.supportStatus === 'planned'
                 ? ((selectedNode.data.catalogKey === 'action.assign_user' || selectedNode.data.catalogKey === 'action.assign_team')
-                    ? 'El destino ya puede configurarse con Organization. La rama se habilitará para publicar cuando termine la ejecución real en Tickets.'
-                    : 'Puedes diseñarla, pero una rama que la use no se puede publicar hasta implementar su contrato de backend.')
-                : 'Este bloque compila a una regla que el motor ejecuta realmente.'}</p>
+                    ? 'Target can be configured with Organization. The branch will be enabled for publishing once live execution in Tickets is finished.'
+                    : 'You can design with this, but a branch using it cannot be published until its backend contract is implemented.')
+                : 'This block compiles to a rule that the engine executes live.'}</p>
             </div>
-            <label className="mt-5 block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Nombre del bloque
+            <label className="mt-5 block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Block name
               <input disabled={readOnly} value={String(selectedNode.data.label ?? '')} onChange={(event) => updateSelected({ label: event.target.value })} className="input-field mt-2 w-full normal-case" />
             </label>
 
             {selectedNode.data.catalogKey === 'condition.priority' && (
               <div className="mt-5 space-y-4">
-                <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Evaluación
+                <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Evaluation
                   <select disabled={readOnly} value={String(selectedNode.data.conditionMode ?? 'priority')} onChange={(event) => updateSelected({ conditionMode: event.target.value })} className="input-field mt-2 w-full normal-case">
-                    <option value="priority">Comparar prioridad</option><option value="always">Ejecutar siempre</option>
+                    <option value="priority">Compare priority</option><option value="always">Always execute</option>
                   </select>
                 </label>
-                {selectedNode.data.conditionMode !== 'always' && <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Prioridad
+                {selectedNode.data.conditionMode !== 'always' && <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Priority
                   <select disabled={readOnly} value={String(selectedNode.data.priority ?? 'critica')} onChange={(event) => updateSelected({ priority: event.target.value })} className="input-field mt-2 w-full normal-case">
                     {Object.entries(priorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
@@ -613,12 +613,12 @@ function CanvasEditor({
 
             {selectedNode.data.catalogKey === 'control.delay' && (
               <div className="mt-5 grid grid-cols-[1fr_130px] gap-2">
-                <label className="text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Duración
+                <label className="text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Duration
                   <input disabled={readOnly} type="number" min={0} value={String(selectedNode.data.delayValue ?? '0')} onChange={(event) => updateSelected({ delayValue: event.target.value })} className="input-field mt-2 w-full normal-case" />
                 </label>
-                <label className="text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Unidad
+                <label className="text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Unit
                   <select disabled={readOnly} value={String(selectedNode.data.delayUnit ?? 'minutes')} onChange={(event) => updateSelected({ delayUnit: event.target.value })} className="input-field mt-2 w-full normal-case">
-                    <option value="seconds">Segundos</option><option value="minutes">Minutos</option><option value="hours">Horas</option><option value="days">Días</option>
+                    <option value="seconds">Seconds</option><option value="minutes">Minutes</option><option value="hours">Hours</option><option value="days">Days</option>
                   </select>
                 </label>
               </div>
@@ -626,8 +626,8 @@ function CanvasEditor({
 
             {selectedNode.data.catalogKey === 'action.notify_stakeholders' && (
               <div className="mt-5 rounded-xl border border-border/40 bg-on-surface/5 p-4 text-xs text-on-surface-variant">
-                <p className="font-black text-on-surface">Destinatarios administrados por Notificaciones</p>
-                <p className="mt-2 leading-relaxed">Solicitante, responsable y personas o áreas interesadas. Cada usuario conserva sus preferencias de canal.</p>
+                <p className="font-black text-on-surface">Recipients managed by Notifications</p>
+                <p className="mt-2 leading-relaxed">Requester, assignee, and interested people or areas. Each user maintains their channel preferences.</p>
               </div>
             )}
 
@@ -649,8 +649,8 @@ function CanvasEditor({
             )}
 
             {!readOnly && <div className="mt-6 grid grid-cols-2 gap-2 border-t border-border/40 pt-5">
-              <button type="button" onClick={duplicateSelected} className="secondary-button"><Copy className="h-4 w-4" /> Duplicar</button>
-              <button type="button" onClick={removeSelected} className="secondary-button text-red-300"><Trash2 className="h-4 w-4" /> Eliminar</button>
+              <button type="button" onClick={duplicateSelected} className="secondary-button"><Copy className="h-4 w-4" /> Duplicate</button>
+              <button type="button" onClick={removeSelected} className="secondary-button text-red-300"><Trash2 className="h-4 w-4" /> Delete</button>
             </div>}
           </aside>
         )}
@@ -661,8 +661,8 @@ function CanvasEditor({
           <section className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-border/60 bg-surface-container-low p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="flex items-center gap-2 text-lg font-black text-on-surface">{showJSON ? <Braces className="h-5 w-5 text-primary" /> : <CheckCircle2 className="h-5 w-5 text-primary" />} {showJSON ? 'Contrato ejecutable y layout' : 'Validación previa'}</h2>
-                <p className="mt-1 text-sm text-on-surface-variant">{showJSON ? 'El runtime ejecuta reglas; el editor conserva el diseño exacto.' : 'Solo las ramas completamente operativas pueden publicarse.'}</p>
+                <h2 className="flex items-center gap-2 text-lg font-black text-on-surface">{showJSON ? <Braces className="h-5 w-5 text-primary" /> : <CheckCircle2 className="h-5 w-5 text-primary" />} {showJSON ? 'Executable contract and layout' : 'Pre-validation'}</h2>
+                <p className="mt-1 text-sm text-on-surface-variant">{showJSON ? 'Runtime executes rules; the editor preserves exact layout.' : 'Only fully operational branches can be published.'}</p>
               </div>
               <button type="button" onClick={() => { setShowValidation(false); setShowJSON(false); }} className="rounded-lg p-2 text-on-surface-variant hover:bg-on-surface/5"><X className="h-4 w-4" /></button>
             </div>
@@ -670,7 +670,7 @@ function CanvasEditor({
               <pre className="mt-5 max-h-[60vh] overflow-auto rounded-2xl bg-[#070b12] p-5 text-xs text-emerald-300">{JSON.stringify(compilation.payload ?? { errors: compilation.errors }, null, 2)}</pre>
             ) : (
               <div className="mt-5 space-y-3">
-                {compilation.errors.length === 0 && <div className="flex gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200"><CheckCircle2 className="h-5 w-5 shrink-0" /><div><p className="font-black">Workflow válido</p><p className="mt-1 opacity-75">La definición puede publicarse y ejecutarse.</p></div></div>}
+                {compilation.errors.length === 0 && <div className="flex gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200"><CheckCircle2 className="h-5 w-5 shrink-0" /><div><p className="font-black">Valid workflow</p><p className="mt-1 opacity-75">Definition can be published and executed.</p></div></div>}
                 {/* Cada error que sabe a qué nodo pertenece es pulsable: enfoca y
                     selecciona ese bloque. Leer "completa área y equipo" sin poder
                     ir al bloque obliga a buscarlo a mano en un diagrama grande. */}
@@ -688,7 +688,7 @@ function CanvasEditor({
                       <AlertTriangle className="h-5 w-5 shrink-0" />
                       <span className="min-w-0 flex-1">
                         {issue.message}
-                        {anclado && <span className="mt-1 block text-[10px] font-black uppercase tracking-wider opacity-70">Pulsa para ir al bloque</span>}
+                        {anclado && <span className="mt-1 block text-[10px] font-black uppercase tracking-wider opacity-70">Click to go to block</span>}
                       </span>
                     </button>
                   );

@@ -186,7 +186,7 @@ export function FieldCard({
       <div className="flex items-center gap-2 p-3 pl-2.5">
         <span
           aria-hidden
-          title={draggable ? 'Arrastra para reordenar' : 'Quita el filtro para reordenar'}
+          title={draggable ? 'Drag to reorder' : 'Clear filter to reorder'}
           className={`shrink-0 p-1 rounded-lg transition-colors ${
             draggable
               ? 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest cursor-grab active:cursor-grabbing'
@@ -200,7 +200,7 @@ export function FieldCard({
           type="button"
           onClick={onToggle}
           aria-expanded={expanded}
-          aria-label={`${expanded ? 'Contraer' : 'Configurar'} el campo ${field.label}`}
+          aria-label={`${expanded ? 'Collapse' : 'Configure'} field ${field.label}`}
           className="flex flex-1 items-center gap-3 min-w-0 text-left rounded-xl px-2 py-1.5 hover:bg-surface-container-high transition-colors group"
         >
           <div className="flex items-center gap-2.5 shrink-0">
@@ -217,11 +217,11 @@ export function FieldCard({
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="truncate font-bold text-on-surface text-sm">
-                {field.label || <span className="text-on-surface-variant italic">Campo sin nombre</span>}
+                {field.label || <span className="text-on-surface-variant italic">Untitled field</span>}
               </span>
               <span
                 onClick={copyKey}
-                title="Copiar clave técnica"
+                title="Copy technical key"
                 className="inline-flex items-center gap-1 font-mono text-[10px] text-on-surface-variant/80 bg-surface-container px-2 py-0.5 rounded-md border border-border/40 hover:border-primary/40 hover:text-primary transition-colors cursor-pointer"
               >
                 {copiedKey ? <Check className="w-3 h-3 text-emerald-400" /> : <Hash className="w-3 h-3 opacity-60" />}
@@ -236,30 +236,30 @@ export function FieldCard({
 
               {field.required && (
                 <span className="inline-flex items-center gap-0.5 text-rose-400 font-semibold">
-                  <ShieldCheck className="w-3 h-3" /> obligatorio
+                  <ShieldCheck className="w-3 h-3" /> required
                 </span>
               )}
 
               {field.readOnly && (
                 <span className="inline-flex items-center gap-0.5 text-slate-400 font-medium">
-                  <Lock className="w-3 h-3" /> solo lectura
+                  <Lock className="w-3 h-3" /> read-only
                 </span>
               )}
 
               {field.bindsTo && (
                 <span className="inline-flex items-center gap-0.5 text-fuchsia-400 font-semibold">
-                  <Link2 className="w-3 h-3" /> {field.bindsTo === 'assetId' ? 'activo CMDB' : field.bindsTo === 'siteAssetId' ? 'sitio' : field.bindsTo === 'agenteItId' ? 'agente IT' : 'vinculado'}
+                  <Link2 className="w-3 h-3" /> {field.bindsTo === 'assetId' ? 'CMDB asset' : field.bindsTo === 'siteAssetId' ? 'site' : field.bindsTo === 'agenteItId' ? 'IT agent' : 'bound'}
                 </span>
               )}
 
               {hasConditions && (
                 <span className="inline-flex items-center gap-0.5 text-violet-400 font-semibold">
-                  <GitBranch className="w-3 h-3" /> condicional
+                  <GitBranch className="w-3 h-3" /> conditional
                 </span>
               )}
 
               {rules
-                .filter((rule) => rule !== 'obligatorio' && rule !== 'solo lectura' && rule !== 'vinculado' && rule !== 'varios dispositivos' && rule !== 'visible condicional' && rule !== 'obligatorio condicional')
+                .filter((rule) => rule !== 'required' && rule !== 'read-only' && rule !== 'bound' && rule !== 'multiple devices' && rule !== 'conditionally visible' && rule !== 'conditionally required')
                 .map((rule) => (
                   <span key={rule} className="text-on-surface-variant/80">· {rule}</span>
                 ))}
@@ -268,20 +268,20 @@ export function FieldCard({
         </button>
 
         <div className="flex shrink-0 items-center gap-0.5">
-          <IconButton label="Subir campo" disabled={index === 0 || !draggable} onClick={() => onMove(-1)}>
+          <IconButton label="Move field up" disabled={index === 0 || !draggable} onClick={() => onMove(-1)}>
             <ArrowUp className="w-4 h-4" />
           </IconButton>
           <IconButton
-            label="Bajar campo"
+            label="Move field down"
             disabled={index === total - 1 || !draggable}
             onClick={() => onMove(1)}
           >
             <ArrowDown className="w-4 h-4" />
           </IconButton>
-          <IconButton label="Duplicar campo" onClick={onDuplicate}>
+          <IconButton label="Duplicate field" onClick={onDuplicate}>
             <Copy className="w-4 h-4" />
           </IconButton>
-          <IconButton label="Eliminar campo" disabled={total === 1} danger onClick={onRemove}>
+          <IconButton label="Delete field" disabled={total === 1} danger onClick={onRemove}>
             <Trash2 className="w-4 h-4" />
           </IconButton>
         </div>
@@ -296,11 +296,11 @@ export function FieldCard({
               <div className="w-6 h-6 rounded-lg bg-primary/15 text-primary flex items-center justify-center">
                 <Sparkles className="w-3.5 h-3.5" />
               </div>
-              <span className="text-sm font-bold text-on-surface">Identificación del Campo</span>
+              <span className="text-sm font-bold text-on-surface">Field Identification</span>
             </div>
 
             <div className="grid lg:grid-cols-[minmax(0,1fr)_260px] gap-4">
-              <FriendlyField label="Etiqueta">
+              <FriendlyField label="Label">
                 <input
                   value={field.label}
                   onChange={(event) => {
@@ -312,11 +312,11 @@ export function FieldCard({
                     });
                   }}
                   className="friendly-input text-base font-semibold"
-                  placeholder="Ej. Prioridad del Ticket"
+                  placeholder="e.g. Ticket Priority"
                 />
               </FriendlyField>
 
-              <FriendlyField label="Tipo de respuesta">
+              <FriendlyField label="Response type">
                 <select
                   data-testid={`catalog-field-type-${field.key}`}
                   value={field.type}
@@ -342,27 +342,27 @@ export function FieldCard({
             <div className="grid md:grid-cols-2 gap-4 mt-4">
               {field.type !== 'boolean' && !fieldTypeUsesOptions(field.type) && (
                 <FriendlyField
-                  label="Texto de ejemplo"
-                  help="Se muestra dentro del campo y desaparece al escribir."
+                  label="Placeholder text"
+                  help="Appears inside the field and disappears when typing."
                 >
                   <input
                     value={field.placeholder ?? ''}
                     onChange={(event) => onChange({ placeholder: event.target.value || undefined })}
                     className="friendly-input bg-surface-container-low"
-                    placeholder="Ej. Describe brevemente…"
+                    placeholder="e.g. Describe briefly…"
                   />
                 </FriendlyField>
               )}
               <FriendlyField
-                label="Texto de ayuda"
-                help="Queda visible debajo del campo mientras se completa."
+                label="Help text"
+                help="Remains visible below the field while filling."
               >
                 <input
                   data-testid={`catalog-field-help-${field.key}`}
                   value={field.helpText ?? ''}
                   onChange={(event) => onChange({ helpText: event.target.value || undefined })}
                   className="friendly-input bg-surface-container-low"
-                  placeholder="Ej. Indica el número de serie del equipo."
+                  placeholder="e.g. Enter device serial number."
                 />
               </FriendlyField>
             </div>
@@ -389,14 +389,14 @@ export function FieldCard({
                 <Link2 className="w-3.5 h-3.5" />
               </div>
               <div>
-                <span className="text-sm font-bold text-on-surface">Vincular a un registro real</span>
-                <p className="text-[11px] text-on-surface-variant">Conecta este campo con la base de datos de CMDB, Sitios o Agentes IT.</p>
+                <span className="text-sm font-bold text-on-surface">Link to a live record</span>
+                <p className="text-[11px] text-on-surface-variant">Connect this field with CMDB, Sites, or IT Agents database.</p>
               </div>
             </div>
             <div className="grid md:grid-cols-2 gap-4">
               <FriendlyField
-                label="Vincular a"
-                help="Guarda una referencia real en vez de un valor escrito a mano."
+                label="Link to"
+                help="Saves a real reference instead of a handwritten value."
               >
                 <select
                   data-testid={`catalog-field-bindsto-${field.key}`}
@@ -425,7 +425,7 @@ export function FieldCard({
                 </select>
               </FriendlyField>
               {(field.bindsTo === 'recursoId' || field.bindsTo === 'assetId') && (
-                <FriendlyField label="Tipo de activo permitido">
+                <FriendlyField label="Allowed asset type">
                   <select
                     value={field.resourceType ?? ''}
                     onChange={(event) =>
@@ -445,7 +445,7 @@ export function FieldCard({
                 </FriendlyField>
               )}
               {field.bindsTo === 'assetId' && (
-                <FriendlyField label="Rol del activo" help="Describe por qué queda relacionado con el registro.">
+                <FriendlyField label="Asset role" help="Describes why it is linked to the record.">
                   <input
                     value={field.assetRole ?? 'affected'}
                     onChange={(event) => onChange({ assetRole: event.target.value || 'affected' })}
@@ -456,8 +456,8 @@ export function FieldCard({
               )}
               {field.bindsTo === 'assetId' && (
                 <FriendlyField
-                  label="Cantidad de dispositivos"
-                  help="Con varios, la persona elige 1 o más equipos del sitio en este mismo campo y marca cuál es el principal."
+                  label="Device count"
+                  help="With multiple, users select 1 or more site devices in this field and pick the primary."
                 >
                   <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border/40 bg-surface-container-low px-3 py-3 hover:bg-surface-container transition-colors">
                     <input
@@ -466,14 +466,14 @@ export function FieldCard({
                       checked={field.multiple === true}
                       onChange={(event) =>
                         onChange(
-                          event.target.checked
+                           event.target.checked
                             ? { multiple: true }
                             : { multiple: undefined, minItems: undefined, maxItems: undefined },
                         )
                       }
                       className="h-4 w-4 rounded text-primary focus:ring-primary"
                     />
-                    <span className="text-sm font-bold text-on-surface">Permitir varios dispositivos</span>
+                    <span className="text-sm font-bold text-on-surface">Allow multiple devices</span>
                   </label>
                 </FriendlyField>
               )}
@@ -493,12 +493,12 @@ export function FieldCard({
               <div className="w-6 h-6 rounded-lg bg-primary/15 text-primary flex items-center justify-center">
                 <LayoutTemplate className="w-3.5 h-3.5" />
               </div>
-              <span className="text-sm font-bold text-on-surface">Dónde aparece</span>
+              <span className="text-sm font-bold text-on-surface">Where it appears</span>
             </div>
             {known.length === 0 ? (
               <p className="text-[11px] text-on-surface-variant leading-5">
-                Esta definición todavía no tiene páginas materializadas. Se crean al abrir el
-                diseñador de plantilla, y este campo recibirá su lugar ahí.
+                This definition does not have materialized pages yet. They are created when opening the
+                template designer, and this field will receive its place there.
               </p>
             ) : (
               <>
@@ -518,13 +518,13 @@ export function FieldCard({
                   ))}
                 </div>
                 <p className="mt-3 text-[11px] text-on-surface-variant leading-5">
-                  La visibilidad se decide colocando o quitando el campo en el{' '}
-                  <span className="font-bold text-on-surface">Diseñador de plantilla</span>, no aquí.
+                  Visibility is decided by placing or removing the field in the{' '}
+                  <span className="font-bold text-on-surface">Template designer</span>, not here.
                   {missing.length > 0 && (
                     <>
                       {' '}
-                      Hoy no aparece en{' '}
-                      {missing.map((surface) => SURFACE_LABELS[surface]).join(' ni ')}.
+                      Currently does not appear in{' '}
+                      {missing.map((surface) => SURFACE_LABELS[surface]).join(' or ')}.
                     </>
                   )}
                 </p>
@@ -542,8 +542,8 @@ export function FieldCard({
           {!guided && (
             <div className="pt-2 border-t border-border/30">
               <FriendlyField
-                label="Identificador interno"
-                help="La clave con la que se guarda el valor. Cambiarla no reescribe los registros existentes."
+                label="Internal identifier"
+                help="The key under which the value is stored. Changing it does not rewrite existing records."
               >
                 <div className="relative">
                   <input
@@ -578,7 +578,7 @@ function DefaultValueField({
   if (fieldTypeUsesOptions(field.type)) {
     return (
       <p className="mt-4 text-[11px] text-on-surface-variant">
-        El valor por defecto se marca con la estrella en la lista de opciones.
+        The default value is marked with the star in the options list.
       </p>
     );
   }
@@ -586,7 +586,7 @@ function DefaultValueField({
   if (field.type === 'boolean') {
     return (
       <div className="mt-4">
-        <FriendlyField label="Arranca marcado">
+        <FriendlyField label="Checked by default">
           <select
             value={field.defaultValue === true ? 'true' : 'false'}
             onChange={(event) => onChange({ defaultValue: event.target.value === 'true' })}
@@ -594,7 +594,7 @@ function DefaultValueField({
             style={{ colorScheme: 'dark' }}
           >
             <option value="false" className="bg-[#191c22] text-[#e1e2eb]">No</option>
-            <option value="true" className="bg-[#191c22] text-[#e1e2eb]">Sí</option>
+            <option value="true" className="bg-[#191c22] text-[#e1e2eb]">Yes</option>
           </select>
         </FriendlyField>
       </div>
@@ -605,8 +605,8 @@ function DefaultValueField({
   return (
     <div className="mt-4 grid md:grid-cols-2 gap-4">
       <FriendlyField
-        label="Valor por defecto"
-        help="Con qué llega el campo antes de que nadie lo toque."
+        label="Default value"
+        help="What the field starts with before anyone interacts with it."
       >
         <input
           data-testid={`catalog-field-default-${field.key}`}
@@ -622,7 +622,7 @@ function DefaultValueField({
           }}
           className={`friendly-input bg-surface-container-low ${field.type === 'date' ? selectClasses : ''}`}
           style={field.type === 'date' ? { colorScheme: 'dark' } : undefined}
-          placeholder="Ej. Valor inicial"
+          placeholder="e.g. Initial value"
         />
       </FriendlyField>
     </div>

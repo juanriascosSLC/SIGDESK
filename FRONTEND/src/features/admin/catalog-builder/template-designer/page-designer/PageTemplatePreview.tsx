@@ -36,12 +36,12 @@ export function PageTemplatePreview({
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-sm font-black uppercase tracking-wider text-on-surface-variant">
-            Vista previa — {surface.kindLabel}
+            Preview — {surface.kindLabel}
           </h3>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Cerrar vista previa"
+            aria-label="Close preview"
             className="text-on-surface-variant hover:text-on-surface"
           >
             <X className="h-4 w-4" />
@@ -51,7 +51,7 @@ export function PageTemplatePreview({
         {specification.fields.length > 0 && (
           <details className="mb-6 rounded-2xl border border-border/40 bg-surface-container p-4">
             <summary className="cursor-pointer text-xs font-bold uppercase tracking-wider text-on-surface-variant">
-              Datos de ejemplo (para probar condiciones)
+              Sample data (to test conditions)
             </summary>
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {specification.fields.map((field) => (

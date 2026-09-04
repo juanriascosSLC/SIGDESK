@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import type { Ticket, TicketStatus } from './types';
 import { KNOWN_TICKET_STATUSES } from './types';
-import { AlertCircle, Archive, Clock, CheckCircle2, CircleDashed, LayoutGrid, List as ListIcon, Filter, MoreHorizontal, Link2, User, CircleDot } from 'lucide-react';
+import { AlertCircle, Archive, Clock, CheckCircle2, CircleDashed, LayoutGrid, List as ListIcon, Filter, Link2, User, CircleDot } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import TicketsList from './TicketsList';
 import { useTickets, useUpdateTicketStatus } from './hooks';
@@ -10,6 +10,7 @@ import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { useAuth } from '@/features/auth/useAuth';
 import { useToast } from '@/components/ui';
+import { assigneeText, USER_UNAVAILABLE_LABEL } from './identity-labels';
 
 type StatusStyle = { icon: LucideIcon; color: string; bgColor: string };
 
@@ -86,13 +87,8 @@ function KanbanColumn({
           </div>
           <h3 className="font-bold text-sm text-on-surface tracking-wide">{title}</h3>
         </div>
-        <div className="flex items-center gap-2">
-          <div className={`px-2.5 py-0.5 rounded-full text-xs font-black tracking-wider ${config.bgColor} ${config.color} border border-current/20`}>
-            {tickets.length}
-          </div>
-          <button className="p-1 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors">
-            <MoreHorizontal className="w-4 h-4" />
-          </button>
+        <div className={`px-2.5 py-0.5 rounded-full text-xs font-black tracking-wider ${config.bgColor} ${config.color} border border-current/20`}>
+          {tickets.length}
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-3 space-y-3 scrollbar-thin">
@@ -144,11 +140,11 @@ function KanbanColumn({
 
             <div className="flex items-center justify-between pt-3 border-t border-border/30">
               <div className="flex items-center gap-2">
-                 <div className="w-6 h-6 rounded-full bg-surface-container-highest border border-border/40 flex items-center justify-center text-[10px] font-black text-on-surface shadow-sm" title={`Asignado: ${ticket.assignee || 'Sin asignar'}`}>
-                    {ticket.assignee ? ticket.assignee.charAt(0).toUpperCase() : <User className="w-3 h-3 opacity-50" />}
+                 <div className="w-6 h-6 rounded-full bg-surface-container-highest border border-border/40 flex items-center justify-center text-[10px] font-black text-on-surface shadow-sm" title={`Assigned: ${assigneeText(ticket)}`}>
+                    {ticket.assigneeDisplayName ? ticket.assigneeDisplayName.charAt(0).toUpperCase() : <User className="w-3 h-3 opacity-50" />}
                  </div>
                  <span className="text-[11px] font-medium text-on-surface-variant truncate max-w-[90px]">
-                   {ticket.assignee || 'Sin asignar'}
+                   {assigneeText(ticket)}
                  </span>
               </div>
               <span className="text-[10px] font-medium text-on-surface-variant/70">
@@ -159,7 +155,7 @@ function KanbanColumn({
         ))}
         {tickets.length === 0 && (
           <div className="h-40 flex flex-col items-center justify-center text-xs text-on-surface-variant/60 italic border-2 border-dashed border-border/30 rounded-2xl">
-            Sin tickets en este estado
+            No tickets in this status
           </div>
         )}
       </div>
@@ -191,10 +187,18 @@ export default function TicketsKanban() {
     () => Array.from(new Set(tickets.map((t) => t.site).filter(Boolean) as string[])).sort(),
     [tickets],
   );
-  const assigneeOptions = useMemo(
-    () => Array.from(new Set(tickets.map((t) => t.assignee).filter(Boolean) as string[])).sort(),
-    [tickets],
-  );
+  // Filter VALUES stay ids (what the backend's ?assignee= expects); only the
+  // dropdown LABEL is a resolved display name — NEVER the raw id, even as a
+  // fallback.
+  const assigneeOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const t of tickets) {
+      if (t.assigneeId) byId.set(t.assigneeId, t.assigneeDisplayName || USER_UNAVAILABLE_LABEL);
+    }
+    return Array.from(byId.entries())
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [tickets]);
 
   if (isLoading) {
     return (
@@ -276,7 +280,7 @@ export default function TicketsKanban() {
             className="bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-2 text-on-surface outline-none"
           >
             <option value="">All Assignees</option>
-            {assigneeOptions.map((a) => <option key={a} value={a}>{a}</option>)}
+            {assigneeOptions.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
           </select>
           {hasActiveFilters && (
             <button

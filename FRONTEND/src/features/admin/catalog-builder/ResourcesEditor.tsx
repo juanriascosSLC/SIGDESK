@@ -74,8 +74,8 @@ export function ResourcesEditor({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <SectionHeading
           icon={<Link2 className="w-5 h-5" />}
-          title="Recursos conectados"
-          description="Conecta políticas y capacidades administradas por otros módulos."
+          title="Connected resources"
+          description="Connect policies and capabilities managed by other modules."
         />
         <button
           onClick={addBinding}
@@ -84,18 +84,18 @@ export function ResourcesEditor({
         >
           <Plus className="w-4 h-4" />
           {resourcesQuery.isLoading
-            ? 'Cargando capacidades…'
+            ? 'Loading capabilities…'
             : guided
-              ? 'Agregar capacidad'
-              : 'Conectar recurso'}
+              ? 'Add capability'
+              : 'Connect resource'}
         </button>
       </div>
 
       <div className="mt-6 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4 flex gap-3 text-sm">
         <Check className="w-5 h-5 text-cyan-300 shrink-0" />
         <p className="text-on-surface-variant">
-          El Catalog Builder decide qué recurso utiliza esta entidad. El módulo especializado continúa
-          siendo el dueño de su configuración.
+          The Catalog Builder determines which resource this entity uses. The specialized module remains
+          the owner of its configuration.
         </p>
       </div>
 
@@ -103,10 +103,10 @@ export function ResourcesEditor({
         <EmptyMessage
           text={
             resourcesQuery.isError
-              ? 'No fue posible consultar las capacidades de los módulos.'
+              ? 'Unable to fetch module capabilities.'
               : guided
-              ? 'Este paso es opcional. Puedes continuar y conectar permisos, SLA o automatizaciones después.'
-              : 'Esta entidad todavía no utiliza políticas, SLA, automatizaciones ni integraciones.'
+              ? 'This step is optional. You can continue and connect permissions, SLA, or automations later.'
+              : 'This entity does not use policies, SLA, automations, or integrations yet.'
           }
         />
       ) : (
@@ -133,7 +133,7 @@ export function ResourcesEditor({
                       : 'lg:grid-cols-[220px_minmax(0,1fr)_130px_110px_40px]'
                   }`}
                 >
-                  <FriendlyField label="Tipo de recurso">
+                  <FriendlyField label="Resource type">
                     <select
                       value={`${binding.module}:${binding.resourceType}`}
                       onChange={(event) =>
@@ -170,8 +170,8 @@ export function ResourcesEditor({
                     </select>
                   </FriendlyField>
                   <FriendlyField
-                    label="Capacidad disponible"
-                    help={`Seleccionado desde ${selectedKind?.owner ?? 'el módulo correspondiente'}.`}
+                    label="Available capability"
+                    help={`Selected from ${selectedKind?.owner ?? 'the corresponding module'}.`}
                   >
                     <select
                       value={binding.resourceId}
@@ -194,7 +194,7 @@ export function ResourcesEditor({
                       style={{ colorScheme: 'dark' }}
                     >
                       {compatibleResources.length === 0 && (
-                        <option value="" className="bg-[#191c22] text-[#e1e2eb]">No hay recursos publicados</option>
+                        <option value="" className="bg-[#191c22] text-[#e1e2eb]">No published resources</option>
                       )}
                       {compatibleResources.map((resource) => (
                         <option
@@ -207,7 +207,7 @@ export function ResourcesEditor({
                       ))}
                     </select>
                   </FriendlyField>
-                  {!guided && <FriendlyField label="Versión">
+                  {!guided && <FriendlyField label="Version">
                     <input
                       value={binding.resourceVersion ?? ''}
                       onChange={(event) =>
@@ -217,11 +217,11 @@ export function ResourcesEditor({
                           return current;
                         })
                       }
-                      placeholder="Se resolverá al publicar"
+                      placeholder="Will resolve upon publishing"
                       className="friendly-input"
                     />
                   </FriendlyField>}
-                  {!guided && <FriendlyField label="Contrato">
+                  {!guided && <FriendlyField label="Contract">
                     <input
                       value={binding.contractVersion ?? '1'}
                       onChange={(event) =>
@@ -236,7 +236,7 @@ export function ResourcesEditor({
                     />
                   </FriendlyField>}
                   <IconButton
-                    label="Desconectar recurso"
+                    label="Disconnect resource"
                     danger
                     onClick={() =>
                       updateSpecification((current) => {

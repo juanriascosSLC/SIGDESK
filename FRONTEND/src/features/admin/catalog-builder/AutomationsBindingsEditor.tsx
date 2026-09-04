@@ -76,17 +76,17 @@ export function AutomationsBindingsEditor({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <SectionHeading
           icon={<Workflow className="w-5 h-5" />}
-          title="Automatizaciones conectadas"
-          description="Qué automatizaciones publicadas forman parte del comportamiento de esta plantilla."
+          title="Connected automations"
+          description="Which published automations are part of this template's behavior."
         />
       </div>
 
       <div className="mt-6 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4 flex gap-3 text-sm">
         <Workflow className="w-5 h-5 text-cyan-300 shrink-0" />
         <p className="text-on-surface-variant">
-          Publicar una automatización solo la deja <strong>disponible</strong>. Se ejecuta cuando esta
-          definición la vincula y se publica. Cambiar estas vinculaciones exige publicar una versión
-          nueva de la definición, y solo afecta a los registros creados a partir de entonces.
+          Publishing an automation only makes it <strong>available</strong>. It runs when this
+          definition binds it and is published. Changing these bindings requires publishing a new
+          version of the definition, and only affects records created thereafter.
         </p>
       </div>
 
@@ -95,14 +95,13 @@ export function AutomationsBindingsEditor({
           data-testid="automations-bindings-error"
           className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200"
         >
-          No se pudo consultar el catálogo de automatizaciones. No se ha quitado ninguna vinculación
-          guardada; vuelve a intentarlo antes de publicar, porque publicar sin poder verificarlas se
-          bloqueará.
+          Failed to query the automations catalog. Saved bindings were not removed; please try again
+          before publishing, because publishing without verifying them will be blocked.
         </p>
       )}
 
       {vinculadas.length === 0 ? (
-        <EmptyMessage text="Esta plantilla no ejecuta ninguna automatización todavía." />
+        <EmptyMessage text="This template does not run any automations yet." />
       ) : (
         <div className="mt-6 space-y-3">
           {vinculadas.map(({ binding, index }) => {
@@ -125,10 +124,10 @@ export function AutomationsBindingsEditor({
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0">
                     <p className="font-black text-on-surface">
-                      {recurso?.displayName ?? `Automatización ${workflowID || '(sin id)'}`}
+                      {recurso?.displayName ?? `Automation ${workflowID || '(no id)'}`}
                     </p>
                     <p className="mt-1 text-xs text-on-surface-variant">
-                      Versión {binding.resourceVersion ?? '?'} · familia {binding.resourceId || '(sin familia)'}
+                      Version {binding.resourceVersion ?? '?'} · family {binding.resourceId || '(no family)'}
                     </p>
                     {recurso?.description && (
                       <p className="mt-2 text-xs text-on-surface-variant">{recurso.description}</p>
@@ -139,8 +138,8 @@ export function AutomationsBindingsEditor({
                         className="mt-2 flex items-center gap-2 text-xs font-bold text-red-200"
                       >
                         <AlertTriangle className="h-4 w-4 shrink-0" />
-                        Ya no está publicada o fue archivada. Publicar esta definición se rechazará
-                        hasta elegir otra versión.
+                        No longer published or was archived. Publishing this definition will be rejected
+                        until another version is selected.
                       </p>
                     )}
                   </div>
@@ -157,10 +156,10 @@ export function AutomationsBindingsEditor({
                           })
                         }
                       />
-                      Habilitada
+                      Enabled
                     </label>
                     <IconButton
-                      label="Quitar automatización"
+                      label="Remove automation"
                       danger
                       onClick={() =>
                         updateSpecification((current) => {
@@ -181,7 +180,7 @@ export function AutomationsBindingsEditor({
 
       <div className="mt-6 flex flex-wrap items-end gap-3">
         <label className="flex-1 min-w-[260px] text-[10px] font-black uppercase tracking-wider text-on-surface-variant">
-          Automatizaciones publicadas
+          Published automations
           <select
             data-testid="automations-available"
             disabled={recursos.isPending || seleccionables.length === 0}
@@ -194,10 +193,10 @@ export function AutomationsBindingsEditor({
           >
             <option value="" className="bg-[#191c22] text-[#e1e2eb]">
               {recursos.isPending
-                ? 'Cargando automatizaciones…'
+                ? 'Loading automations…'
                 : seleccionables.length === 0
-                  ? 'No hay más automatizaciones publicadas para vincular'
-                  : 'Selecciona una automatización publicada…'}
+                  ? 'No more published automations to bind'
+                  : 'Select a published automation…'}
             </option>
             {seleccionables.map((recurso) => (
               <option
@@ -211,7 +210,7 @@ export function AutomationsBindingsEditor({
           </select>
         </label>
         <span className="flex items-center gap-2 pb-3 text-xs text-on-surface-variant">
-          <Plus className="h-4 w-4" /> Solo aparecen versiones publicadas: un borrador no puede vincularse.
+          <Plus className="h-4 w-4" /> Only published versions appear: a draft cannot be bound.
         </span>
       </div>
     </section>

@@ -32,11 +32,11 @@ export function GeneralEditor({
     <section data-testid="catalog-panel-general" className="panel-card p-6 lg:p-8">
       <SectionHeading
         icon={<Info className="w-5 h-5" />}
-        title="Información general"
-        description="Dale una identidad clara para que las personas sepan cuándo usarla."
+        title="General Information"
+        description="Give it a clear identity so people know when to use it."
       />
       <div className={`grid gap-5 mt-7 ${guided ? '' : 'md:grid-cols-2'}`}>
-        <FriendlyField label="Nombre visible" help="Así aparecerá en menús y formularios.">
+        <FriendlyField label="Display Name" help="How it will appear in menus and forms.">
           <input
             value={selected.name}
             onChange={(event) => {
@@ -44,13 +44,13 @@ export function GeneralEditor({
               setSelected((current) => ({ ...current, name }));
               if (!selected.id) updateIdentity(name);
             }}
-            placeholder="Ej. Incidente"
+            placeholder="e.g. Incident"
             className="friendly-input"
           />
         </FriendlyField>
         {!guided && <FriendlyField
-          label="Código corto"
-          help="Se usa para identificar y numerar registros. No cambia después de crearla."
+          label="Short Code"
+          help="Used to identify and number records. Cannot be changed after creation."
         >
           <div className="relative">
             <input
@@ -63,7 +63,7 @@ export function GeneralEditor({
             />
             {selected.id && (
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-on-surface-variant">
-                FIJO
+                LOCKED
               </span>
             )}
           </div>
@@ -72,9 +72,9 @@ export function GeneralEditor({
       {guided && (
         <div className="mt-5 rounded-xl border border-border/40 bg-surface-container px-4 py-3 flex items-center justify-between gap-4">
           <div>
-            <p className="text-xs font-bold text-on-surface">Identificador automático</p>
+            <p className="text-xs font-bold text-on-surface">Automatic Identifier</p>
             <p className="text-[11px] text-on-surface-variant">
-              Lo usamos internamente para numerar y conectar la entidad.
+              Used internally to number and connect the entity.
             </p>
           </div>
           <code data-testid="catalog-entity-key" className="text-sm font-black text-primary">{selected.entityKey || '—'}</code>
@@ -82,8 +82,8 @@ export function GeneralEditor({
       )}
       <div className="mt-5">
         <FriendlyField
-          label="Descripción"
-          help="Explica qué representa esta entidad y en qué situación debe utilizarse."
+          label="Description"
+          help="Explains what this entity represents and when it should be used."
         >
           <textarea
             value={selected.specification.description}
@@ -94,7 +94,7 @@ export function GeneralEditor({
               }))
             }
             rows={4}
-            placeholder="Ej. Registra una interrupción o degradación de un servicio…"
+            placeholder="e.g. Records an interruption or degradation of a service…"
             className="friendly-input resize-y"
           />
         </FriendlyField>
@@ -104,9 +104,9 @@ export function GeneralEditor({
           <FileText className="w-5 h-5 text-primary" />
         </div>
         <div>
-          <h3 className="font-bold text-on-surface">Vista previa de numeración</h3>
+          <h3 className="font-bold text-on-surface">Numbering Preview</h3>
           <p className="text-sm text-on-surface-variant mt-1">
-            Los registros se identificarán como{' '}
+            Records will be identified as{' '}
             <strong className="font-mono text-primary">
               {selected.specification.identity.prefix || 'ABC'}-000001
             </strong>

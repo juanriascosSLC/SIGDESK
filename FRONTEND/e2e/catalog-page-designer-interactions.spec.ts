@@ -240,16 +240,24 @@ test('the resize handle still drags, and canvas widgets are inert', async ({ pag
   await page.waitForTimeout(300);
   expect(await slot.getAttribute('aria-label')).not.toBe(before);
 
-  // The previewed widget's own controls are inert: the RESOLVER button is
+  // The previewed widget's own controls are inert: the Resolve button is
   // rendered and visible, but the slot above it takes the pointer, so a click
   // configures the element instead of operating the simulated ticket.
-  const resolve = page.getByTestId('page-designer-region-wrapper-actions').getByText('RESOLVER');
+  //
+  // TicketActionsWidget's real button reads "Resolve" (English) — this test
+  // asserted the stale "RESOLVER" (an all-caps Spanish label that never
+  // existed in the component's actual JSX, only ever in this test), which
+  // made getByText find nothing and every run time out at 60s.
+  // getByText alone is ambiguous here: the status <select>'s own
+  // "Resolved" <option> also matches by substring. The real "Resolve"
+  // control is a <button>, so scope to that role.
+  const resolve = page.getByTestId('page-designer-region-wrapper-actions').getByRole('button', { name: 'Resolve' });
   await expect(resolve).toBeVisible();
   const resolveBox = await resolve.boundingBox();
-  if (!resolveBox) throw new Error('no RESOLVER box');
+  if (!resolveBox) throw new Error('no Resolve box');
   await page.mouse.click(resolveBox.x + resolveBox.width / 2, resolveBox.y + resolveBox.height / 2);
   await expect(page.getByTestId('page-designer-properties').getByText('Barra de acciones').first()).toBeVisible();
-  // Status untouched: the actions bar still offers RESOLVER, not REABRIR.
+  // Status untouched: the actions bar still offers Resolve, not Reopen.
   await expect(resolve).toBeVisible();
 });
 

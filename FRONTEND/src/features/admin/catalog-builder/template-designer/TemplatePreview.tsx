@@ -18,7 +18,7 @@ function sampleValue(field: FieldDefinition): unknown {
   return '';
 }
 
-const KIND_LABEL: Record<LayoutKind, string> = { create: 'Crear', edit: 'Editar', detail: 'Detalle' };
+const KIND_LABEL: Record<LayoutKind, string> = { create: 'Create', edit: 'Edit', detail: 'Detail' };
 
 // Uses the exact same DynamicLayout the runtime uses — not a lookalike — with
 // an editable sample-data panel (the DynamicField inputs themselves) so
@@ -51,12 +51,12 @@ export function TemplatePreview({
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-sm font-black uppercase tracking-wider text-on-surface-variant">
-            Vista previa — {KIND_LABEL[kind]}
+            Preview — {KIND_LABEL[kind]}
           </h3>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Cerrar vista previa"
+            aria-label="Close preview"
             className="text-on-surface-variant hover:text-on-surface"
           >
             <X className="h-4 w-4" />

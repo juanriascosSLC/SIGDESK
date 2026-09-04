@@ -25,7 +25,9 @@ async function creationBindings(request: APIRequestContext) {
 
   const agentsResponse = await request.get(`${apiBaseURL}/agentes_it`);
   expect(agentsResponse.ok(), `Could not load IT agents: ${await agentsResponse.text()}`).toBeTruthy();
-  const rawAgents = await agentsResponse.json() as Array<{ id: string }> | { items?: Array<{ id: string }> };
+  const rawAgents = await agentsResponse.json() as
+    | Array<{ id: string; nombre?: string }>
+    | { items?: Array<{ id: string; nombre?: string }> };
   const agents = Array.isArray(rawAgents) ? rawAgents : rawAgents.items ?? [];
 
   // Un destino organizacional REAL (area + equipo), que es lo que pide la
@@ -47,6 +49,7 @@ async function creationBindings(request: APIRequestContext) {
     recursoId: recursoId!,
     siteDisplayName: sites.items?.[0]?.displayName,
     agenteItId: agents[0]?.id,
+    agenteItNombre: agents[0]?.nombre,
     departmentId: team!.department_id,
     teamId: team!.id,
   };
@@ -276,113 +279,44 @@ test('an incident walks its full historical lifecycle: open -> in progress -> pe
   expect(new Set(await statusOptionLabels(page))).toEqual(new Set(['Closed', 'In Progress']));
   await expect(page.getByTestId('ticket-reopen-button')).toBeVisible();
 
+  // Reopen now collects its mandatory reason through a real ConfirmDialog
+  // (ReopenTicketDialog), not window.prompt — this replaced the native
+  // dialog a while ago (see the comment on ReopenTicketDialog itself), but
+  // this test still registered a page.once('dialog', ...) handler that a
+  // real Dialog component never fires, so the transitions POST this test
+  // waits for never happened and every run timed out at 60s.
+  await page.getByTestId('ticket-reopen-button').click();
+  const reopenDialog = page.getByRole('dialog', { name: 'Reopen ticket' });
+  await expect(reopenDialog).toBeVisible();
+  await reopenDialog.getByLabel('Reason for reopening').fill('Playwright E2E reopen validation');
+
   const reopenResponsePromise = page.waitForResponse(
     (response) =>
       /\/entities\/INC\/[^/]+\/transitions\/[^/]+$/.test(new URL(response.url()).pathname) &&
       response.request().method() === 'POST',
   );
-  page.once('dialog', (dialog) => dialog.accept('Validación E2E de reapertura'));
-  await page.getByTestId('ticket-reopen-button').click();
+  await reopenDialog.getByRole('button', { name: 'Reopen', exact: true }).click();
   await reopenResponsePromise;
   await expect(select).toHaveValue('In Progress');
   await expect(page.getByTestId('ticket-reopen-button')).toHaveCount(0);
 });
 
-test('keeps initial assignment and persists comments, attachments and merged incidents', async ({
-  page,
-  request,
-}) => {
-  const definitionResponse = await request.get(`${apiBaseURL}/catalog/definitions/INC`);
-  expect(definitionResponse.ok()).toBeTruthy();
-  const definition = (await definitionResponse.json()) as Definition;
-  const binding = await creationBindings(request);
-  expect(binding.agenteItId, 'An IT agent is required to verify initial assignment').toBeTruthy();
-
-  const create = async (title: string, idempotencyKey: string) => {
-    const response = await request.post(`${apiBaseURL}/entities/INC`, {
-      headers: { 'Idempotency-Key': idempotencyKey },
-      data: {
-        data: definitionData(definition, {
-          title,
-          description: 'Live collaboration and persistence acceptance incident.',
-          priority: 'high',
-        }),
-        recursoId: binding.recursoId,
-        agenteItId: binding.agenteItId,
-        assetContext: { siteAssetId: binding.recursoId, links: [] },
-      },
-    });
-    expect(response.ok(), `Could not create ${title}: ${await response.text()}`).toBeTruthy();
-    return response.json() as Promise<{ id: string; humanId: string; primerResponsableId?: string }>;
-  };
-
-  const idempotencyKey = `playwright-collaboration-${randomUUID()}`;
-  const primary = await create('Playwright primary incident for merge', idempotencyKey);
-  const replay = await create('This replay must not create another incident', idempotencyKey);
-  expect(replay.id).toBe(primary.id);
-  const secondary = await create(
-    'Playwright secondary incident for merge',
-    `playwright-collaboration-secondary-${randomUUID()}`,
-  );
-
-  await expect.poll(
-    async () => (await request.get(`${apiBaseURL}/entities/INC/${primary.id}`)).status(),
-    { timeout: 15_000 },
-  ).toBe(200);
-
-  const persistedPrimary = await (
-    await request.get(`${apiBaseURL}/entities/INC/${primary.id}`)
-  ).json() as { primerResponsableId?: string; agenteItId?: string };
-  expect(persistedPrimary.primerResponsableId).toBe(binding.agenteItId);
-
-  const commentBody = `Persistent collaboration comment ${randomUUID()}`;
-  const commentResponse = await request.post(`${apiBaseURL}/tickets/${primary.id}/comments`, {
-    data: { body: commentBody, isInternal: false },
-  });
-  expect(commentResponse.ok(), await commentResponse.text()).toBeTruthy();
-
-  const attachmentName = `evidence-${randomUUID()}.txt`;
-  const attachmentBody = 'SIG-DESK beta acceptance evidence';
-  const attachmentResponse = await request.post(
-    `${apiBaseURL}/tickets/${primary.id}/attachments`,
-    {
-      multipart: {
-        file: {
-          name: attachmentName,
-          mimeType: 'text/plain',
-          buffer: Buffer.from(attachmentBody),
-        },
-      },
-    },
-  );
-  expect(attachmentResponse.ok(), await attachmentResponse.text()).toBeTruthy();
-  const attachment = await attachmentResponse.json() as { id: string; fileName: string };
-  expect(attachment.fileName).toBe(attachmentName);
-  const download = await request.get(`${apiBaseURL}/attachments/${attachment.id}/download`);
-  expect(download.ok()).toBeTruthy();
-  expect(await download.text()).toBe(attachmentBody);
-
-  const mergeResponse = await request.post(`${apiBaseURL}/tickets/${primary.id}/merge`, {
-    data: { mergedIds: [secondary.id] },
-  });
-  expect(mergeResponse.ok(), await mergeResponse.text()).toBeTruthy();
-
-  await expect.poll(async () => {
-    const response = await request.get(`${apiBaseURL}/entities/INC/${primary.id}`);
-    const ticket = await response.json() as { mergedCount?: number };
-    return ticket.mergedCount;
-  }).toBe(1);
-  const mergedSource = await (
-    await request.get(`${apiBaseURL}/entities/INC/${secondary.id}`)
-  ).json() as { mergedIntoId?: string | null };
-  expect(mergedSource.mergedIntoId).toBe(primary.id);
-
-  await mockAuthenticatedAdmin(page);
-  await page.goto(`/app/tickets/${primary.id}`);
-  await expect(page.getByTestId('ticket-detail')).toBeVisible();
-  await expect(page.getByText(binding.agenteItId!, { exact: true }).first()).toBeVisible();
-  await expect(page.getByText(commentBody, { exact: true }).first()).toBeVisible();
-  await expect(page.getByText(attachmentName, { exact: true })).toBeVisible();
-  await expect(page.getByText('Tickets combinados en', { exact: false })).toBeVisible();
-  await expect(page.getByText('Playwright secondary incident for merge', { exact: true })).toBeVisible();
-});
+// The live comment/attachment/merge collaboration test used to live here,
+// running directly against the shared local stack (sigdesk_tickets_local)
+// with no cleanup — every run left a permanent primary + secondary
+// incident, a comment and an attachment behind (Ticket identity
+// presentation, item 6: E2E data hygiene). It now runs against a disposable
+// per-run stack instead, with guaranteed cleanup even on assertion failure
+// — see isolated-ticket-collaboration.spec.ts.
+//
+// The legacy first-responsible (agenteItId) name-resolution assertion that
+// used to live in this test is still covered — by the Go test
+// TestHTTP_ObtenerEntidad_ResponsableLegado_ResuelveNombreViaAgenteIT
+// (tickets_service/adapters/in) against a real backend with the identity
+// reconciler running. It was deliberately NOT ported into
+// isolated-ticket-collaboration.spec.ts: that stack's disposable
+// tickets_service has no identity reconciler wired (that wiring lives only
+// in tickets_service/main.go, not cmd/e2e_server), so it has no way to
+// resolve a real organization_service agent's name locally, and asserting
+// against it there would either fail honestly or require standing up
+// reconciler infrastructure this pass doesn't add.

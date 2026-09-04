@@ -26,11 +26,11 @@ function initialData(fields: FieldDefinition[], ticket: Ticket, currentUserName:
   for (const field of fields) if (field.defaultValue !== undefined) data[field.key] = field.defaultValue;
   return {
     ...data,
-    title: `Resolver ${ticket.humanId ?? ticket.id}: ${ticket.title}`,
-    description: `Cambio controlado originado por ${ticket.humanId ?? ticket.id}. ${ticket.description}`,
+    title: `Resolve ${ticket.humanId ?? ticket.id}: ${ticket.title}`,
+    description: `Controlled change originated by ${ticket.humanId ?? ticket.id}. ${ticket.description}`,
     requester: currentUserName,
     changeOwner: currentUserName,
-    serviceAffected: ticket.category || data.serviceAffected || 'Servicio por determinar',
+    serviceAffected: ticket.category || data.serviceAffected || 'Service to be determined',
     reason: `Execute the action needed to resolve ${ticket.humanId ?? ticket.id}.`,
     impact: data.impact || (ticket.priority === 'Critical' ? 'high' : 'medium'),
     urgency: data.urgency || 'medium',
@@ -66,7 +66,7 @@ export function IncidentChangeDialog({ open, ticket, currentUserName, onClose, o
 
   const workflow = useMutation({
     mutationFn: async () => {
-      if (!ticket.entityId) throw new Error('El incidente no tiene una entidad INC vinculada.');
+      if (!ticket.entityId) throw new Error('The incident has no linked INC entity.');
       const specification = definition.data?.specification;
       if (!specification) throw new Error('The RFC definition is not available.');
       const data: Record<string, unknown> = {};
@@ -105,10 +105,10 @@ export function IncidentChangeDialog({ open, ticket, currentUserName, onClose, o
         <div className="sticky top-0 z-10 flex items-start justify-between border-b border-border/40 bg-surface-container-low/95 p-6 backdrop-blur-md">
           <div>
             <div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-300"><GitPullRequest className="h-4 w-4" /> INC → RFC</div>
-            <h2 className="text-xl font-black text-on-surface">Crear cambio desde este incidente</h2>
+            <h2 className="text-xl font-black text-on-surface">Create change from this incident</h2>
             <p className="mt-1 text-xs text-on-surface-variant">Change Management will manage execution; both records will keep their relation and versions.</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-xl p-2 text-on-surface-variant" aria-label="Cerrar"><X className="h-5 w-5" /></button>
+          <button type="button" onClick={onClose} className="rounded-xl p-2 text-on-surface-variant" aria-label="Close"><X className="h-5 w-5" /></button>
         </div>
         <div className="grid gap-5 p-6 md:grid-cols-2">
           {fields.map((field) => (
@@ -119,8 +119,8 @@ export function IncidentChangeDialog({ open, ticket, currentUserName, onClose, o
         </div>
         {workflow.isError && <div className="mx-6 mb-4 flex gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300"><AlertTriangle className="h-4 w-4" />{workflow.error.message}</div>}
         <div className="sticky bottom-0 flex justify-end gap-3 border-t border-border/40 bg-surface-container-low/95 p-6">
-          <button type="button" onClick={onClose} className="secondary-button">Cancelar</button>
-          <button type="submit" disabled={workflow.isPending || !definition.data} className="primary-button disabled:opacity-50"><CheckCircle2 className="h-4 w-4" />{workflow.isPending ? 'Creando y vinculando…' : 'Crear RFC y vincular'}</button>
+          <button type="button" onClick={onClose} className="secondary-button">Cancel</button>
+          <button type="submit" disabled={workflow.isPending || !definition.data} className="primary-button disabled:opacity-50"><CheckCircle2 className="h-4 w-4" />{workflow.isPending ? 'Creating and linking…' : 'Create RFC and link'}</button>
         </div>
       </form>
     </div>

@@ -14,6 +14,13 @@ export interface DrawerProps {
   children: ReactNode;
   side?: 'left' | 'right';
   widthClassName?: string;
+  /**
+   * Stable id for the drawer panel — lets a trigger button reference it via
+   * `aria-controls` (e.g. a "More" button that also needs `aria-expanded`).
+   * Optional and backward compatible: omitted, the panel still gets an id,
+   * just an auto-generated one no external trigger can reference.
+   */
+  id?: string;
 }
 
 /**
@@ -22,8 +29,10 @@ export interface DrawerProps {
  * as `Dialog` via `useFocusTrap`, so keyboard users get identical guarantees
  * from either overlay.
  */
-export function Drawer({ open, onClose, title, children, side = 'left', widthClassName = 'w-80 max-w-[85vw]' }: DrawerProps) {
+export function Drawer({ open, onClose, title, children, side = 'left', widthClassName = 'w-80 max-w-[85vw]', id }: DrawerProps) {
   const titleId = useId();
+  const autoId = useId();
+  const panelId = id ?? autoId;
   const panelRef = useFocusTrap(open, onClose);
   const fromX = side === 'left' ? '-100%' : '100%';
 
@@ -41,6 +50,7 @@ export function Drawer({ open, onClose, title, children, side = 'left', widthCla
             aria-hidden="true"
           />
           <motion.div
+            id={panelId}
             ref={panelRef as React.RefObject<HTMLDivElement>}
             role="dialog"
             aria-modal="true"

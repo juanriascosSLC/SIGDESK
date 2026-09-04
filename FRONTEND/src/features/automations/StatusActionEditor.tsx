@@ -48,7 +48,7 @@ export default function StatusActionEditor({
   // la persona vería un nodo en blanco sin saber que antes pedía algo.
   useEffect(() => {
     if (transiciones.isPending || transiciones.isError) return;
-    const ausentes = elegida && !encontrada ? [`la transición “${elegida}”`] : [];
+    const ausentes = elegida && !encontrada ? [`transition “${elegida}”`] : [];
     const actuales = Array.isArray(data.missingReferences) ? data.missingReferences as string[] : [];
     if (JSON.stringify(actuales) !== JSON.stringify(ausentes)) {
       onChange({ missingReferences: ausentes });
@@ -61,7 +61,7 @@ export default function StatusActionEditor({
   return (
     <div className="mt-5 space-y-4" data-testid="status-editor">
       <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">
-        Transición publicada
+        Published transition
         <select
           disabled={readOnly || transiciones.isPending}
           value={elegida}
@@ -82,7 +82,7 @@ export default function StatusActionEditor({
           }}
           className="input-field mt-2 w-full normal-case"
         >
-          <option value="">Selecciona una transición…</option>
+          <option value="">Select a transition…</option>
           {/* La clave configurada SIEMPRE aparece, aunque no esté entre las
               disponibles. Sin esta opción, un fallo al leer Catalog Builder —o
               una transición retirada— dejaba el selector en blanco y parecía
@@ -91,8 +91,8 @@ export default function StatusActionEditor({
           {elegida && !encontrada && (
             <option value={elegida}>
               {transiciones.isError
-                ? `${elegida} (no se pudo verificar)`
-                : `${elegida} (ya no publicada)`}
+                ? `${elegida} (could not verify)`
+                : `${elegida} (no longer published)`}
             </option>
           )}
           {disponibles.map((transicion) => (
@@ -105,15 +105,15 @@ export default function StatusActionEditor({
 
       {transiciones.isError && (
         <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-200" data-testid="status-transitions-error">
-          No se pudieron leer las transiciones publicadas de {entityKey}. No se ha borrado la que ya estaba
-          configurada; vuelve a intentarlo antes de publicar.
+          Could not load published transitions for {entityKey}. The configured transition was not deleted;
+          try again before publishing.
         </p>
       )}
 
       {elegida && !encontrada && !transiciones.isPending && !transiciones.isError && (
         <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-[11px] leading-relaxed text-red-200" data-testid="status-transition-missing">
-          Catalog Builder ya no publica “{elegida}”. La configuración se conserva tal cual, pero no se puede
-          publicar hasta elegir una transición vigente.
+          Catalog Builder no longer publishes “{elegida}”. Configuration is preserved as-is, but cannot be
+          published until an active transition is selected.
         </p>
       )}
 
@@ -129,16 +129,16 @@ export default function StatusActionEditor({
         <p className="flex gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-200" data-testid="status-requires-input">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>
-            Esta transición exige información que una automatización no puede aportar —justificación de
-            incumplimiento de SLA al cerrar, o motivo al reabrir—. El ticket la rechazará y la ejecución quedará
-            fallida. Úsala solo si ese lifecycle no pide esos datos.
+            This transition requires input that an automation cannot provide — such as SLA breach justification
+            when closing, or reason when reopening. The ticket will reject it and the execution will fail.
+            Use it only if this lifecycle does not require those inputs.
           </span>
         </p>
       )}
 
       <p className="rounded-xl border border-border/40 bg-on-surface/5 p-3 text-[11px] leading-relaxed text-on-surface-variant">
-        Cambiar de estado no toca responsable, área ni equipo. Si el ticket ya está en el estado destino, o si
-        alguien lo movió antes, la ejecución queda <strong>omitida</strong> con su motivo: no es un fallo.
+        Changing status does not modify assignee, area, or team. If the ticket is already in the target state, or someone
+        moved it earlier, execution is <strong>skipped</strong> with a reason recorded: it is not a failure.
       </p>
     </div>
   );

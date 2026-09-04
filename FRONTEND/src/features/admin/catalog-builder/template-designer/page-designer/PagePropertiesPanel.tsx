@@ -36,12 +36,12 @@ export interface SelectionNeighbours {
 // raw column count stays visible underneath for anyone reasoning in the
 // 12-column grid the metamodel stores.
 const SPAN_LABELS: Record<DesignerSpan, string> = {
-  3: 'Un cuarto',
-  4: 'Un tercio',
-  6: 'La mitad',
-  8: 'Dos tercios',
-  9: 'Tres cuartos',
-  12: 'Todo el ancho',
+  3: 'One quarter',
+  4: 'One third',
+  6: 'Half',
+  8: 'Two thirds',
+  9: 'Three quarters',
+  12: 'Full width',
 };
 
 const SIDEBAR_OPTIONS = [3, 4, 5] as const;
@@ -128,10 +128,10 @@ export function PagePropertiesPanel({
     placement.kind === 'widget'
       ? 'Widget'
       : placement.kind === 'content'
-        ? 'Elemento estructural'
+        ? 'Structural element'
         : placement.source === 'catalog'
-          ? 'Campo de la entidad'
-          : 'Campo del sistema';
+          ? 'Entity field'
+          : 'System field';
 
   function update(updater: (current: PagePlacement) => PagePlacement) {
     onUpdatePlacement(selectedId!, updater);
@@ -161,7 +161,7 @@ export function PagePropertiesPanel({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Cerrar propiedades"
+          aria-label="Close properties"
           className="shrink-0 rounded-md p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
         >
           <X className="h-4 w-4" />
@@ -171,26 +171,26 @@ export function PagePropertiesPanel({
       {locked && (
         <p className="flex items-start gap-2 rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-[11px] leading-4 text-amber-200">
           <Lock className="mt-0.5 h-3 w-3 shrink-0" />
-          Elemento fijo de «{surface.regionMeta[regionName].label}». No se puede mover, redimensionar ni quitar.
+          Fixed element of "{surface.regionMeta[regionName].label}". Cannot be moved, resized, or removed.
         </p>
       )}
 
       {widget && (
         <p className="rounded-lg border border-border/30 bg-surface-container-low px-3 py-2 text-[11px] leading-4 text-on-surface-variant">
-          Lo mantiene el módulo <span className="font-bold text-on-surface">{widget.ownerModule}</span>.
+          Maintained by the <span className="font-bold text-on-surface">{widget.ownerModule}</span> module.
         </p>
       )}
 
       {/* Position ------------------------------------------------------- */}
       <section className="space-y-2">
-        <FieldLabel>Ubicación</FieldLabel>
+        <FieldLabel>Location</FieldLabel>
         <div className="rounded-xl border border-border/40 bg-surface-container-low p-3">
           <p className="text-xs font-bold text-on-surface">{surface.regionMeta[regionName].label}</p>
           <p className="mt-0.5 text-[10px] leading-4 text-on-surface-variant">{surface.regionMeta[regionName].description}</p>
 
           {!locked && targetRegions.length > 0 && (
             <div className="mt-2.5">
-              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/80">Mover a</p>
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/80">Move to</p>
               <div className="flex flex-wrap gap-1.5">
                 {targetRegions.map((candidate) => (
                   <button
@@ -208,17 +208,17 @@ export function PagePropertiesPanel({
 
           {!locked && (
             <div className="mt-2.5 flex items-center gap-1.5">
-              <NudgeButton label="Mover a la izquierda" disabled={!neighbours.canMoveLeft} onClick={() => onMove(selectedId, 'left')}>
+              <NudgeButton label="Move left" disabled={!neighbours.canMoveLeft} onClick={() => onMove(selectedId, 'left')}>
                 <MoveLeft className="h-3.5 w-3.5" />
               </NudgeButton>
-              <NudgeButton label="Mover a la derecha" disabled={!neighbours.canMoveRight} onClick={() => onMove(selectedId, 'right')}>
+              <NudgeButton label="Move right" disabled={!neighbours.canMoveRight} onClick={() => onMove(selectedId, 'right')}>
                 <MoveRight className="h-3.5 w-3.5" />
               </NudgeButton>
               <span className="mx-1 h-4 w-px bg-border/50" />
-              <NudgeButton label="Subir la fila" disabled={!neighbours.canMoveUp} onClick={() => onMove(selectedId, 'up')}>
+              <NudgeButton label="Move row up" disabled={!neighbours.canMoveUp} onClick={() => onMove(selectedId, 'up')}>
                 <ArrowUp className="h-3.5 w-3.5" />
               </NudgeButton>
-              <NudgeButton label="Bajar la fila" disabled={!neighbours.canMoveDown} onClick={() => onMove(selectedId, 'down')}>
+              <NudgeButton label="Move row down" disabled={!neighbours.canMoveDown} onClick={() => onMove(selectedId, 'down')}>
                 <ArrowDown className="h-3.5 w-3.5" />
               </NudgeButton>
             </div>
@@ -229,7 +229,7 @@ export function PagePropertiesPanel({
       {/* Width ---------------------------------------------------------- */}
       {!locked && (
         <section>
-          <FieldLabel>Ancho</FieldLabel>
+          <FieldLabel>Width</FieldLabel>
           <div className="rounded-xl border border-border/40 bg-surface-container-low p-3">
             <div aria-hidden className="mb-2.5 flex gap-0.5">
               {Array.from({ length: 12 }, (_, index) => (
@@ -266,7 +266,7 @@ export function PagePropertiesPanel({
       {/* Kind-specific -------------------------------------------------- */}
       {placement.kind === 'field' && (
         <LabeledInput
-          label="Etiqueta"
+          label="Label"
           value={placement.label ?? ''}
           placeholder={placementLabel(surface, { ...placement, label: undefined }, specification)}
           onChange={(value) => update((current) => ({ ...current, label: value || undefined }))}
@@ -275,18 +275,18 @@ export function PagePropertiesPanel({
 
       {placement.kind === 'content' && placement.contentKind === 'section' && (
         <LabeledInput
-          label="Título"
+          label="Title"
           value={placement.title ?? ''}
-          placeholder="Ej. Diagnóstico"
+          placeholder="e.g. Diagnosis"
           onChange={(value) => update((current) => ({ ...current, title: value || undefined }))}
         />
       )}
 
       {placement.kind === 'content' && placement.contentKind === 'text' && (
         <LabeledTextarea
-          label="Texto"
+          label="Text"
           value={placement.content ?? ''}
-          placeholder="Una nota fija que verá quien abra el ticket"
+          placeholder="A fixed note visible to whoever opens the ticket"
           onChange={(value) => update((current) => ({ ...current, content: value || undefined }))}
         />
       )}
@@ -295,12 +295,12 @@ export function PagePropertiesPanel({
         <Toggle
           checked={Boolean(placement.readOnly)}
           onChange={(checked) => update((current) => ({ ...current, readOnly: checked || undefined }))}
-          label="Solo lectura (presentacional; aún no se aplica en el backend)"
+          label="Read-only (presentational; not enforced by backend yet)"
         />
       )}
 
       <ConditionRule
-        label="Mostrar solo cuando…"
+        label="Show only when…"
         compact
         condition={placement.visibleWhen}
         sources={specification.fields}
@@ -309,24 +309,24 @@ export function PagePropertiesPanel({
 
       {field?.required && (
         <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-2 text-[11px] leading-4 text-amber-300">
-          Este campo es obligatorio en el esquema; esa regla no se puede relajar desde la colocación.
+          This field is required in the schema; that rule cannot be relaxed from placement.
         </p>
       )}
 
       {!locked && (
         <details className="rounded-xl border border-border/40 bg-surface-container-low p-3">
           <summary className="cursor-pointer text-[10px] font-black uppercase tracking-wider text-on-surface-variant">
-            Opciones avanzadas
+            Advanced options
           </summary>
           <div className="mt-3 space-y-3">
             <NumberInput
-              label="Alto en filas"
+              label="Height in rows"
               value={placement.rowSpan ?? 1}
               min={1}
               onChange={(value) => update((current) => ({ ...current, rowSpan: value }))}
             />
             <NumberInput
-              label="Orden en móvil (opcional)"
+              label="Mobile order (optional)"
               value={placement.mobileOrder ?? ''}
               min={0}
               onChange={(value) => update((current) => ({ ...current, mobileOrder: value }))}
@@ -344,7 +344,7 @@ export function PagePropertiesPanel({
               onClick={() => onDuplicate(selectedId)}
               className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border/40 px-2 py-2 text-[11px] font-bold text-on-surface-variant hover:border-primary/50 hover:text-on-surface"
             >
-              <Copy className="h-3.5 w-3.5" /> Duplicar
+              <Copy className="h-3.5 w-3.5" /> Duplicate
             </button>
           )}
           <button
@@ -352,7 +352,7 @@ export function PagePropertiesPanel({
             onClick={() => onRemove(selectedId)}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-red-500/30 px-2 py-2 text-[11px] font-bold text-red-300 hover:bg-red-500/10"
           >
-            <Trash2 className="h-3.5 w-3.5" /> Quitar
+            <Trash2 className="h-3.5 w-3.5" /> Remove
           </button>
         </div>
       )}
@@ -402,28 +402,28 @@ function PageSettings({
           <PanelsTopLeft className="h-4 w-4" />
         </span>
         <div>
-          <h3 className="text-sm font-black text-on-surface">Ajustes de la página</h3>
+          <h3 className="text-sm font-black text-on-surface">Page settings</h3>
           <p className="text-[11px] leading-4 text-on-surface-variant">
-            Selecciona un elemento del lienzo para editarlo.
+            Select an element on the canvas to edit it.
           </p>
         </div>
       </div>
 
-      <section>
-        <FieldLabel>Reparto de columnas</FieldLabel>
+      <section className="space-y-2">
+        <FieldLabel>Column layout</FieldLabel>
         <div className="space-y-2 rounded-xl border border-border/40 bg-surface-container-low p-3">
           <div aria-hidden className="flex h-9 gap-1.5">
             <div
               className="flex items-center justify-center rounded-lg bg-primary/20 text-[9px] font-black uppercase tracking-wider text-primary"
               style={{ flexGrow: 12 - sidebar, flexBasis: 0 }}
             >
-              Principal
+              Main
             </div>
             <div
               className="flex items-center justify-center rounded-lg bg-surface-container-highest text-[9px] font-black uppercase tracking-wider text-on-surface-variant"
               style={{ flexGrow: sidebar, flexBasis: 0 }}
             >
-              Lateral
+              Sidebar
             </div>
           </div>
           <div className="grid grid-cols-3 gap-1.5">
@@ -440,7 +440,7 @@ function PageSettings({
                     : 'border-border/40 bg-surface-container text-on-surface-variant hover:border-primary/40'
                 }`}
               >
-                <span className="block text-[11px] font-bold">{value === 3 ? 'Angosta' : value === 4 ? 'Media' : 'Ancha'}</span>
+                <span className="block text-[11px] font-bold">{value === 3 ? 'Narrow' : value === 4 ? 'Medium' : 'Wide'}</span>
                 <span className="block font-mono text-[9px] opacity-70">{value}/12</span>
               </button>
             ))}
@@ -448,8 +448,8 @@ function PageSettings({
         </div>
       </section>
 
-      <section>
-        <FieldLabel>Zonas de la página</FieldLabel>
+      <section className="space-y-2">
+        <FieldLabel>Page regions</FieldLabel>
         <ul className="space-y-1.5">
           {REGION_ORDER.map((region) => {
             const meta = surface.regionMeta[region];
@@ -463,11 +463,11 @@ function PageSettings({
                 <span className="min-w-0 flex-1">
                   <span className="block text-[11px] font-bold text-on-surface">{meta.label}</span>
                   <span className="block truncate text-[10px] text-on-surface-variant/80">
-                    {page[region].placements.length} elemento{page[region].placements.length === 1 ? '' : 's'}
+                    {page[region].placements.length} element{page[region].placements.length === 1 ? '' : 's'}
                   </span>
                 </span>
                 {meta.fixed && (
-                  <span title="Zona fija" className="shrink-0 text-on-surface-variant/70">
+                  <span title="Fixed region" className="shrink-0 text-on-surface-variant/70">
                     <Lock className="h-3 w-3" />
                   </span>
                 )}
@@ -478,10 +478,10 @@ function PageSettings({
       </section>
 
       <p className="rounded-xl border border-border/30 bg-surface-container-low p-3 text-[11px] leading-4 text-on-surface-variant">
-        Atajos: <span className="font-mono font-bold text-on-surface">Ctrl+Z</span> deshacer ·{' '}
-        <span className="font-mono font-bold text-on-surface">Ctrl+Shift+Z</span> rehacer ·{' '}
-        <span className="font-mono font-bold text-on-surface">Supr</span> quitar lo seleccionado ·{' '}
-        <span className="font-mono font-bold text-on-surface">Esc</span> deseleccionar.
+        Shortcuts: <span className="font-mono font-bold text-on-surface">Ctrl+Z</span> undo ·{' '}
+        <span className="font-mono font-bold text-on-surface">Ctrl+Shift+Z</span> redo ·{' '}
+        <span className="font-mono font-bold text-on-surface">Del</span> remove selected ·{' '}
+        <span className="font-mono font-bold text-on-surface">Esc</span> deselect.
       </p>
     </>
   );

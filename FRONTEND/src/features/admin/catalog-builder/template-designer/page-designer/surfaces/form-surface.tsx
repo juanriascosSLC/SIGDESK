@@ -23,21 +23,21 @@ import { useSimulatedFormContext } from '../useSimulatedFormContext';
 
 const HEADLINES: Record<FormPageKind, { title: string; description: string }> = {
   create: {
-    title: 'Diseñador de plantilla',
+    title: 'Template designer',
     description:
-      'Arma el formulario de creación por zonas, igual que la página del ticket. Haz clic en un campo de la biblioteca para agregarlo, o arrástralo a un punto exacto; selecciónalo en el lienzo para ajustar su ancho, su posición y cuándo se muestra.',
+      'Build the creation form by regions, just like the ticket page. Click a field in the library to add it, or drag to an exact spot; select it on the canvas to adjust its width, position, and visibility conditions.',
   },
   edit: {
-    title: 'Diseñador de plantilla',
+    title: 'Template designer',
     description:
-      'Arma el formulario de edición por zonas. Un campo que dejes fuera no se podrá editar desde aquí, pero conserva su valor: nunca se borra.',
+      'Build the edit form by regions. A field left out cannot be edited from here, but retains its value: it is never deleted.',
   },
 };
 
 function buildFormSurface(kind: FormPageKind): PageSurface<FormPageContext> {
   const surface: PageSurface<FormPageContext> = {
     kind,
-    kindLabel: kind === 'create' ? 'Crear' : 'Editar',
+    kindLabel: kind === 'create' ? 'Create' : 'Edit',
     specKey: kind === 'create' ? 'createPage' : 'editPage',
     headline: HEADLINES[kind],
 
@@ -61,22 +61,22 @@ function buildFormSurface(kind: FormPageKind): PageSurface<FormPageContext> {
     paletteGroups: (entityKey, specification) => [
       {
         id: 'widgets',
-        title: 'Componentes',
-        hint: 'Bloques del formulario que ya traen su propia lógica',
+        title: 'Components',
+        hint: 'Form blocks with built-in logic',
         items: widgetLibraryItems(surface, entityKey),
         defaultOpen: true,
       },
       {
         id: 'catalog-fields',
-        title: 'Campos de esta entidad',
-        hint: 'Los campos que definiste en «Campos del formulario»',
+        title: 'Fields in this entity',
+        hint: 'Fields defined in "Form fields"',
         items: catalogFieldLibraryItems(specification),
         defaultOpen: true,
       },
       {
         id: 'structure',
-        title: 'Elementos estructurales',
-        hint: 'Títulos, notas y espaciado — no guardan datos',
+        title: 'Structural elements',
+        hint: 'Headings, notes, and spacing — store no data',
         items: contentPaletteItems(),
         defaultOpen: true,
       },

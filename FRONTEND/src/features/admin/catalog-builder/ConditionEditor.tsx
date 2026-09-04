@@ -126,15 +126,14 @@ export function ConditionRule({
           checked={enabled}
           disabled={disabled}
           onChange={(checked) => (checked ? enable() : onChange(undefined))}
-          label={enabled ? 'Activa' : 'Inactiva'}
+          label={enabled ? 'Active' : 'Inactive'}
         />
       </div>
 
       {complex && (
         <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-200">
-          Esta regla usa un grupo avanzado <span className="font-mono">all/any</span>. Puedes
-          conservarla desde la sección Avanzado o reemplazarla activando nuevamente esta regla
-          simple.
+          This rule uses an advanced <span className="font-mono">all/any</span> group. You can
+          keep it from the Advanced section or replace it by re-enabling this simple rule.
         </div>
       )}
 
@@ -147,7 +146,7 @@ export function ConditionRule({
           <select
             value={source.key}
             onChange={(event) => changeSource(event.target.value)}
-            aria-label="Campo de origen"
+            aria-label="Source field"
             className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
             style={{ colorScheme: 'dark' }}
           >
@@ -160,7 +159,7 @@ export function ConditionRule({
           <select
             value={operator}
             onChange={(event) => changeOperator(event.target.value as ConditionOperator)}
-            aria-label="Operador"
+            aria-label="Operator"
             className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
             style={{ colorScheme: 'dark' }}
           >
@@ -179,7 +178,7 @@ export function ConditionRule({
             />
           ) : (
             <div className="friendly-input flex items-center text-sm text-on-surface-variant">
-              No requiere valor
+              No value required
             </div>
           )}
         </div>
@@ -190,18 +189,18 @@ export function ConditionRule({
           resultado según el orden de los clics— se pregunta. */}
       {enabled && !complex && supportsQuantifier && (
         <label className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-on-surface-variant">
-          <span className="font-bold">Aplica a</span>
+          <span className="font-bold">Applies to</span>
           <select
             value={quantifier}
             onChange={(event) => changeQuantifier(event.target.value as ConditionQuantifier)}
-            aria-label="A qué dispositivos aplica la condición"
+            aria-label="Which devices the condition applies to"
             data-testid={`${testId}-quantifier`}
             className="friendly-input bg-[#1d2026] py-1 text-[#e1e2eb]"
             style={{ colorScheme: 'dark' }}
           >
-            <option value="principal" className="bg-[#191c22] text-[#e1e2eb]">el dispositivo principal</option>
-            <option value="any" className="bg-[#191c22] text-[#e1e2eb]">alguno de los dispositivos</option>
-            <option value="all" className="bg-[#191c22] text-[#e1e2eb]">todos los dispositivos</option>
+            <option value="principal" className="bg-[#191c22] text-[#e1e2eb]">the primary device</option>
+            <option value="any" className="bg-[#191c22] text-[#e1e2eb]">any of the devices</option>
+            <option value="all" className="bg-[#191c22] text-[#e1e2eb]">all devices</option>
           </select>
         </label>
       )}
@@ -240,8 +239,8 @@ function ConditionValueEditor({
           })
         }
         className="friendly-input"
-        placeholder="valor1, valor2"
-        aria-label="Valores separados por coma"
+        placeholder="value1, value2"
+        aria-label="Comma-separated values"
       />
     );
   }
@@ -251,7 +250,7 @@ function ConditionValueEditor({
       <select
         value={String(condition.value ?? '')}
         onChange={(event) => onChange({ field: source.key, operator, value: event.target.value })}
-        aria-label="Valor esperado"
+        aria-label="Expected value"
         className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
         style={{ colorScheme: 'dark' }}
       >
@@ -271,11 +270,11 @@ function ConditionValueEditor({
         onChange={(event) =>
           onChange({ field: source.key, operator, value: event.target.value === 'true' })
         }
-        aria-label="Valor esperado"
+        aria-label="Expected value"
         className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
         style={{ colorScheme: 'dark' }}
       >
-        <option value="true" className="bg-[#191c22] text-[#e1e2eb]">Sí</option>
+        <option value="true" className="bg-[#191c22] text-[#e1e2eb]">Yes</option>
         <option value="false" className="bg-[#191c22] text-[#e1e2eb]">No</option>
       </select>
     );
@@ -301,8 +300,8 @@ function ConditionValueEditor({
         })
       }
       className="friendly-input"
-      placeholder="Valor esperado"
-      aria-label="Valor esperado"
+      placeholder="Expected value"
+      aria-label="Expected value"
     />
   );
 }

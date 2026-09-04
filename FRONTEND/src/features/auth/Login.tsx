@@ -34,7 +34,7 @@ export default function Login() {
       setError(
         submitError instanceof Error
           ? submitError.message
-          : 'No se pudo iniciar sesión. Inténtalo de nuevo.',
+          : 'Could not sign in. Please try again.',
       );
     } finally {
       setIsSubmitting(false);
@@ -67,17 +67,17 @@ export default function Login() {
 
           <div className="text-center mb-6">
             <p className="text-sm text-on-surface-variant">
-              Ingresa con tu <span className="font-bold text-on-surface">cuenta de dominio SIG</span>
+              Sign in with your <span className="font-bold text-on-surface">SIG domain account</span>
             </p>
             <p className="text-xs text-on-surface-variant/70 mt-1">
-              La misma que usas en SIGInstallations - SIGInventory y SIGtools
+              The same account you use in SIGInstallations, SIGInventory, and SIGtools
             </p>
           </div>
 
           <form className="space-y-5" onSubmit={handleSubmit}>
             <div>
               <label htmlFor="username" className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">
-                Usuario
+                Username
               </label>
               <div className="mt-1 relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -93,14 +93,14 @@ export default function Login() {
                   value={username}
                   onChange={(event) => setUsername(event.target.value)}
                   className="appearance-none block w-full pl-10 pr-3 py-3 border border-border rounded-xl bg-surface-container-lowest/50 text-on-surface placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 sm:text-sm transition-all"
-                  placeholder="tu.usuario (sin @sig.com)"
+                  placeholder="your.username (without @sig.com)"
                 />
               </div>
             </div>
 
             <div>
               <label htmlFor="password" className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">
-                Contraseña
+                Password
               </label>
               <div className="mt-1 relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -138,11 +138,11 @@ export default function Login() {
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" /> Ingresando…
+                    <Loader2 className="w-4 h-4 animate-spin" /> Signing in…
                   </>
                 ) : (
                   <>
-                    Iniciar sesión <ArrowRight className="w-4 h-4" />
+                    Sign in <ArrowRight className="w-4 h-4" />
                   </>
                 )}
               </button>
@@ -150,9 +150,9 @@ export default function Login() {
           </form>
 
           <p className="mt-6 text-center text-xs text-on-surface-variant/70 leading-relaxed">
-            ¿Olvidaste tu contraseña? Es la de tu cuenta de dominio:
+            Forgot your password? It is your domain account password:
             <br />
-            restablécela con el equipo de IT.
+            please contact the IT support team to reset it.
           </p>
         </div>
       </div>

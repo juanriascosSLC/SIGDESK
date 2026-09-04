@@ -26,9 +26,9 @@ export type FormWidgetDefinition = PageWidgetDefinition<FormPageContext>;
 export const FORM_WIDGETS: Record<FormWidgetKey, FormWidgetDefinition> = {
   formHeader: {
     key: 'formHeader',
-    label: 'Encabezado del servicio',
+    label: 'Service Header',
     icon: FileText,
-    ownerModule: 'Catálogo',
+    ownerModule: 'Catalog',
     allowedRegions: ['header'],
     minColumnSpan: 12,
     allowMultiple: false,
@@ -38,9 +38,9 @@ export const FORM_WIDGETS: Record<FormWidgetKey, FormWidgetDefinition> = {
   },
   formActions: {
     key: 'formActions',
-    label: 'Barra de acciones',
+    label: 'Action Bar',
     icon: SlidersHorizontal,
-    ownerModule: 'Catálogo',
+    ownerModule: 'Catalog',
     allowedRegions: ['actions'],
     minColumnSpan: 12,
     allowMultiple: false,
@@ -50,9 +50,9 @@ export const FORM_WIDGETS: Record<FormWidgetKey, FormWidgetDefinition> = {
   },
   formRequesterDetails: {
     key: 'formRequesterDetails',
-    label: 'Datos del solicitante',
+    label: 'Requester Details',
     icon: UserRound,
-    ownerModule: 'Catálogo (sesión)',
+    ownerModule: 'Catalog (Session)',
     allowedRegions: ['main', 'sidebar'],
     minColumnSpan: 3,
     allowMultiple: false,
@@ -62,7 +62,7 @@ export const FORM_WIDGETS: Record<FormWidgetKey, FormWidgetDefinition> = {
   },
   formSlaPreview: {
     key: 'formSlaPreview',
-    label: 'SLA esperado',
+    label: 'Expected SLA',
     icon: Timer,
     ownerModule: 'SLA',
     allowedRegions: ['main', 'sidebar', 'footer'],
@@ -74,7 +74,7 @@ export const FORM_WIDGETS: Record<FormWidgetKey, FormWidgetDefinition> = {
   },
   formAttachments: {
     key: 'formAttachments',
-    label: 'Archivos adjuntos',
+    label: 'Attachments',
     icon: Paperclip,
     ownerModule: 'Tickets',
     allowedRegions: ['main', 'sidebar', 'footer'],
@@ -86,9 +86,9 @@ export const FORM_WIDGETS: Record<FormWidgetKey, FormWidgetDefinition> = {
   },
   formRecordSummary: {
     key: 'formRecordSummary',
-    label: 'Resumen de captura',
+    label: 'Intake Summary',
     icon: ClipboardCheck,
-    ownerModule: 'Catálogo',
+    ownerModule: 'Catalog',
     allowedRegions: ['main', 'sidebar', 'footer'],
     minColumnSpan: 3,
     allowMultiple: false,
@@ -98,7 +98,7 @@ export const FORM_WIDGETS: Record<FormWidgetKey, FormWidgetDefinition> = {
   },
   formAssetSummary: {
     key: 'formAssetSummary',
-    label: 'Contexto de activos',
+    label: 'Asset Context',
     icon: Building2,
     ownerModule: 'Assets / CMDB',
     allowedRegions: ['main', 'sidebar', 'footer'],
@@ -110,9 +110,9 @@ export const FORM_WIDGETS: Record<FormWidgetKey, FormWidgetDefinition> = {
   },
   formStakeholders: {
     key: 'formStakeholders',
-    label: 'Personas y áreas interesadas',
+    label: 'Stakeholders and Interested Teams',
     icon: Users,
-    ownerModule: 'Organization / Notificaciones',
+    ownerModule: 'Organization / Notifications',
     allowedRegions: ['main', 'sidebar', 'footer'],
     minColumnSpan: 4,
     allowMultiple: false,

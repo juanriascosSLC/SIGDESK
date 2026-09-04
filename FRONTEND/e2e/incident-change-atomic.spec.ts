@@ -73,9 +73,15 @@ test('INC creates its RFC and typed origin relation through one atomic endpoint'
   });
 
   await page.goto('/app/tickets/INC-000010');
-  await page.getByRole('button', { name: 'Crear RFC' }).click();
-  await expect(page.getByRole('heading', { name: 'Crear cambio desde este incidente' })).toBeVisible();
-  await page.getByRole('button', { name: 'Crear RFC y vincular' }).click();
+  // TicketActionsWidget's trigger and IncidentChangeDialog's heading/submit
+  // are English today (both were fully translated) — this test previously
+  // asserted their old Spanish labels ('Crear RFC' / 'Crear cambio desde
+  // este incidente' / 'Crear RFC y vincular'), which no longer exist
+  // anywhere in the component and made every run time out for 60s instead
+  // of failing fast on a real assertion.
+  await page.getByRole('button', { name: 'Create RFC' }).click();
+  await expect(page.getByRole('heading', { name: 'Create change from this incident' })).toBeVisible();
+  await page.getByRole('button', { name: 'Create RFC and link' }).click();
 
   await expect.poll(() => atomicBody?.incidentId).toBe('10');
   expect(atomicBody?.data).toMatchObject({ requester: 'Playwright Admin' });

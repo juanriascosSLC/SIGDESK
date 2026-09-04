@@ -58,9 +58,9 @@ export function PageComponentPalette({
       <div className="rounded-2xl border border-border/40 bg-surface-container">
         <div className="space-y-2 border-b border-border/40 p-3">
           <div>
-            <h3 className="text-xs font-black uppercase tracking-wider text-on-surface">Biblioteca</h3>
+            <h3 className="text-xs font-black uppercase tracking-wider text-on-surface">Library</h3>
             <p className="mt-0.5 text-[11px] leading-4 text-on-surface-variant">
-              Haz clic para agregarlo al final de su zona, o arrástralo a un punto exacto.
+              Click to add to the end of its region, or drag to an exact spot.
             </p>
           </div>
           <div className="relative">
@@ -68,15 +68,15 @@ export function PageComponentPalette({
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar componente…"
-              aria-label="Buscar componente"
+              placeholder="Search components…"
+              aria-label="Search components"
               className="w-full rounded-xl border border-border/40 bg-surface-container-low py-2 pl-8 pr-8 text-xs text-on-surface placeholder:text-on-surface-variant/60"
             />
             {search && (
               <button
                 type="button"
                 onClick={() => setSearch('')}
-                aria-label="Limpiar búsqueda"
+                aria-label="Clear search"
                 className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-on-surface-variant hover:text-on-surface"
               >
                 <X className="h-3 w-3" />
@@ -88,7 +88,7 @@ export function PageComponentPalette({
         <div className="max-h-[22rem] space-y-2 overflow-y-auto p-2.5 @4xl:max-h-[calc(100vh-17rem)]">
           {visibleGroups.length === 0 && (
             <p className="py-6 text-center text-xs text-on-surface-variant">
-              Nada coincide con «{search}».
+              Nothing matches "{search}".
             </p>
           )}
           {visibleGroups.map((group) => (
@@ -216,10 +216,10 @@ function PaletteItem({
       aria-disabled={unavailable}
       title={
         unavailable
-          ? 'Este componente no puede colocarse en ninguna zona editable'
+          ? 'This component cannot be placed in any editable region'
           : placed
-            ? 'Ya está en la página — haz clic para ir a él, o arrástralo para moverlo'
-            : `Agregar ${item.label}`
+            ? 'Already on the page — click to jump to it, or drag to move'
+            : `Add ${item.label}`
       }
       className={`group/item flex items-start gap-2 rounded-lg border px-2.5 py-2 transition-colors ${
         unavailable
@@ -233,13 +233,13 @@ function PaletteItem({
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs font-bold text-on-surface">{item.label}</p>
         <p className="truncate text-[10px] leading-4 text-on-surface-variant/80">
-          {placed ? 'Ya está en la página' : item.description}
+          {placed ? 'Already on the page' : item.description}
         </p>
         {!placed && restricted && (
           <p className="mt-1 flex flex-wrap items-center gap-1">
-            <span className="text-[9px] font-bold uppercase tracking-wider text-on-surface-variant/70">Solo en</span>
+            <span className="text-[9px] font-bold uppercase tracking-wider text-on-surface-variant/70">Only in</span>
             {restricted.length === 0 ? (
-              <span className="text-[9px] font-bold uppercase tracking-wider text-amber-400/90">ninguna zona</span>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-amber-400/90">no region</span>
             ) : (
               restricted.map((region) => (
                 <span
@@ -255,8 +255,8 @@ function PaletteItem({
       </div>
       <button
         type="button"
-        aria-label={placed ? `Ir a ${item.label} en el lienzo` : `Agregar ${item.label}`}
-        title={placed ? 'Ir a este elemento en el lienzo' : `Agregar ${item.label}`}
+        aria-label={placed ? `Go to ${item.label} on canvas` : `Add ${item.label}`}
+        title={placed ? 'Go to this element on canvas' : `Add ${item.label}`}
         disabled={unavailable}
         onClick={(event) => {
           event.stopPropagation();

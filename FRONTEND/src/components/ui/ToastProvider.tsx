@@ -58,7 +58,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={value}>
       {children}
       {createPortal(
-        <div className="pointer-events-none fixed bottom-4 right-4 z-[200] flex w-full max-w-sm flex-col gap-2">
+        <div className="pointer-events-none fixed bottom-[calc(56px+env(safe-area-inset-bottom)+0.5rem)] right-4 sm:bottom-4 z-[200] flex w-full max-w-sm flex-col gap-2">
           <div aria-live="assertive" role="status" className="contents">
             <AnimatePresence>
               {assertiveToasts.map((toast) => (

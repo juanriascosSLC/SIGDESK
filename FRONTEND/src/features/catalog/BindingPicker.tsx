@@ -76,13 +76,13 @@ export function BindingPicker(props: BindingPickerProps) {
   // llamador. Así el camino de selección única no tiene una rama propia que
   // pueda divergir.
   const selected: BindingValue[] = props.multiple
-    ? props.value
+    ? (props.value as BindingValue[])
     : props.value
-      ? [props.value]
+      ? [props.value as BindingValue]
       : [];
   const emit = (next: BindingValue[]) => {
     if (props.multiple) props.onSelect(next);
-    else props.onSelect(next[0] ?? null);
+    else (props.onSelect as (val: BindingValue | null) => void)(next[0] ?? null);
   };
 
   const countMessage = props.multiple ? (props.countMessage ?? '') : '';
@@ -154,7 +154,7 @@ export function BindingPicker(props: BindingPickerProps) {
                 onClick={() => emit([])}
                 className="flex shrink-0 items-center gap-1 text-xs font-bold text-primary"
               >
-                <X className="h-3 w-3" /> Cambiar
+                <X className="h-3 w-3" /> Change
               </button>
             </div>
           ) : (
@@ -176,7 +176,7 @@ export function BindingPicker(props: BindingPickerProps) {
                           data-testid={`binding-picker-principal-${kind}-${item.id}`}
                           className="flex shrink-0 items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-primary"
                         >
-                          <Star className="h-3 w-3" /> Principal
+                          <Star className="h-3 w-3" /> Primary
                         </span>
                       ) : (
                         <button
@@ -185,13 +185,13 @@ export function BindingPicker(props: BindingPickerProps) {
                           onClick={() => makePrincipal(item)}
                           className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-on-surface-variant hover:text-primary"
                         >
-                          Hacer principal
+                          Make primary
                         </button>
                       )}
                       <button
                         type="button"
                         data-testid={`binding-picker-remove-${kind}-${item.id}`}
-                        aria-label={`Quitar ${item.displayName}`}
+                        aria-label={`Remove ${item.displayName}`}
                         onClick={() => emit(selected.filter((entry) => entry.id !== item.id))}
                         className="shrink-0 rounded-lg p-1 text-on-surface-variant hover:bg-on-surface/10 hover:text-on-surface"
                       >
@@ -213,10 +213,10 @@ export function BindingPicker(props: BindingPickerProps) {
                   }}
                   placeholder={
                     kind === 'agenteIt'
-                      ? 'Buscar agente por nombre'
+                      ? 'Search agent by name'
                       : kind === 'site'
-                        ? 'Buscar sitio por nombre o código'
-                        : 'Buscar por nombre, etiqueta o número de serie'
+                        ? 'Search site by name or code'
+                        : 'Search by name, tag or serial number'
                   }
                   className="friendly-input w-full pl-9"
                 />
@@ -229,38 +229,38 @@ export function BindingPicker(props: BindingPickerProps) {
                 >
                   {countMessage ||
                     (maxItems !== undefined
-                      ? `${selected.length} de ${maxItems} seleccionados`
-                      : `${selected.length} seleccionados`)}
+                      ? `${selected.length} of ${maxItems} selected`
+                      : `${selected.length} selected`)}
                 </p>
               )}
 
               <div className="mt-3 max-h-56 space-y-2 overflow-y-auto">
                 {loading && (
                   <p className="flex items-center gap-2 p-3 text-xs text-on-surface-variant">
-                    <RefreshCw className="h-3 w-3 animate-spin" /> Cargando…
+                    <RefreshCw className="h-3 w-3 animate-spin" /> Loading…
                   </p>
                 )}
                 {!loading && isError && (
                   <div className="rounded-xl border border-dashed border-red-500/30 p-4 text-center text-xs text-red-300">
-                    No se pudo cargar el listado.
+                    Could not load items.
                     <button
                       type="button"
                       onClick={onRetry}
                       className="ml-2 inline-flex items-center gap-1 font-bold text-primary"
                     >
-                      <RefreshCw className="h-3 w-3" /> Reintentar
+                      <RefreshCw className="h-3 w-3" /> Retry
                     </button>
                   </div>
                 )}
                 {!loading && !isError && needsMoreSearch && (
                   <p className="rounded-xl border border-dashed border-border/40 p-4 text-center text-xs text-on-surface-variant">
-                    Escribe al menos 2 caracteres para buscar entre {items.length} registros.
+                    Type at least 2 characters to search across {items.length} records.
                   </p>
                 )}
                 {!loading && !isError && !needsMoreSearch && items.length === 0 && (
                   <p className="rounded-xl border border-dashed border-border/40 p-4 text-center text-xs text-on-surface-variant">
-                    Todavía no hay {kind === 'agenteIt' ? 'agentes IT' : kind === 'site' ? 'sitios' : 'activos'} registrados en el
-                    sistema. Contacta a IT.
+                    No {kind === 'agenteIt' ? 'IT agents' : kind === 'site' ? 'sites' : 'assets'} registered in the
+                    system yet. Contact IT.
                   </p>
                 )}
                 {!loading &&
@@ -269,7 +269,7 @@ export function BindingPicker(props: BindingPickerProps) {
                   items.length > 0 &&
                   results.length === 0 && (
                     <p className="rounded-xl border border-dashed border-border/40 p-4 text-center text-xs text-on-surface-variant">
-                      Sin coincidencias para «{search}». Prueba con otro término.
+                      No matches for "{search}". Try another term.
                     </p>
                   )}
                 {!loading &&
@@ -286,7 +286,7 @@ export function BindingPicker(props: BindingPickerProps) {
                         data-testid={`binding-picker-option-${kind}-${item.id}`}
                         onClick={() => toggle(item)}
                         disabled={blocked}
-                        title={blocked ? `Ya seleccionaste el máximo de ${maxItems}.` : undefined}
+                        title={blocked ? `You have already selected the maximum of ${maxItems}.` : undefined}
                         className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left ${
                           isSelected
                             ? 'border-primary/50 bg-primary/10'
@@ -314,12 +314,12 @@ export function BindingPicker(props: BindingPickerProps) {
                     onClick={() => setVisibleCount((current) => current + RESULT_PAGE_SIZE)}
                     className="w-full rounded-xl border border-dashed border-primary/40 p-3 text-xs font-bold text-primary hover:bg-primary/5"
                   >
-                    Mostrar más · {results.length - visibleResults.length} restantes
+                    Show more · {results.length - visibleResults.length} remaining
                   </button>
                 )}
                 {!loading && !isError && !needsMoreSearch && results.length > 0 && (
                   <p className="px-1 pt-1 text-center text-[10px] text-on-surface-variant">
-                    Mostrando {visibleResults.length} de {results.length}
+                    Showing {visibleResults.length} of {results.length}
                   </p>
                 )}
               </div>

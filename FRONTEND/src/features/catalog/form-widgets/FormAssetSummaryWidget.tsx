@@ -23,10 +23,10 @@ export function FormAssetSummaryWidget({ context }: { context: FormPageContext }
     <section className="rounded-2xl border border-border/50 bg-surface-container p-5" data-testid="form-asset-summary-widget">
       <div className="flex items-center gap-2">
         <Building2 className="h-4 w-4 text-primary" />
-        <h3 className="font-black text-on-surface">Contexto de activos</h3>
+        <h3 className="font-black text-on-surface">Asset Context</h3>
       </div>
       {linked.length === 0 ? (
-        <p className="mt-3 text-sm text-on-surface-variant">Los sitios y equipos seleccionados aparecerán aquí.</p>
+        <p className="mt-3 text-sm text-on-surface-variant">Selected sites and equipment will appear here.</p>
       ) : (
         <ul className="mt-3 space-y-2">
           {linked.map(({ field, value, isPrincipal, count }) => (
@@ -35,13 +35,13 @@ export function FormAssetSummaryWidget({ context }: { context: FormPageContext }
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">
                   {field.label}
-                  {count > 1 && ` · ${count} equipos`}
+                  {count > 1 && ` · ${count} devices`}
                 </p>
                 <p className="truncate text-sm font-semibold text-on-surface">{value.displayName}</p>
               </div>
               {isPrincipal && (
                 <span className="flex shrink-0 items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-primary">
-                  <Star className="h-3 w-3" /> Principal
+                  <Star className="h-3 w-3" /> Primary
                 </span>
               )}
             </li>

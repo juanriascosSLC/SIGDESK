@@ -117,10 +117,28 @@ test('Knowledge Base shows the same honest state from the end-user portal', asyn
   await expect(page.getByText('KB-1024')).toHaveCount(0);
 });
 
-test('Portal My Tickets shows no fabricated ticket rows', async ({ page }) => {
+// Was a placeholder "not available yet" screen when this audit suite was
+// first written — now backed by a real `GET /entities/INC?createdBy=me`
+// (see mis_tickets_postgres_test.go for the backend contract and
+// my-tickets.spec.ts for the full frontend behavior: empty/error/offline/
+// pagination/search/navigation). This test's job here is narrower: prove
+// the old hardcoded rows are gone for good, whatever the backend returns.
+test('Portal My Tickets renders real data, not the old hardcoded rows', async ({ page }) => {
   await mockAuthenticatedRequester(page, { forwardUnmatched: false });
+  await page.route('**/entities/INC?*', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        items: [
+          { id: '9001', humanId: 'INC-009001', entityKey: 'INC', state: 'abierto', data: { title: 'Real submitted ticket' }, createdAt: '2026-08-30T12:00:00Z', creadorId: 'requester-1', prioridad: 'media' },
+        ],
+        hasMore: false,
+      }),
+    }),
+  );
   await page.goto('/portal/tickets');
-  await expect(page.getByText(/available yet/i)).toBeVisible();
+  await expect(page.getByText('INC-009001')).toBeVisible();
   await expect(page.getByText('INC-202611')).toHaveCount(0);
   await expect(page.getByText('REQ-202590')).toHaveCount(0);
 });

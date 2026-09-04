@@ -186,13 +186,13 @@ export function bindingCountIssue(
   const maximum = field?.maxItems;
   if (count < minimum) {
     return minimum === 1
-      ? 'Selecciona al menos un dispositivo.'
-      : `Selecciona al menos ${minimum} dispositivos.`;
+      ? 'Select at least one device.'
+      : `Select at least ${minimum} devices.`;
   }
   if (maximum !== undefined && count > maximum) {
     return maximum === 1
-      ? 'Selecciona como máximo un dispositivo.'
-      : `Selecciona como máximo ${maximum} dispositivos.`;
+      ? 'Select at most one device.'
+      : `Select at most ${maximum} devices.`;
   }
   return '';
 }

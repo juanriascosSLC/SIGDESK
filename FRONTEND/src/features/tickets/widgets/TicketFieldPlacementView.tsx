@@ -2,6 +2,7 @@ import { bindingList } from '@/features/catalog/metamodel';
 import type { PagePlacement } from '@/features/catalog/metamodel';
 import type { TicketPageContext } from './context';
 import { ticketFieldLabels } from './ticket-field-labels';
+import { assigneeText } from '../identity-labels';
 
 function formatCatalogValue(
   value: unknown,
@@ -60,10 +61,10 @@ export function TicketFieldPlacementView({
         value = ticket.id;
         break;
       case 'requester':
-        value = ticket.requester;
+        value = ticket.requesterDisplayName;
         break;
       case 'assignee':
-        value = ticket.assignee || 'Sin asignar';
+        value = assigneeText(ticket);
         break;
       case 'createdAt':
         value = new Date(ticket.createdAt).toLocaleString();
@@ -72,7 +73,7 @@ export function TicketFieldPlacementView({
         value = ticket.status;
         break;
       case 'mergedCount':
-        value = ticket.mergedCount ? `${ticket.mergedCount} tickets` : 'Ninguno';
+        value = ticket.mergedCount ? `${ticket.mergedCount} tickets` : 'None';
         break;
       default:
         value = '—';

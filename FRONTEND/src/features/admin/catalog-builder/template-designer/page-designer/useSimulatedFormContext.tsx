@@ -122,14 +122,14 @@ export function useSimulatedFormContext(
     kind,
     preview: true,
     definitionName:
-      kind === 'create' ? `Nuevo ${entityKey}` : `Editar datos de ${entityKey}`,
+      kind === 'create' ? `New ${entityKey}` : `Edit fields for ${entityKey}`,
     definitionVersion: 1,
-    description: specification.description || 'Descripción del servicio.',
+    description: specification.description || 'Service description.',
     humanId: kind === 'edit' ? `${entityKey}-0001` : undefined,
     fields: specification.fields,
     data: sampleData,
     renderField,
-    requester: { displayName: 'Vista previa', email: 'vista.previa@sig.systems' },
+    requester: { displayName: 'Preview', email: 'preview@sig.systems' },
     stakeholders: {
       directory: SAMPLE_STAKEHOLDER_DIRECTORY,
       loading: false,
@@ -153,8 +153,8 @@ export function useSimulatedFormContext(
       onRemove: () => {},
     },
     submit: {
-      submitLabel: kind === 'create' ? `Crear ${entityKey}` : 'Guardar cambios',
-      cancelLabel: 'Cancelar',
+      submitLabel: kind === 'create' ? `Create ${entityKey}` : 'Save changes',
+      cancelLabel: 'Cancel',
       pending: false,
       onCancel: () => {},
       disabled: false,

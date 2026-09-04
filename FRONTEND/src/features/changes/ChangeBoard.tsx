@@ -316,7 +316,7 @@ export default function ChangeBoard() {
                 type="button"
                 onClick={() => setShowCreate(false)}
                 className="rounded-xl p-2 text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"
-                aria-label="Cerrar"
+                aria-label="Close"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -344,7 +344,7 @@ export default function ChangeBoard() {
                 <span>
                   {createMutation.error instanceof ApiError
                     ? createMutation.error.message
-                    : 'No se pudo crear la RFC.'}
+                    : 'Could not create the RFC.'}
                 </span>
               </div>
             )}
@@ -354,7 +354,7 @@ export default function ChangeBoard() {
                 onClick={() => setShowCreate(false)}
                 className="secondary-button"
               >
-                Cancelar
+                Cancel
               </button>
               <button
                 type="submit"
@@ -362,11 +362,11 @@ export default function ChangeBoard() {
                 className="primary-button disabled:opacity-50"
               >
                 {createMutation.isPending ? (
-                  'Creando…'
+                  'Creating…'
                 ) : (
                   <>
                     <CheckCircle2 className="h-4 w-4" />
-                    Crear RFC
+                    Create RFC
                   </>
                 )}
               </button>

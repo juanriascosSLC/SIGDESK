@@ -21,12 +21,12 @@ import { useSimulatedTicketContext } from '../useSimulatedTicketContext';
 // Nothing about its behaviour changes here.
 export const DETAIL_SURFACE: PageSurface<TicketPageContext> = {
   kind: 'detail',
-  kindLabel: 'Detalle',
+  kindLabel: 'Detail',
   specKey: 'detailPage',
   headline: {
-    title: 'Diseñador de plantilla',
+    title: 'Template designer',
     description:
-      'Arma la página del ticket por zonas. Haz clic en un componente de la biblioteca para agregarlo, o arrástralo a un punto exacto; selecciónalo en el lienzo para ajustar su ancho, su posición y cuándo se muestra.',
+      'Build the ticket page by regions. Click a component in the library to add it, or drag to an exact spot; select it on the canvas to adjust its width, position, and visibility conditions.',
   },
 
   widgets: TICKET_WIDGETS,
@@ -47,28 +47,28 @@ export const DETAIL_SURFACE: PageSurface<TicketPageContext> = {
     {
       id: 'widgets',
       title: 'Widgets',
-      hint: 'Bloques completos que ya traen su propia lógica',
+      hint: 'Complete blocks with built-in logic',
       items: widgetLibraryItems(DETAIL_SURFACE, entityKey),
       defaultOpen: true,
     },
     {
       id: 'catalog-fields',
-      title: 'Campos de esta entidad',
-      hint: 'Los campos que definiste en «Campos del formulario»',
+      title: 'Fields in this entity',
+      hint: 'Fields defined in "Form fields"',
       items: catalogFieldLibraryItems(specification),
       defaultOpen: true,
     },
     {
       id: 'ticket-fields',
-      title: 'Campos internos del sistema',
-      hint: 'Datos que el módulo de Tickets mantiene por su cuenta',
+      title: 'Internal system fields',
+      hint: 'Data maintained automatically by the Tickets module',
       items: ticketFieldLibraryItems(DETAIL_SURFACE, entityKey, ticketDetailFields),
       defaultOpen: false,
     },
     {
       id: 'structure',
-      title: 'Elementos estructurales',
-      hint: 'Títulos, notas y espaciado — no guardan datos',
+      title: 'Structural elements',
+      hint: 'Headings, notes, and spacing — store no data',
       items: contentPaletteItems(),
       defaultOpen: true,
     },

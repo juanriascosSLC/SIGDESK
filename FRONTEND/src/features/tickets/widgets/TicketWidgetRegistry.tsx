@@ -131,7 +131,7 @@ export const TICKET_WIDGETS: Record<TicketWidgetKey, TicketWidgetDefinition> = {
   },
   assetDetails: {
     key: 'assetDetails',
-    label: 'Detalles del activo',
+    label: 'Asset Details',
     icon: Server,
     ownerModule: 'Tickets (SIGInventory projection)',
     allowedRegions: ['main', 'sidebar', 'footer'],

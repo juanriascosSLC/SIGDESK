@@ -157,7 +157,7 @@ export function DynamicField({
           className={`${classes} bg-[#1d2026] text-[#e1e2eb]`}
           style={{ colorScheme: 'dark' }}
         >
-          <option value="" className="bg-[#191c22] text-[#e1e2eb]">Selecciona una opción…</option>
+          <option value="" className="bg-[#191c22] text-[#e1e2eb]">Select an option…</option>
           {field.options?.map((option) => (
             <option key={option.value} value={option.value} className="bg-[#191c22] text-[#e1e2eb]">
               {option.label}
@@ -260,10 +260,10 @@ function MultiSelectField({
   const excess = maximum !== undefined && selected.length > maximum;
   const message = shortfall
     ? minimum === 1
-      ? 'Selecciona al menos una opción.'
-      : `Selecciona al menos ${minimum} opciones.`
+      ? 'Select at least one option.'
+      : `Select at least ${minimum} options.`
     : excess
-      ? `Selecciona como máximo ${maximum} opciones.`
+      ? `Select at most ${maximum} options.`
       : '';
 
   useEffect(() => {
@@ -306,9 +306,9 @@ function MultiSelectField({
       </div>
       {(minimum > 0 || maximum !== undefined) && (
         <span className="mt-2 block text-xs text-on-surface-variant">
-          {selected.length} seleccionada{selected.length === 1 ? '' : 's'}
-          {minimum > 0 && ` · mínimo ${minimum}`}
-          {maximum !== undefined && ` · máximo ${maximum}`}
+          {selected.length} selected
+          {minimum > 0 && ` · minimum ${minimum}`}
+          {maximum !== undefined && ` · maximum ${maximum}`}
         </span>
       )}
       {help}

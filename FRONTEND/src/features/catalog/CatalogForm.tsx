@@ -2,7 +2,7 @@ import { useCallback, useState, type FormEvent } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { getTicket, uploadAttachment } from '@/features/tickets/api';
+import { getTicket, priorityToApi, uploadAttachment } from '@/features/tickets/api';
 import { assetTypeMatches, listAssetSites, listSiteAssets } from '@/features/assets/api';
 import { useAuth } from '@/features/auth/useAuth';
 import { previewSlaForEntity } from '@/features/sla/api';
@@ -278,10 +278,10 @@ export default function CatalogForm() {
       const isAssetKind = kind === 'site' || kind === 'asset';
       if (isAssetKind) {
         if (assetsRestricted) {
-          return 'Tu cuenta no tiene acceso al inventario — contacta a IT para crear esta solicitud.';
+          return 'Your account does not have access to inventory — contact IT to submit this request.';
         }
         if (kind === 'asset' && !selectedSite) {
-          return 'Selecciona primero el sitio para consultar sus dispositivos.';
+          return 'Select a site first to view its devices.';
         }
         // Con permiso y sitio elegido, un listado vacío ya lo explica el
         // propio picker («todavía no hay activos registrados»), que es cierto
@@ -289,7 +289,7 @@ export default function CatalogForm() {
         return undefined;
       }
       if (restrictedForRequester) {
-        return 'Este campo solo puede completarlo un agente — contacta a IT para crear esta solicitud.';
+        return 'This field can only be completed by an agent — contact IT to submit this request.';
       }
       return undefined;
     },
@@ -371,6 +371,19 @@ export default function CatalogForm() {
     // excluyen del payload `data` genérico.
     const bindingKeys = new Set(bindingFields.map((field) => field.key));
     const dataKeys = activeKeys.filter((key) => !bindingKeys.has(key));
+    // A field keyed exactly 'priority' ALSO maps to the native ticket
+    // priority (crearEntidadRequest.Prioridad, "prioridad" on the wire).
+    // It stays in `data` too — unlike a bindsTo field, the server's own
+    // required-catalog-field check reads campos_dinamicos, not the native
+    // property, so a spec that declares 'priority' required would 422 on
+    // every submission ("falta un campo requerido") if this were sent
+    // only natively. Sending both is deliberate, not a duplicate source of
+    // truth: they're written together from the same single selection in
+    // this one function, so they can't drift — data.priority is what makes
+    // required-field validation see the choice; prioridad is what actually
+    // sets the ticket's SLA-driving native field, which nothing previously
+    // wired a catalog field into at all.
+    const hasNativePriorityField = activeKeys.includes('priority') && !bindingKeys.has('priority');
     const missing = definition.specification.fields.find((field) => {
       if (!activeKeys.includes(field.key) || !isFieldRequired(field, conditionData)) return false;
       const value = effectiveData[field.key];
@@ -397,7 +410,11 @@ export default function CatalogForm() {
       return;
     }
     setSubmitError('');
-    const binding: { recursoId?: string; agenteItId?: string; assetContext?: AssetContextInput; stakeholders?: StakeholdersInput } = {};
+    const binding: { recursoId?: string; agenteItId?: string; assetContext?: AssetContextInput; stakeholders?: StakeholdersInput; prioridad?: string } = {};
+    if (hasNativePriorityField) {
+      const raw = effectiveData.priority;
+      if (typeof raw === 'string' && raw.trim()) binding.prioridad = priorityToApi(raw.trim());
+    }
     const assetContext: AssetContextInput = { links: [] };
     for (const field of bindingFields) {
       // Un campo de dispositivos aporta UN link por cada equipo elegido. El
@@ -467,7 +484,7 @@ export default function CatalogForm() {
           directory: stakeholderDirectoryQuery.data,
           loading: stakeholderDirectoryQuery.isLoading,
           errorMessage: stakeholderDirectoryQuery.isError
-            ? 'No pudimos cargar el directorio de Organization.'
+            ? 'We could not load the Organization directory.'
             : undefined,
           value: stakeholders,
           readOnly: restrictedForRequester,

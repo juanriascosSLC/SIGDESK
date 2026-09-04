@@ -58,7 +58,7 @@ export function LayoutSectionCard({
         >
           <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-on-surface-variant" />
           <span className="truncate text-sm font-black text-on-surface">
-            {section.title || 'Sección sin título'}
+            {section.title || 'Untitled section'}
           </span>
           <span className="shrink-0 rounded-full bg-surface-container-high px-2 py-0.5 text-[9px] font-bold text-on-surface-variant">
             {section.columns} col
@@ -68,7 +68,7 @@ export function LayoutSectionCard({
           <button
             type="button"
             onClick={onDuplicateSection}
-            aria-label="Duplicar sección"
+            aria-label="Duplicate section"
             className="rounded-lg p-1.5 text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
           >
             <Copy className="h-3.5 w-3.5" />
@@ -76,7 +76,7 @@ export function LayoutSectionCard({
           <button
             type="button"
             onClick={onRemoveSection}
-            aria-label="Eliminar sección"
+            aria-label="Delete section"
             className="rounded-lg p-1.5 text-on-surface-variant hover:bg-red-500/10 hover:text-red-400"
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -113,7 +113,7 @@ export function LayoutSectionCard({
         ))}
         {section.placements.length === 0 && (
           <div className="col-span-full rounded-xl border-2 border-dashed border-border/40 py-6 text-center text-xs text-on-surface-variant">
-            Arrastra campos aquí
+            Drag fields here
           </div>
         )}
       </div>

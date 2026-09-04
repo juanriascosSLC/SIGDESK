@@ -145,7 +145,7 @@ export function EditableSlot({
         setNodeRef(node);
       }}
       role="group"
-      aria-label={`${label} — ${span} de 12 columnas`}
+      aria-label={`${label} — ${span} of 12 columns`}
       onClick={onSelect}
       data-testid={`page-designer-slot-${cellId}`}
       className={`group/slot relative h-full cursor-pointer rounded-2xl outline-none transition-shadow ${
@@ -167,8 +167,8 @@ export function EditableSlot({
         <div className="flex min-w-0 items-center gap-0.5 rounded-lg border border-border/50 bg-surface-container px-1 py-0.5 shadow-lg">
           {locked ? (
             <span
-              aria-label="Bloqueado"
-              title="Elemento fijo de esta zona: no se puede mover ni quitar"
+              aria-label="Locked"
+              title="Fixed element of this region: cannot be moved or removed"
               className="p-1 text-on-surface-variant"
             >
               <Lock className="h-3 w-3" />
@@ -178,8 +178,8 @@ export function EditableSlot({
               type="button"
               {...attributes}
               {...listeners}
-              aria-label="Arrastrar"
-              title="Arrastrar para mover"
+              aria-label="Drag"
+              title="Drag to move"
               data-testid={`page-designer-drag-${cellId}`}
               className="cursor-grab rounded-md p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface active:cursor-grabbing"
             >
@@ -195,7 +195,7 @@ export function EditableSlot({
               event.stopPropagation();
               onSelect();
             }}
-            title={`Seleccionar ${label}`}
+            title={`Select ${label}`}
             className="flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 text-left hover:bg-surface-container-high"
           >
             {Icon && <Icon className="h-3 w-3 shrink-0 text-primary/80" />}
@@ -210,25 +210,25 @@ export function EditableSlot({
 
         {!locked && (
           <div className="flex items-center gap-0.5 rounded-lg border border-border/50 bg-surface-container px-1 py-0.5 shadow-lg">
-            <ChromeButton label="Mover a la izquierda" onClick={() => onMove('left')} disabled={!neighbours.canMoveLeft}>
+            <ChromeButton label="Move left" onClick={() => onMove('left')} disabled={!neighbours.canMoveLeft}>
               <MoveLeft className="h-3 w-3" />
             </ChromeButton>
-            <ChromeButton label="Mover a la derecha" onClick={() => onMove('right')} disabled={!neighbours.canMoveRight}>
+            <ChromeButton label="Move right" onClick={() => onMove('right')} disabled={!neighbours.canMoveRight}>
               <MoveRight className="h-3 w-3" />
             </ChromeButton>
-            <ChromeButton label="Subir la fila" onClick={() => onMove('up')} disabled={!neighbours.canMoveUp}>
+            <ChromeButton label="Move row up" onClick={() => onMove('up')} disabled={!neighbours.canMoveUp}>
               <ArrowUp className="h-3 w-3" />
             </ChromeButton>
-            <ChromeButton label="Bajar la fila" onClick={() => onMove('down')} disabled={!neighbours.canMoveDown}>
+            <ChromeButton label="Move row down" onClick={() => onMove('down')} disabled={!neighbours.canMoveDown}>
               <ArrowDown className="h-3 w-3" />
             </ChromeButton>
             {canDuplicate && (
-              <ChromeButton label="Duplicar" onClick={onDuplicate}>
+              <ChromeButton label="Duplicate" onClick={onDuplicate}>
                 <Copy className="h-3 w-3" />
               </ChromeButton>
             )}
             <ChromeButton
-              label="Quitar"
+              label="Remove"
               onClick={onRemove}
               danger
               testId={`page-designer-remove-${cellId}`}
@@ -251,8 +251,8 @@ export function EditableSlot({
             onPointerDown={startResize}
             data-testid={`page-designer-resize-${cellId}`}
             role="separator"
-            aria-label="Cambiar ancho"
-            title="Arrastra para cambiar el ancho"
+            aria-label="Resize"
+            title="Drag to resize"
             className={`absolute -right-1.5 top-1/2 z-20 flex h-12 w-3 -translate-y-1/2 cursor-ew-resize items-center justify-center rounded-full border bg-surface-container shadow transition-all ${
               resizing
                 ? 'border-primary bg-primary/20 opacity-100'
@@ -263,7 +263,7 @@ export function EditableSlot({
           </div>
           {resizing && (
             <span className="pointer-events-none absolute -top-3.5 left-1/2 z-30 -translate-x-1/2 rounded-full border border-primary bg-surface-container px-2 py-0.5 font-mono text-[10px] font-black text-primary shadow-lg">
-              {span} / 12 columnas
+              {span} / 12 columns
             </span>
           )}
         </>

@@ -17,6 +17,26 @@ export const KNOWN_TICKET_STATUSES = [
 
 export const KNOWN_TICKET_PRIORITIES = ['Low', 'Medium', 'High', 'Critical'] as const;
 
+/**
+ * The organizational assignment (department -> team -> optional person) as
+ * exposed by `GET /entities/INC` — see tickets_service's `assignmentDTO`.
+ * Absent on a historical ticket that predates organizational assignment, or
+ * one that has never been assigned that way.
+ */
+export interface TicketAssignment {
+  departmentId: string;
+  departmentName?: string;
+  teamId: string;
+  teamName?: string;
+  assigneeUserId?: string;
+  assigneeUserName?: string;
+  source: string;
+  assignedByType: string;
+  assignedById: string;
+  assignedByUserId?: string;
+  assignedAt: string;
+}
+
 export interface Ticket {
   /**
    * Internal id (tickets.id BIGINT, serialized as a string). This is what
@@ -35,8 +55,45 @@ export interface Ticket {
   status: TicketStatus;
   priority: TicketPriority;
   category: string;
-  requester: string;
-  assignee: string | null;
+  /**
+   * Canonical requester identifier (organization_service usuario_id). Use
+   * this for commands, filtering and auditing — never render it directly as
+   * the visible label (Ticket identity presentation).
+   */
+  requesterId: string;
+  /**
+   * Trusted display name for the requester, already resolved with a safe
+   * fallback ("Usuario no disponible" when it can't be resolved) — safe to
+   * render directly in every surface, and never a raw id.
+   */
+  requesterDisplayName: string;
+  /**
+   * Canonical assignee identifier: a PERSON id, either the organizational
+   * assignee (`assignment.assigneeUserId`) or, for a historical ticket with
+   * no organizational assignment, the legacy first-responsible AgenteIT's
+   * user. `null` when nobody is individually assigned (team-only or fully
+   * unassigned) — use for commands/filtering/auditing, never render this id
+   * directly.
+   */
+  assigneeId: string | null;
+  /**
+   * Trusted display name of the individually assigned person, already
+   * resolved with a safe fallback, or `null` when nobody is individually
+   * assigned. Never a raw id.
+   */
+  assigneeDisplayName: string | null;
+  /**
+   * Populated only for a TEAM-ONLY organizational assignment — a
+   * department/team destination with no individual assigned yet. Lets a
+   * surface say "assigned to the X team" instead of falsely reading
+   * "Unassigned" (requirement: a team-only assignment must never read as
+   * unassigned).
+   */
+  assigneeTeamName: string | null;
+  /** The full organizational assignment, when the ticket has one — needed by
+   *  surfaces that want department/team context beyond the flat display
+   *  fields above. */
+  assignment?: TicketAssignment;
   createdAt: string;
   assetId?: string;
   site?: string;
@@ -78,6 +135,16 @@ export interface TicketFilters {
   limit?: number;
   mergedInto?: string;
   assetId?: string;
+  /**
+   * "My Tickets" — maps to `GET /entities/INC?createdBy=me`. The backend
+   * only ever accepts the literal `createdBy=me` and resolves it itself
+   * against the authenticated session; there is no way to pass an
+   * arbitrary user id here, by design (see the backend's
+   * entidades_controller.go — a non-"me" value is a 400, not a filter).
+   * Applies server-side, before pagination, so it's correct to combine
+   * with `q`/`cursor`/`limit` like any other filter.
+   */
+  createdByMe?: boolean;
 }
 
 export interface TicketPage {

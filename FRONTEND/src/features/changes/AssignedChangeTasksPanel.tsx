@@ -37,7 +37,7 @@ export function AssignedChangeTasksPanel() {
   });
 
   function handleAction(task: ChangeTask, key: string) {
-    // "complete" collects optional evidence via TaskActionDialog — replaces
+    // "complete" collects evidence via TaskActionDialog — replaces
     // `window.prompt('Evidencia o resultado de la tarea:')`. The other
     // actions (start, unblock) need no input and apply immediately.
     if (key === 'complete') {

@@ -52,7 +52,7 @@ export function DesignerPlacementContent({
         <ContentPlacementView placement={placement} />
       ) : (
         <DesignerGhost placement={placement}>
-          <p className="text-xs italic text-on-surface-variant/60">Sin título — escríbelo en Propiedades</p>
+          <p className="text-xs italic text-on-surface-variant/60">Untitled — enter it in Properties</p>
         </DesignerGhost>
       );
     case 'text':
@@ -60,7 +60,7 @@ export function DesignerPlacementContent({
         <ContentPlacementView placement={placement} />
       ) : (
         <DesignerGhost placement={placement}>
-          <p className="text-xs italic text-on-surface-variant/60">Sin texto — escríbelo en Propiedades</p>
+          <p className="text-xs italic text-on-surface-variant/60">No text — enter it in Properties</p>
         </DesignerGhost>
       );
     case 'divider':

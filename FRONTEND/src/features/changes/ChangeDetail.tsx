@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -58,6 +58,20 @@ function fieldValue(field: FieldDefinition, value: unknown): string {
   return String(value);
 }
 
+function resolveRelationDestination(entityKey: string, humanId: string): string | null {
+  const encodedId = encodeURIComponent(humanId);
+  switch (entityKey) {
+    case 'INC':
+      return `/app/tickets/${encodedId}`;
+    case 'PRB':
+      return `/app/problems/${encodedId}`;
+    case 'RFC':
+      return `/app/changes/${encodedId}`;
+    default:
+      return null;
+  }
+}
+
 function transitionPermission(key: string): string {
   if (['approve', 'reject'].includes(key)) return PERMISSIONS.changesApprove;
   if (
@@ -88,7 +102,7 @@ export default function ChangeDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { can, displayName } = useAuth();
+  const { can, displayName, deskUserId } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [pendingTransition, setPendingTransition] = useState<TransitionDefinition | null>(null);
   const [editData, setEditData] = useState<Record<string, unknown>>({});
@@ -309,9 +323,9 @@ export default function ChangeDetail() {
         ))}
       </div>
       <div className="mt-6 flex justify-end gap-3 border-t border-border/40 pt-5">
-        <button type="button" onClick={() => setIsEditing(false)} className="secondary-button">Cancelar</button>
+        <button type="button" onClick={() => setIsEditing(false)} className="secondary-button">Cancel</button>
         <button type="submit" disabled={updateMutation.isPending} className="primary-button disabled:opacity-50">
-          <Save className="h-4 w-4" /> Guardar cambios
+          <Save className="h-4 w-4" /> Save changes
         </button>
       </div>
     </form>
@@ -324,6 +338,7 @@ export default function ChangeDetail() {
         record={change}
         specification={specification}
         currentUserName={displayName}
+        currentUserId={deskUserId}
         relations={relationsQuery.data ?? []}
         transitions={availableTransitions}
         onTransition={(transition) => requestTransition(transition)}
@@ -518,7 +533,7 @@ export default function ChangeDetail() {
                 className="primary-button disabled:opacity-50"
               >
                 <Save className="h-4 w-4" />
-                {updateMutation.isPending ? 'Guardando…' : 'Guardar cambios'}
+                {updateMutation.isPending ? 'Saving…' : 'Save changes'}
               </button>
             </div>
           </form>
@@ -527,7 +542,7 @@ export default function ChangeDetail() {
         <div className="mb-6 rounded-3xl border border-border/40 bg-surface-container-low p-6">
           <div className="mb-5 flex items-center gap-2">
             <GitBranch className="h-5 w-5 text-primary" />
-            <h2 className="font-black text-on-surface">Ciclo de vida</h2>
+            <h2 className="font-black text-on-surface">Lifecycle</h2>
           </div>
           <div className="flex flex-wrap gap-2">
             {specification.lifecycle.states.map((state) => (
@@ -605,7 +620,7 @@ export default function ChangeDetail() {
           <section className="rounded-3xl border border-border/40 bg-surface-container-low p-6">
             <div className="mb-4 flex items-center gap-2">
               <CalendarClock className="h-5 w-5 text-primary" />
-              <h2 className="font-black text-on-surface">Relaciones ITSM</h2>
+              <h2 className="font-black text-on-surface">ITSM Relations</h2>
             </div>
             <div className="space-y-4">
               {(relationsQuery.data?.length ?? 0) > 0 && (
@@ -615,40 +630,51 @@ export default function ChangeDetail() {
                     const entityKey = outbound ? relation.targetEntityKey : relation.sourceEntityKey;
                     const humanId = outbound ? relation.targetHumanId : relation.sourceHumanId;
                     const label = outbound ? relation.relationLabel : relation.inverseLabel;
-                    const destination =
-                      entityKey === 'PRB'
-                        ? `/app/problems/${encodeURIComponent(humanId)}`
-                        : entityKey === 'INC'
-                          ? `/app/tickets/${encodeURIComponent(humanId)}`
-                          : '#';
+                    const destination = resolveRelationDestination(entityKey, humanId);
+
+                    if (!destination) {
+                      return (
+                        <div
+                          key={relation.id}
+                          data-testid={`relation-badge-${relation.id}`}
+                          className="rounded-xl border border-border/50 bg-surface-container/60 px-3 py-2 text-left cursor-default select-none"
+                        >
+                          <span className="block text-[9px] font-black uppercase text-on-surface-variant">{label}</span>
+                          <span className="font-mono text-xs font-semibold text-on-surface-variant">{humanId}</span>
+                        </div>
+                      );
+                    }
+
                     return (
-                      <button
+                      <Link
                         key={relation.id}
-                        onClick={() => navigate(destination)}
-                        className="rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-left"
+                        to={destination}
+                        data-testid={`relation-link-${relation.id}`}
+                        aria-label={`Open ${label} ${humanId}`}
+                        className="rounded-xl border border-primary/30 bg-primary/10 hover:bg-primary/20 hover:border-primary/50 transition-colors px-3 py-2 text-left cursor-pointer block"
                       >
                         <span className="block text-[9px] font-black uppercase text-on-surface-variant">{label}</span>
                         <span className="font-mono text-xs font-bold text-primary">{humanId}</span>
-                      </button>
+                      </Link>
                     );
                   })}
                 </div>
               )}
               <div>
                 <div className="mb-2 text-[10px] font-black uppercase tracking-wider text-on-surface-variant">
-                  Problema relacionado
+                  Related problem
                 </div>
                 <div className="text-sm text-on-surface">
                   {relationsQuery.data?.some((relation) =>
                     relation.sourceEntityKey === 'PRB' || relation.targetEntityKey === 'PRB'
                   )
-                    ? 'Gestionado mediante relaciones versionadas'
-                    : textData(change, 'relatedProblemId') || 'Sin PRB relacionado'}
+                    ? 'Managed through versioned relations'
+                    : textData(change, 'relatedProblemId') || 'No related PRB'}
                 </div>
               </div>
               <div>
                 <div className="mb-2 text-[10px] font-black uppercase tracking-wider text-on-surface-variant">
-                  Incidentes relacionados
+                  Related incidents
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {relatedIncidents.map((incident) => (

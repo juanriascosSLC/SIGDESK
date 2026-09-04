@@ -21,16 +21,16 @@ export function sampleDataFor(fields: FieldDefinition[]): Record<string, unknown
 // No network: the designer never reads live inventory.
 export const SAMPLE_BINDING_ITEMS: Record<string, BindingValue[]> = {
   recursoId: [
-    { id: 'sample-recurso-1', displayName: 'Cámara recepción', tipo: 'camera' },
-    { id: 'sample-recurso-2', displayName: 'NVR planta baja', tipo: 'nvr' },
+    { id: 'sample-recurso-1', displayName: 'Reception camera', tipo: 'camera' },
+    { id: 'sample-recurso-2', displayName: 'Ground floor NVR', tipo: 'nvr' },
   ],
   agenteItId: [
     { id: 'sample-agente-1', displayName: 'Carlos Ruiz', tipo: 'soporte' },
     { id: 'sample-agente-2', displayName: 'Ana Martínez', tipo: 'redes' },
   ],
   siteAssetId: [
-    { id: 'sample-site-1', displayName: 'Sede principal', tipo: 'site' },
-    { id: 'sample-site-2', displayName: 'Bodega norte', tipo: 'site' },
+    { id: 'sample-site-1', displayName: 'Main office', tipo: 'site' },
+    { id: 'sample-site-2', displayName: 'North warehouse', tipo: 'site' },
   ],
   assetId: [
     // Tres, no dos: con un campo multi hace falta poder elegir varios y que

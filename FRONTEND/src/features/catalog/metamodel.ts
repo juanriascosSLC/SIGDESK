@@ -176,14 +176,14 @@ export interface FieldDefinition {
 // sin dependencias, verificable desde Node) y se reexportan arriba.
 
 const FIELD_LABELS: Record<string, string> = {
-  title: 'Título',
-  titulo: 'Título',
-  description: 'Descripción',
-  descripcion: 'Descripción',
-  priority: 'Prioridad',
-  requester: 'Solicitante',
-  assignee: 'Asignado a',
-  site: 'Sitio',
+  title: 'Title',
+  titulo: 'Title',
+  description: 'Description',
+  descripcion: 'Description',
+  priority: 'Priority',
+  requester: 'Requester',
+  assignee: 'Assignee',
+  site: 'Site',
 };
 
 export function fieldDisplayLabel(field: Pick<FieldDefinition, 'key' | 'label'>): string {
@@ -673,6 +673,21 @@ export interface EntityRecord {
   createdAt: string;
   updatedAt: string;
   recursoId?: string;
+  /**
+   * Canonical creator identifier (organization_service usuario_id), for
+   * PRB/RFC — problem_service/change_service's own entity DTO (PRB/RFC
+   * identity presentation). Use for commands/auditing only, never render
+   * directly as the visible label.
+   */
+  createdBy?: string;
+  /**
+   * Trusted display name for `createdBy`, resolved server-side (JWT
+   * snapshot at creation, or the owning service's local identity
+   * projection for a historical record) — safe to render directly, and
+   * never a raw id. Absent when it could not be resolved; the caller
+   * decides the safe fallback ("User unavailable"), never the raw id.
+   */
+  createdByName?: string;
   organizationUnitId?: string;
   stakeholders?: StakeholdersInput;
   assetContext?: {
@@ -728,7 +743,7 @@ export const emptyDefinition = (): CatalogDefinition => ({
     fields: [
       {
         key: 'title',
-        label: 'Título',
+        label: 'Title',
         type: 'text',
         required: true,
         minLength: 3,
@@ -736,7 +751,7 @@ export const emptyDefinition = (): CatalogDefinition => ({
       },
     ],
     lifecycle: {
-      states: [{ key: 'draft', label: 'Borrador', initial: true }],
+      states: [{ key: 'draft', label: 'Draft', initial: true }],
       transitions: [],
     },
     bindings: [],
@@ -935,7 +950,7 @@ export async function createDefinitionDraft(definition: CatalogDefinition) {
 // rechaza la escritura si el borrador cambió desde que se leyó (409).
 export async function updateDefinitionDraft(definition: CatalogDefinition) {
   if (!definition.updatedAt) {
-    throw new Error('El borrador no tiene marca de actualización; recárgalo antes de guardar.');
+    throw new Error('Draft has no update timestamp; reload it before saving.');
   }
   const updated = await apiRequest<CatalogDefinition>(
     `/catalog/definitions/${encodeURIComponent(definition.entityKey)}/draft`,
@@ -1118,7 +1133,7 @@ export function createEntity(
   entityKey: string,
   data: Record<string, unknown>,
   idempotencyKey?: string,
-  binding?: { recursoId?: string; agenteItId?: string; assetContext?: AssetContextInput; stakeholders?: StakeholdersInput },
+  binding?: { recursoId?: string; agenteItId?: string; assetContext?: AssetContextInput; stakeholders?: StakeholdersInput; prioridad?: string },
 ) {
   // recursoId/agenteItId pertenecen al contrato legado de INC. PRB y RFC
   // reciben solamente el contexto CMDB versionado; enviar esos campos a sus

@@ -31,7 +31,7 @@ export function MergedTicketsWidget({ context }: { context: TicketPageContext })
               >
                 <span className="font-mono text-xs text-primary shrink-0">{merged.id}</span>
                 <span className="text-sm text-on-surface truncate flex-1">{merged.title}</span>
-                <span className="text-xs text-on-surface-variant shrink-0">{merged.requester}</span>
+                <span className="text-xs text-on-surface-variant shrink-0">{merged.requesterDisplayName}</span>
               </button>
               {mergedTickets.canUnmerge && (
                 <button

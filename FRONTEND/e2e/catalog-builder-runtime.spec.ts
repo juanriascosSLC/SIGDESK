@@ -1,4 +1,9 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import {
   expect,
   test,
@@ -7,14 +12,13 @@ import {
   type Page,
   type Response,
 } from '@playwright/test';
-import { mockAuthenticatedAdmin, SIG_DESK_API_BASE } from './support';
+import { mockAuthenticatedAdmin, SIG_DESK_API_BASE, createMutationAuditor } from './support';
 import {
   conditionMatches,
   definitionData,
   type Definition,
 } from './catalog-support';
-
-const apiBaseURL = SIG_DESK_API_BASE;
+import { startIsolatedCatalogStack } from './isolated-catalog-stack';
 
 type Entity = {
   id: string;
@@ -45,7 +49,7 @@ async function getPublishedDefinition(
   request: APIRequestContext,
 ): Promise<Definition> {
   return jsonOrFailure<Definition>(
-    await request.get(`${apiBaseURL}/catalog/definitions/INC`),
+    await request.get('/catalog/definitions/INC'),
     'get published INC definition',
   );
 }
@@ -56,13 +60,13 @@ async function createIncident(
   title: string,
 ): Promise<Entity> {
   const sites = await jsonOrFailure<{ items: Array<{ id: string }> }>(
-    await request.get(`${apiBaseURL}/assets/sites?limit=1`),
+    await request.get(`${SIG_DESK_API_BASE}/assets/sites?limit=1`),
     'load one CMDB site',
   );
   const siteId = sites.items[0]?.id;
   expect(siteId).toBeTruthy();
   return jsonOrFailure<Entity>(
-    await request.post(`${apiBaseURL}/entities/INC`, {
+    await request.post('/entities/INC', {
       headers: { 'Idempotency-Key': `catalog-builder-e2e-${randomUUID()}` },
       data: {
         data: definitionData(definition, {
@@ -91,7 +95,7 @@ async function waitForTicketProjection(
       async () =>
         (
           await request.get(
-            `${apiBaseURL}/tickets/${encodeURIComponent(id)}`,
+            `/tickets/${encodeURIComponent(id)}`,
           )
         ).status(),
       {
@@ -145,330 +149,336 @@ async function fillCatalogForm(
   }
 }
 
+test('canonical catalog-inc-v1.json fixture is clean of E2E markers and labels', () => {
+  const fixturePath = path.resolve(__dirname, '../../BACKEND/scripts/fixtures/catalog-inc-v1.json');
+  expect(fs.existsSync(fixturePath)).toBeTruthy();
+  const content = fs.readFileSync(fixturePath, 'utf8');
+  expect(content).not.toContain('Contexto de resolución E2E');
+  expect(content).not.toContain('catalog-builder-e2e');
+  expect(content).not.toContain('Entidad E2E');
+  expect(content).not.toContain('ENTIDADE2E');
+});
+
 test('publishes Catalog Builder changes and preserves historical ticket manifests', async ({
   page,
-  request,
 }) => {
   test.setTimeout(180_000);
-  await page.setViewportSize({ width: 1400, height: 1200 });
-  const baseline = await getPublishedDefinition(request);
-  const historicalTitle = `Historical INC on definition v${baseline.version}`;
-  const historical = await createIncident(request, baseline, historicalTitle);
-  await waitForTicketProjection(request, historical.id);
-
-  const triggerField =
-    baseline.specification.fields.find((field) => field.key === 'title') ??
-    baseline.specification.fields.find((field) => field.type === 'text');
-  expect(triggerField, 'INC needs a text field to drive the conditional rule').toBeTruthy();
-
-  const nextVersion = baseline.version + 1;
-  const triggerValue = `Catalog runtime trigger v${nextVersion}`;
-  const fieldLabel = `Contexto de resolución E2E v${nextVersion}`;
-  const runtimeValue = `Visible únicamente en INC v${nextVersion}`;
-
-  await mockAuthenticatedAdmin(page);
-  await page.setViewportSize({ width: 1400, height: 1200 });
-  await page.goto('/app/admin/catalog-builder');
-  await expect(page.getByTestId('catalog-builder')).toBeVisible();
-  await page.getByTestId('catalog-entity-INC').click();
-  await page.getByTestId('catalog-section-fields').click();
-
-  const existingFieldCount = await page
-    .getByTestId(/^catalog-field-editor-/)
-    .count();
-  await page.getByTestId('catalog-add-field').click();
-  const newFieldEditor = page.getByTestId(/^catalog-field-editor-/).last();
-  await expect(page.getByTestId(/^catalog-field-editor-/)).toHaveCount(
-    existingFieldCount + 1,
-  );
-
-  const fieldEditorTestId = await newFieldEditor.getAttribute('data-testid');
-  expect(fieldEditorTestId).toMatch(/^catalog-field-editor-/);
-  const newFieldKey = fieldEditorTestId!.replace(
-    'catalog-field-editor-',
-    '',
-  );
-  await newFieldEditor.locator('input').first().fill(fieldLabel);
-
-  for (const rule of ['visible', 'required'] as const) {
-    const condition = page.getByTestId(
-      `catalog-condition-${rule}-${newFieldKey}`,
-    );
-    await condition.getByRole('switch').click();
-    await condition.locator('select').nth(0).selectOption(triggerField!.key);
-    await condition.locator('select').nth(1).selectOption('equals');
-    await condition.locator('input').fill(triggerValue);
-  }
-
-  await expect(page.getByTestId('catalog-save-draft')).toBeVisible();
-  await expect(page.getByTestId('catalog-save-draft')).toBeEnabled();
-
-  // The response listener MUST be registered before the click — the same
-  // click-then-wait ordering that the publish step below already avoids via
-  // Promise.all. Registering it after the click (as this used to do, with a
-  // waitForTimeout(500) in between) is a real race: if the response actually
-  // arrives faster than 500ms, waitForResponse starts listening only after
-  // the event already fired and is never told about it, timing out even
-  // though the save succeeded. This raced on every CI run regardless of how
-  // long the timeout was extended, because the listener was never present
-  // for the event in the first place.
-  const editorError = page.getByTestId('catalog-editor-error');
-  const saveResponsePromise = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === '/catalog/definitions' &&
-      response.request().method() === 'POST' &&
-      response.ok(),
-    { timeout: 30_000 },
-  );
-  await page.getByTestId('catalog-save-draft').click();
-
-  let saveResponse: Awaited<typeof saveResponsePromise>;
+  const stack = await startIsolatedCatalogStack();
+  const auditor = createMutationAuditor();
   try {
-    saveResponse = await saveResponsePromise;
-  } catch (timeoutError) {
-    // If the save never reached the network at all (client-side validation
-    // blocked it), surface that instead of a bare timeout.
-    if (await editorError.isVisible()) {
-      throw new Error(
-        `catalog-save-draft validation error: ${await editorError.textContent()}`,
-        { cause: timeoutError },
+    await mockAuthenticatedAdmin(page, {
+      catalogApiUrl: stack.baseUrl,
+      sessionToken: stack.jwtToken,
+      mutationAuditor: auditor,
+    });
+    await page.setViewportSize({ width: 1400, height: 1200 });
+    const baseline = await getPublishedDefinition(stack.isolatedRequest);
+    const historicalTitle = `Historical INC on definition v${baseline.version}`;
+    const historical = await createIncident(stack.isolatedRequest, baseline, historicalTitle);
+    await waitForTicketProjection(stack.isolatedRequest, historical.id);
+
+    const triggerField =
+      baseline.specification.fields.find((field) => field.key === 'title') ??
+      baseline.specification.fields.find((field) => field.type === 'text');
+    expect(triggerField, 'INC needs a text field to drive the conditional rule').toBeTruthy();
+
+    const nextVersion = baseline.version + 1;
+    const triggerValue = `Catalog runtime trigger v${nextVersion}`;
+    const fieldLabel = `Contexto de resolución E2E v${nextVersion}`;
+    const runtimeValue = `Visible únicamente en INC v${nextVersion}`;
+
+    await page.goto('/app/admin/catalog-builder');
+    await expect(page.getByTestId('catalog-builder')).toBeVisible();
+    await page.getByTestId('catalog-entity-INC').click();
+    await page.getByTestId('catalog-section-fields').click();
+
+    const existingFieldCount = await page
+      .getByTestId(/^catalog-field-editor-/)
+      .count();
+    await page.getByTestId('catalog-add-field').click();
+    const newFieldEditor = page.getByTestId(/^catalog-field-editor-/).last();
+    await expect(page.getByTestId(/^catalog-field-editor-/)).toHaveCount(
+      existingFieldCount + 1,
+    );
+
+    const fieldEditorTestId = await newFieldEditor.getAttribute('data-testid');
+    expect(fieldEditorTestId).toMatch(/^catalog-field-editor-/);
+    const newFieldKey = fieldEditorTestId!.replace(
+      'catalog-field-editor-',
+      '',
+    );
+    await newFieldEditor.locator('input').first().fill(fieldLabel);
+
+    for (const rule of ['visible', 'required'] as const) {
+      const condition = page.getByTestId(
+        `catalog-condition-${rule}-${newFieldKey}`,
       );
+      await condition.getByRole('switch').click();
+      await condition.locator('select').nth(0).selectOption(triggerField!.key);
+      await condition.locator('select').nth(1).selectOption('equals');
+      await condition.locator('input').fill(triggerValue);
     }
-    throw timeoutError;
-  }
-  const savedDraft = await jsonOrFailure<Definition>(
-    saveResponse,
-    'save Catalog draft from UI',
-  );
-  expect(savedDraft.version).toBeGreaterThan(0);
-  await expect(page.getByTestId('catalog-notice')).toContainText(
-    /Borrador.*guardado/,
-  );
 
-  await expect(page.getByTestId('catalog-publish')).toBeVisible();
-  await expect(page.getByTestId('catalog-publish')).toBeEnabled();
+    await expect(page.getByTestId('catalog-save-draft')).toBeVisible();
+    await expect(page.getByTestId('catalog-save-draft')).toBeEnabled();
 
-  const [publishResponse] = await Promise.all([
-    page.waitForResponse(
+    const editorError = page.getByTestId('catalog-editor-error');
+    const saveResponsePromise = page.waitForResponse(
       (response) =>
-        new URL(response.url()).pathname.endsWith(
-          `/catalog/definitions/INC/versions/${savedDraft.version}/publish`,
-        ) &&
+        new URL(response.url()).pathname === '/catalog/definitions' &&
         response.request().method() === 'POST' &&
         response.ok(),
-    ),
-    page.getByTestId('catalog-publish').click(),
-  ]);
-  const published = await jsonOrFailure<Definition>(
-    publishResponse,
-    'publish Catalog definition from UI',
-  );
-  expect(published.version).toBeGreaterThan(baseline.version);
-  await expect(page.getByTestId('catalog-notice')).toContainText(
-    'INC ya tiene los cambios publicados',
-  );
+      { timeout: 30_000 },
+    );
+    await page.getByTestId('catalog-save-draft').click();
 
-  const runtimeDefinition = await getPublishedDefinition(request);
-  expect(runtimeDefinition.id).toBe(published.id);
-  const runtimeField = runtimeDefinition.specification.fields.find(
-    (field) => field.key === newFieldKey,
-  );
-  expect(runtimeField).toMatchObject({
-    label: fieldLabel,
-    visibleWhen: {
+    let saveResponse: Awaited<typeof saveResponsePromise>;
+    try {
+      saveResponse = await saveResponsePromise;
+    } catch (timeoutError) {
+      if (await editorError.isVisible()) {
+        throw new Error(
+          `catalog-save-draft validation error: ${await editorError.textContent()}`,
+          { cause: timeoutError },
+        );
+      }
+      throw timeoutError;
+    }
+    const savedDraft = await jsonOrFailure<Definition>(
+      saveResponse,
+      'save Catalog draft from UI',
+    );
+    expect(savedDraft.version).toBeGreaterThan(0);
+    await expect(page.getByTestId('catalog-notice')).toContainText(
+      /(?:Borrador.*guardado|Draft.*saved)/i,
+    );
+
+    await expect(page.getByTestId('catalog-publish')).toBeVisible();
+    await expect(page.getByTestId('catalog-publish')).toBeEnabled();
+
+    const [publishResponse] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname.endsWith(
+            `/catalog/definitions/INC/versions/${savedDraft.version}/publish`,
+          ) &&
+          response.request().method() === 'POST' &&
+          response.ok(),
+      ),
+      page.getByTestId('catalog-publish').click(),
+    ]);
+    const published = await jsonOrFailure<Definition>(
+      publishResponse,
+      'publish Catalog definition from UI',
+    );
+    expect(published.version).toBeGreaterThan(baseline.version);
+    await expect(page.getByTestId('catalog-notice')).toContainText(
+      /(?:INC ya tiene los cambios publicados|INC.*published)/i,
+    );
+
+    const runtimeDefinition = await getPublishedDefinition(stack.isolatedRequest);
+    expect(runtimeDefinition.version).toBe(published.version);
+    const publishedField = runtimeDefinition.specification.fields.find(
+      (field) => field.key === newFieldKey,
+    );
+    expect(publishedField).toBeTruthy();
+    expect(publishedField?.label).toBe(fieldLabel);
+    expect(publishedField?.visibleWhen).toEqual({
       field: triggerField!.key,
       operator: 'equals',
       value: triggerValue,
-    },
-    requiredWhen: {
+    });
+    expect(publishedField?.requiredWhen).toEqual({
       field: triggerField!.key,
       operator: 'equals',
       value: triggerValue,
-    },
-  });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const spec = runtimeDefinition.specification as Record<string, any>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const layoutDoc = (spec.layouts?.detail?.default ?? spec.detailPage?.default ?? spec.detailLayout) as Record<string, any> | undefined;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allPlacements: Record<string, any>[] = [];
-  if (layoutDoc?.fields) {
-    allPlacements.push(...layoutDoc.fields);
-  }
-  if (layoutDoc) {
-    for (const regionName of ['header', 'actions', 'main', 'sidebar', 'footer']) {
-      const region = layoutDoc[regionName];
-      if (region?.rows) {
-        for (const row of region.rows) {
-          for (const cell of row.cells ?? []) {
-            if (cell.placement) allPlacements.push(cell.placement);
+    });
+
+    const createView = runtimeDefinition.specification.views?.create ?? [];
+    expect(createView).toContain(newFieldKey);
+
+    const createPageRaw = runtimeDefinition.specification.createPage as Record<string, unknown> | undefined;
+    const layoutDoc = (createPageRaw?.default ?? createPageRaw) as
+      | Record<string, { rows?: Array<{ cells?: Array<{ placement?: { source?: string; fieldKey?: string } }> }> }>
+      | undefined;
+    const allPlacements: Array<{ source?: string; fieldKey?: string }> = [];
+    if (layoutDoc) {
+      for (const regionName of ['header', 'main', 'sidebar', 'footer']) {
+        const region = layoutDoc[regionName];
+        if (region?.rows) {
+          for (const row of region.rows) {
+            for (const cell of row.cells ?? []) {
+              if (cell.placement) allPlacements.push(cell.placement);
+            }
           }
         }
       }
     }
-  }
-  const createdPlacement = allPlacements.find((p) => p.fieldKey === newFieldKey);
-  if (createdPlacement) {
-    expect(createdPlacement).toMatchObject({
-      source: 'catalog',
-      fieldKey: newFieldKey,
+    const createdPlacement = allPlacements.find((p) => p.fieldKey === newFieldKey);
+    if (createdPlacement) {
+      expect(createdPlacement).toMatchObject({
+        source: 'catalog',
+        fieldKey: newFieldKey,
+      });
+    }
+
+    await page.goto('/app/catalog/INC');
+    await expect(
+      page.getByText(`INC · v${published.version}`, { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByTestId(`catalog-input-${newFieldKey}`)).toHaveCount(0);
+    await page
+      .getByTestId(`catalog-input-${triggerField!.key}`)
+      .fill(triggerValue);
+
+    const conditionalInput = page.getByTestId(
+      `catalog-input-${newFieldKey}`,
+    );
+    await expect(conditionalInput).toBeVisible();
+    await expect(conditionalInput).toHaveAttribute('required', '');
+
+    const newEntityData = definitionData(runtimeDefinition, {
+      title: triggerValue,
+      description:
+        'Incidente creado desde el formulario dinámico después de publicar la definición.',
+      category: 'hardware',
+      priority: 'critical',
+      assetId: 'CAM-CATALOG-RUNTIME-002',
+      site: 'E2E-CATALOG-SITE',
+      [newFieldKey]: runtimeValue,
     });
+    await fillCatalogForm(page, runtimeDefinition, newEntityData);
+
+    const createResponsePromise = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === '/entities/INC' &&
+        response.request().method() === 'POST' &&
+        response.ok(),
+    );
+    await page.getByTestId('catalog-form-submit').click();
+    const runtimeEntity = await jsonOrFailure<Entity>(
+      await createResponsePromise,
+      'create INC from metadata-driven form',
+    );
+    expect(runtimeEntity.definitionVersion).toBe(published.version);
+    expect(runtimeEntity.data[newFieldKey]).toBe(runtimeValue);
+    await expect(
+      page.getByText(runtimeEntity.humanId, { exact: true }),
+    ).toBeVisible();
+    await waitForTicketProjection(stack.isolatedRequest, runtimeEntity.id);
+
+    await page.goto(
+      `/app/tickets/${encodeURIComponent(runtimeEntity.id)}`,
+    );
+    await expect(page.getByTestId('ticket-detail')).toBeVisible();
+    const runtimeDetailField = page.getByTestId(
+      `ticket-detail-field-catalog-${newFieldKey}`,
+    );
+    await expect(runtimeDetailField).toBeVisible();
+    await expect(runtimeDetailField).toContainText(fieldLabel);
+    await expect(runtimeDetailField).toContainText(runtimeValue);
+
+    const runtimeManifest = await jsonOrFailure<Manifest>(
+      await stack.isolatedRequest.get(
+        `/entities/INC/${runtimeEntity.id}/manifest`,
+      ),
+      'get runtime INC manifest',
+    );
+    expect(runtimeManifest.version).toBe(published.version);
+    expect(
+      runtimeManifest.specification.fields.some(
+        (field) => field.key === newFieldKey,
+      ),
+    ).toBeTruthy();
+
+    await page.goto(
+      `/app/tickets/${encodeURIComponent(historical.id)}`,
+    );
+    await expect(page.getByTestId('ticket-detail')).toBeVisible();
+    await expect(
+      page.getByText(historicalTitle, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId(`ticket-detail-field-catalog-${newFieldKey}`),
+    ).toHaveCount(0);
+
+    const historicalManifest = await jsonOrFailure<Manifest>(
+      await stack.isolatedRequest.get(
+        `/entities/INC/${historical.id}/manifest`,
+      ),
+      'get historical INC manifest',
+    );
+    expect(historical.definitionVersion).toBe(baseline.version);
+    expect(historicalManifest.version).toBe(baseline.version);
+    expect(
+      historicalManifest.specification.fields.some(
+        (field) => field.key === newFieldKey,
+      ),
+    ).toBeFalsy();
+
+    auditor.assertAllMutationsIsolated({ origin: new URL(stack.baseUrl).origin, runToken: stack.runToken });
+  } finally {
+    await stack.cleanup();
   }
-
-  await page.goto('/app/catalog/INC');
-  await expect(
-    page.getByText(`INC · v${published.version}`, { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByTestId(`catalog-input-${newFieldKey}`)).toHaveCount(0);
-  await page
-    .getByTestId(`catalog-input-${triggerField!.key}`)
-    .fill(triggerValue);
-
-  const conditionalInput = page.getByTestId(
-    `catalog-input-${newFieldKey}`,
-  );
-  await expect(conditionalInput).toBeVisible();
-  await expect(conditionalInput).toHaveAttribute('required', '');
-
-  const newEntityData = definitionData(runtimeDefinition, {
-    title: triggerValue,
-    description:
-      'Incidente creado desde el formulario dinámico después de publicar la definición.',
-    category: 'hardware',
-    priority: 'critical',
-    assetId: 'CAM-CATALOG-RUNTIME-002',
-    site: 'E2E-CATALOG-SITE',
-    [newFieldKey]: runtimeValue,
-  });
-  await fillCatalogForm(page, runtimeDefinition, newEntityData);
-
-  const createResponsePromise = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === '/entities/INC' &&
-      response.request().method() === 'POST' &&
-      response.ok(),
-  );
-  await page.getByRole('button', { name: 'Crear INC', exact: true }).click();
-  const runtimeEntity = await jsonOrFailure<Entity>(
-    await createResponsePromise,
-    'create INC from metadata-driven form',
-  );
-  expect(runtimeEntity.definitionVersion).toBe(published.version);
-  expect(runtimeEntity.data[newFieldKey]).toBe(runtimeValue);
-  await expect(
-    page.getByText(runtimeEntity.humanId, { exact: true }),
-  ).toBeVisible();
-  await waitForTicketProjection(request, runtimeEntity.id);
-
-  await page.goto(
-    `/app/tickets/${encodeURIComponent(runtimeEntity.id)}`,
-  );
-  await expect(page.getByTestId('ticket-detail')).toBeVisible();
-  const runtimeDetailField = page.getByTestId(
-    `ticket-detail-field-catalog-${newFieldKey}`,
-  );
-  await expect(runtimeDetailField).toBeVisible();
-  await expect(runtimeDetailField).toContainText(fieldLabel);
-  await expect(runtimeDetailField).toContainText(runtimeValue);
-
-  const runtimeManifest = await jsonOrFailure<Manifest>(
-    await request.get(
-      `${apiBaseURL}/entities/INC/${runtimeEntity.id}/manifest`,
-    ),
-    'get runtime INC manifest',
-  );
-  expect(runtimeManifest.version).toBe(published.version);
-  expect(
-    runtimeManifest.specification.fields.some(
-      (field) => field.key === newFieldKey,
-    ),
-  ).toBeTruthy();
-
-  await page.goto(
-    `/app/tickets/${encodeURIComponent(historical.id)}`,
-  );
-  await expect(page.getByTestId('ticket-detail')).toBeVisible();
-  await expect(
-    page.getByText(historicalTitle, { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByTestId(`ticket-detail-field-catalog-${newFieldKey}`),
-  ).toHaveCount(0);
-
-  const historicalManifest = await jsonOrFailure<Manifest>(
-    await request.get(
-      `${apiBaseURL}/entities/INC/${historical.id}/manifest`,
-    ),
-    'get historical INC manifest',
-  );
-  expect(historical.definitionVersion).toBe(baseline.version);
-  expect(historicalManifest.version).toBe(baseline.version);
-  expect(
-    historicalManifest.specification.fields.some(
-      (field) => field.key === newFieldKey,
-    ),
-  ).toBeFalsy();
 });
 
-test('creates and publishes a new catalog entity from the Builder', async ({ page, request }) => {
-  test.setTimeout(120_000);
-  // El nombre es lo unico que se teclea. El codigo corto lo DERIVA el asistente
-  // —el unico camino del producto para crear una entidad nueva— y lo muestra
-  // como identificador automatico, sin campo editable; se lee de ahi.
-  const entityName = `Entidad E2E ${randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase()}`;
+test('creates and publishes a new catalog entity from the Builder', async ({ page }) => {
+  test.setTimeout(180_000);
+  const stack = await startIsolatedCatalogStack();
+  const auditor = createMutationAuditor();
+  try {
+    const entityName = `Entidad E2E ${randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase()}`;
 
-  await mockAuthenticatedAdmin(page);
-  await page.goto('/app/admin/catalog-builder');
-  await expect(page.getByTestId('catalog-builder')).toBeVisible();
-  await page.getByRole('button', { name: 'Crear entidad' }).click();
+    await mockAuthenticatedAdmin(page, {
+      catalogApiUrl: stack.baseUrl,
+      sessionToken: stack.jwtToken,
+      mutationAuditor: auditor,
+    });
+    await page.goto('/app/admin/catalog-builder');
+    await expect(page.getByTestId('catalog-builder')).toBeVisible();
+    await page.getByRole('button', { name: 'Create entity' }).click();
 
-  // El PANEL, no el boton de navegacion: `catalog-section-general` marca el
-  // paso del asistente, asi que buscar los campos dentro de el no resolvia
-  // nunca y la prueba moria por timeout señalando al sitio equivocado.
-  await page.getByTestId('catalog-panel-general').getByLabel('Nombre visible').fill(entityName);
+    await page.getByTestId('catalog-panel-general').getByLabel('Display Name').fill(entityName);
 
-  // Lo que se comprueba es que el identificador que el asistente MUESTRA es el
-  // que termina persistido: teclear uno propio ya no es posible, y afirmar
-  // sobre el valor visible es una comprobacion mas fuerte que afirmar sobre uno
-  // elegido por la prueba.
-  const entityKey = (await page.getByTestId('catalog-entity-key').innerText()).trim();
-  expect(entityKey).toMatch(/^[A-Z0-9_]+$/);
-  await page.getByTestId('catalog-section-fields').click();
-  await expect(page.getByTestId(/^catalog-field-editor-/)).toHaveCount(1);
-  await page.getByTestId('catalog-section-workflow').click();
-  await page.getByTestId('catalog-section-relations').click();
-  await page.getByTestId('catalog-section-resources').click();
-  await page.getByTestId('catalog-section-review').click();
+    const entityKey = (await page.getByTestId('catalog-entity-key').innerText()).trim();
+    expect(entityKey).toMatch(/^[A-Z0-9_]+$/);
+    await page.getByTestId('catalog-section-fields').click();
+    await expect(page.getByTestId(/^catalog-field-editor-/)).toHaveCount(1);
+    await page.getByTestId('catalog-section-workflow').click();
+    await page.getByTestId('catalog-section-relations').click();
+    await page.getByTestId('catalog-section-resources').click();
+    await page.getByTestId('catalog-section-review').click();
 
-  const saveResponse = page.waitForResponse(
-    // Sin el prefijo `/api/v1`: la aplicacion llama a Kong en
-    // `/catalog/definitions` —como el resto de esperas de este archivo—, asi que
-    // el predicado no casaba nunca y la prueba expiraba pese a que el guardado
-    // habia funcionado.
-    (response) => new URL(response.url()).pathname === '/catalog/definitions' &&
-      response.request().method() === 'POST' && response.ok(),
-  );
-  await page.getByTestId('catalog-save-draft').click();
-  const draft = await jsonOrFailure<Definition>(await saveResponse, 'create catalog entity draft');
-  expect(draft.entityKey).toBe(entityKey);
-  expect(draft.name).toBe(entityName);
-  expect(draft.specification.fields.length).toBeGreaterThan(0);
+    const saveResponse = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === '/catalog/definitions' &&
+        response.request().method() === 'POST' && response.ok(),
+    );
+    await page.getByTestId('catalog-save-draft').click();
+    const draft = await jsonOrFailure<Definition>(await saveResponse, 'create catalog entity draft');
+    expect(draft.entityKey).toBe(entityKey);
+    expect(draft.name).toBe(entityName);
+    expect(draft.specification.fields.length).toBeGreaterThan(0);
 
-  const publishResponse = page.waitForResponse(
-    (response) => new URL(response.url()).pathname.endsWith(
-      `/catalog/definitions/${entityKey}/versions/${draft.version}/publish`,
-    ) && response.request().method() === 'POST' && response.ok(),
-  );
-  await page.getByTestId('catalog-publish').click();
-  const published = await jsonOrFailure<Definition>(await publishResponse, 'publish new catalog entity');
-  expect(published.entityKey).toBe(entityKey);
-  expect(published.status).toBe('published');
+    const publishResponse = page.waitForResponse(
+      (response) => new URL(response.url()).pathname.endsWith(
+        `/catalog/definitions/${entityKey}/versions/${draft.version}/publish`,
+      ) && response.request().method() === 'POST' && response.ok(),
+    );
+    await page.getByTestId('catalog-publish').click();
+    const published = await jsonOrFailure<Definition>(await publishResponse, 'publish new catalog entity');
+    expect(published.entityKey).toBe(entityKey);
+    expect(published.status).toBe('published');
 
-  const active = await jsonOrFailure<Definition>(
-    await request.get(`${apiBaseURL}/catalog/definitions/${entityKey}`),
-    'reload published catalog entity',
-  );
-  expect(active.entityKey).toBe(entityKey);
-  expect(active.version).toBe(published.version);
-  expect(active.specification.fields).toEqual(published.specification.fields);
+    const active = await jsonOrFailure<Definition>(
+      await stack.isolatedRequest.get(`/catalog/definitions/${entityKey}`),
+      'reload published catalog entity',
+    );
+    expect(active.entityKey).toBe(entityKey);
+    expect(active.version).toBe(published.version);
+    expect(active.specification.fields).toEqual(published.specification.fields);
+
+    auditor.assertAllMutationsIsolated({ origin: new URL(stack.baseUrl).origin, runToken: stack.runToken });
+  } finally {
+    await stack.cleanup();
+  }
 });

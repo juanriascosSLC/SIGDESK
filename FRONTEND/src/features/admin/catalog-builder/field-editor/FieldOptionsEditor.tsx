@@ -22,41 +22,41 @@ import {
 
 const PRESETS: Array<{ name: string; options: Array<{ label: string; value: string }> }> = [
   {
-    name: 'Prioridad (Alta / Media / Baja)',
+    name: 'Priority (High / Medium / Low)',
     options: [
-      { label: 'Alta', value: 'alta' },
-      { label: 'Media', value: 'media' },
-      { label: 'Baja', value: 'baja' },
+      { label: 'High', value: 'high' },
+      { label: 'Medium', value: 'medium' },
+      { label: 'Low', value: 'low' },
     ],
   },
   {
-    name: 'Impacto (Crítico / Alto / Medio / Bajo)',
+    name: 'Impact (Critical / High / Medium / Low)',
     options: [
-      { label: 'Crítico', value: 'critico' },
-      { label: 'Alto', value: 'alto' },
-      { label: 'Medio', value: 'medio' },
-      { label: 'Bajo', value: 'bajo' },
+      { label: 'Critical', value: 'critical' },
+      { label: 'High', value: 'high' },
+      { label: 'Medium', value: 'medium' },
+      { label: 'Low', value: 'low' },
     ],
   },
   {
-    name: 'Estado (Activo / Inactivo)',
+    name: 'Status (Active / Inactive)',
     options: [
-      { label: 'Activo', value: 'activo' },
-      { label: 'Inactivo', value: 'inactivo' },
+      { label: 'Active', value: 'active' },
+      { label: 'Inactive', value: 'inactive' },
     ],
   },
   {
-    name: 'Frecuencia (Diaria / Semanal / Mensual)',
+    name: 'Frequency (Daily / Weekly / Monthly)',
     options: [
-      { label: 'Diaria', value: 'diaria' },
-      { label: 'Semanal', value: 'semanal' },
-      { label: 'Mensual', value: 'mensual' },
+      { label: 'Daily', value: 'daily' },
+      { label: 'Weekly', value: 'weekly' },
+      { label: 'Monthly', value: 'monthly' },
     ],
   },
   {
-    name: 'Sí / No',
+    name: 'Yes / No',
     options: [
-      { label: 'Sí', value: 'si' },
+      { label: 'Yes', value: 'yes' },
       { label: 'No', value: 'no' },
     ],
   },
@@ -108,7 +108,7 @@ export function FieldOptionsEditor({
 
   function addOption() {
     const number = options.length + 1;
-    setOptions([...options, { value: `opcion${number}`, label: `Opción ${number}` }]);
+    setOptions([...options, { value: `option${number}`, label: `Option ${number}` }]);
   }
 
   function applyPreset(presetOptions: Array<{ label: string; value: string }>) {
@@ -171,10 +171,10 @@ export function FieldOptionsEditor({
           </div>
           <div>
             <span className="text-sm font-bold text-on-surface">
-              Opciones disponibles
+              Available Options
             </span>
             <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-surface-container text-on-surface-variant border border-border/50">
-              {options.length === 0 ? '0 opciones' : `${options.length} en total`}
+              {options.length === 0 ? '0 options' : `${options.length} total`}
             </span>
           </div>
         </div>
@@ -195,7 +195,7 @@ export function FieldOptionsEditor({
             }}
             className="text-xs font-semibold text-on-surface-variant hover:text-on-surface px-2.5 py-1.5 rounded-lg border border-border/50 hover:bg-surface-container-high transition-colors flex items-center gap-1.5"
           >
-            <ClipboardPaste className="w-3.5 h-3.5" /> Pegar lista
+            <ClipboardPaste className="w-3.5 h-3.5" /> Paste list
           </button>
           <button
             type="button"
@@ -203,7 +203,7 @@ export function FieldOptionsEditor({
             onClick={addOption}
             className="text-xs font-bold text-primary hover:text-primary-foreground hover:bg-primary px-3 py-1.5 rounded-lg border border-primary/40 bg-primary/10 transition-all flex items-center gap-1.5 shadow-sm"
           >
-            <Plus className="w-3.5 h-3.5" /> Agregar opción
+            <Plus className="w-3.5 h-3.5" /> Add option
           </button>
         </div>
       </div>
@@ -212,7 +212,7 @@ export function FieldOptionsEditor({
         <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 animate-in fade-in duration-150">
           <div className="flex items-center justify-between gap-3 mb-2">
             <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5" /> Plantillas de opciones rápidas
+              <Sparkles className="w-3.5 h-3.5" /> Quick option presets
             </span>
             <button
               type="button"
@@ -241,14 +241,14 @@ export function FieldOptionsEditor({
         <div className="mb-4 rounded-xl border border-primary/30 bg-surface-container p-4 shadow-lg animate-in fade-in duration-150">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-bold text-on-surface">Pegado Masivo de Opciones</p>
+              <p className="text-xs font-bold text-on-surface">Bulk Paste Options</p>
               <p className="text-xs text-on-surface-variant leading-5 mt-0.5">
-                Una opción por línea. Para fijar la clave técnica usa{' '}
-                <span className="font-mono text-primary bg-primary/10 px-1 py-0.5 rounded">clave = Etiqueta</span>; si no, se deriva
-                automáticamente de la etiqueta.
+                One option per line. To specify the technical key use{' '}
+                <span className="font-mono text-primary bg-primary/10 px-1 py-0.5 rounded">key = Label</span>; otherwise, it is automatically
+                derived from the label.
               </p>
             </div>
-            <IconButton label="Cerrar" onClick={() => setPasting(false)}>
+            <IconButton label="Close" onClick={() => setPasting(false)}>
               <X className="w-4 h-4" />
             </IconButton>
           </div>
@@ -257,7 +257,7 @@ export function FieldOptionsEditor({
             value={pasteText}
             onChange={(event) => setPasteText(event.target.value)}
             rows={5}
-            placeholder={'Alta\nMedia\nBaja\n\nó\n\nalta = Alta\nmedia = Media'}
+            placeholder={'High\nMedium\nLow\n\nor\n\nhigh = High\nmedium = Medium'}
             className="friendly-input mt-3 w-full font-mono text-xs bg-surface-container-low"
           />
           <div className="flex flex-wrap gap-2 mt-3">
@@ -267,7 +267,7 @@ export function FieldOptionsEditor({
               disabled={!pasteText.trim()}
               className="primary-button !px-3.5 !py-1.5 text-xs disabled:opacity-40"
             >
-              <Wand2 className="w-3.5 h-3.5" /> Reemplazar las {options.length}
+              <Wand2 className="w-3.5 h-3.5" /> Replace all {options.length}
             </button>
             <button
               type="button"
@@ -275,7 +275,7 @@ export function FieldOptionsEditor({
               disabled={!pasteText.trim()}
               className="secondary-button !px-3.5 !py-1.5 text-xs disabled:opacity-40"
             >
-              <Plus className="w-3.5 h-3.5" /> Agregar al final
+              <Plus className="w-3.5 h-3.5" /> Append to end
             </button>
           </div>
         </div>
@@ -284,23 +284,23 @@ export function FieldOptionsEditor({
       {duplicates.length > 0 && (
         <p className="mb-3 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300">
           <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-          Hay claves repetidas ({duplicates.join(', ')}). Dos opciones con la misma clave se guardan
-          como el mismo valor y no se pueden distinguir después.
+          Duplicate keys detected ({duplicates.join(', ')}). Two options with the same key are stored
+          as the same value and cannot be distinguished later.
         </p>
       )}
 
       {options.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border/60 p-6 text-center text-xs text-on-surface-variant bg-surface-container/30">
           <Layers className="w-6 h-6 mx-auto mb-2 opacity-40 text-emerald-400" />
-          <p className="font-semibold text-on-surface">Sin opciones configuradas</p>
-          <p className="mt-1">Sin opciones, este campo se muestra vacío y no se puede completar.</p>
+          <p className="font-semibold text-on-surface">No options configured</p>
+          <p className="mt-1">Without options, this field appears empty and cannot be completed.</p>
           <div className="mt-3 flex justify-center gap-2">
             <button
               type="button"
               onClick={addOption}
               className="text-xs px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/30 text-primary font-bold hover:bg-primary hover:text-primary-foreground transition-colors inline-flex items-center gap-1"
             >
-              <Plus className="w-3.5 h-3.5" /> Crear primera opción
+              <Plus className="w-3.5 h-3.5" /> Create first option
             </button>
           </div>
         </div>
@@ -309,12 +309,12 @@ export function FieldOptionsEditor({
           <div className="hidden md:grid grid-cols-[28px_minmax(0,1fr)_minmax(0,180px)_36px_36px] gap-2 px-1">
             <span />
             <span className="text-[10px] font-black uppercase tracking-wider text-on-surface-variant">
-              Etiqueta que ve la persona
+              Label visible to user
             </span>
             <span className="text-[10px] font-black uppercase tracking-wider text-on-surface-variant">
-              Clave guardada
+              Stored key
             </span>
-            <span className="text-[10px] font-black uppercase tracking-wider text-on-surface-variant text-center" title="Valor por defecto">
+            <span className="text-[10px] font-black uppercase tracking-wider text-on-surface-variant text-center" title="Default value">
               Def.
             </span>
             <span />
@@ -333,13 +333,13 @@ export function FieldOptionsEditor({
             >
               <span
                 aria-hidden
-                title="Arrastra para reordenar"
+                title="Drag to reorder"
                 className="flex justify-center text-on-surface-variant/60 hover:text-on-surface cursor-grab active:cursor-grabbing"
               >
                 <GripVertical className="w-4 h-4" />
               </span>
               <input
-                aria-label={`Etiqueta de la opción ${index + 1}`}
+                aria-label={`Option ${index + 1} label`}
                 value={option.label}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -355,26 +355,26 @@ export function FieldOptionsEditor({
                     ...(derived ? { value: technicalKey(label) || option.value } : {}),
                   });
                 }}
-                placeholder={`Opción ${index + 1}`}
+                placeholder={`Option ${index + 1}`}
                 className="friendly-input bg-surface-container-low"
               />
               <input
-                aria-label={`Clave de la opción ${index + 1}`}
+                aria-label={`Option ${index + 1} key`}
                 value={option.value}
                 onChange={(event) => updateOption(index, { value: event.target.value })}
-                placeholder="clave_interna"
+                placeholder="internal_key"
                 className={`friendly-input font-mono text-xs bg-surface-container-low ${
                   duplicates.includes(option.value) ? '!border-amber-500/60 !bg-amber-500/5' : ''
                 }`}
               />
               <button
                 type="button"
-                aria-label={`Marcar «${option.label}» por defecto`}
+                aria-label={`Set "${option.label}" as default`}
                 aria-pressed={chosen.has(option.value)}
                 title={
                   chosen.has(option.value)
-                    ? 'Quitar como valor por defecto'
-                    : 'Usar como valor por defecto'
+                    ? 'Remove as default value'
+                    : 'Set as default value'
                 }
                 onClick={() => toggleDefault(option.value)}
                 className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all ${
@@ -385,7 +385,7 @@ export function FieldOptionsEditor({
               >
                 <Star className={`w-4 h-4 ${chosen.has(option.value) ? 'fill-current' : ''}`} />
               </button>
-              <IconButton label={`Eliminar la opción ${index + 1}`} danger onClick={() => removeOption(index)}>
+              <IconButton label={`Delete option ${index + 1}`} danger onClick={() => removeOption(index)}>
                 <Trash2 className="w-4 h-4" />
               </IconButton>
             </div>

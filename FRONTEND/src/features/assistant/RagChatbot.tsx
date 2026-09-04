@@ -28,22 +28,22 @@ type ChatResponse = {
 const starterMessages: ChatMessage[] = [
   {
     from: "assistant",
-    text: "Hola, soy el asistente de SIG-DESK. Puedo consultar tickets y conocimiento autorizado.",
-    time: "Ahora",
+    text: "Hi, I'm the SIG-DESK assistant. I can look up tickets and authorized knowledge.",
+    time: "Now",
   },
-  { from: "assistant", text: "¿Qué necesitas resolver hoy?", time: "Ahora" },
+  { from: "assistant", text: "What do you need help with today?", time: "Now" },
 ];
 
 const suggestions = [
-  { icon: Ticket, label: "¿Cómo reviso un ticket?", color: "text-cyan-400" },
+  { icon: Ticket, label: "How do I review a ticket?", color: "text-cyan-400" },
   {
     icon: BookOpen,
-    label: "Buscar en Knowledge Base",
+    label: "Search the Knowledge Base",
     color: "text-violet-400",
   },
   {
     icon: ShieldCheck,
-    label: "Consultar una política",
+    label: "Look up a policy",
     color: "text-amber-400",
   },
 ];
@@ -62,7 +62,7 @@ export default function RagChatbot() {
     setError(null);
     setMessages((current) => [
       ...current,
-      { from: "user", text, time: "Ahora" },
+      { from: "user", text, time: "Now" },
     ]);
     setIsSending(true);
     try {
@@ -75,7 +75,7 @@ export default function RagChatbot() {
         {
           from: "assistant",
           text: response.answer,
-          time: "Ahora",
+          time: "Now",
           sources: response.sources,
         },
       ]);
@@ -83,14 +83,14 @@ export default function RagChatbot() {
       setError(
         requestError instanceof ApiError
           ? requestError.message
-          : "No se pudo contactar al asistente.",
+          : "Couldn't reach the assistant.",
       );
       setMessages((current) => [
         ...current,
         {
           from: "assistant",
-          text: "No pude procesar tu consulta. Inténtalo de nuevo.",
-          time: "Ahora",
+          text: "I couldn't process that. Please try again.",
+          time: "Now",
         },
       ]);
     } finally {
@@ -103,8 +103,8 @@ export default function RagChatbot() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Abrir asistente RAG"
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-3 rounded-2xl border border-cyan-400/30 bg-surface-container-lowest/95 px-4 py-3 text-left shadow-[0_14px_40px_rgba(0,0,0,0.45),0_0_25px_rgba(34,211,238,0.12)] backdrop-blur-xl transition-all hover:-translate-y-1 hover:border-cyan-300/60"
+        aria-label="Open SIG Assistant"
+        className="fixed bottom-[calc(56px+env(safe-area-inset-bottom)+1rem)] right-4 md:bottom-6 md:right-6 z-40 flex items-center gap-3 rounded-2xl border border-cyan-400/30 bg-surface-container-lowest/95 px-4 py-3 text-left shadow-[0_14px_40px_rgba(0,0,0,0.45),0_0_25px_rgba(34,211,238,0.12)] backdrop-blur-xl transition-all hover:-translate-y-1 hover:border-cyan-300/60"
       >
         <span className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-400/30 bg-cyan-400/10 text-cyan-300">
           <Bot size={20} />
@@ -114,14 +114,14 @@ export default function RagChatbot() {
             SIG Assistant
           </span>
           <span className="mt-0.5 block text-xs text-on-surface-variant">
-            Pregúntale a la base de conocimiento
+            Ask the knowledge base
           </span>
         </span>
       </button>
     );
 
   return (
-    <section className="fixed bottom-6 right-6 z-40 flex h-[min(680px,calc(100vh-48px))] w-[min(420px,calc(100vw-32px))] flex-col overflow-hidden rounded-3xl border border-cyan-400/25 bg-surface-container-lowest/95 shadow-[0_24px_80px_rgba(0,0,0,0.55),0_0_35px_rgba(34,211,238,0.1)] backdrop-blur-2xl">
+    <section className="fixed bottom-[calc(56px+env(safe-area-inset-bottom)+1rem)] right-4 md:bottom-6 md:right-6 z-40 flex h-[min(680px,calc(100vh-48px-56px))] md:h-[min(680px,calc(100vh-48px))] w-[min(420px,calc(100vw-32px))] flex-col overflow-hidden rounded-3xl border border-cyan-400/25 bg-surface-container-lowest/95 shadow-[0_24px_80px_rgba(0,0,0,0.55),0_0_35px_rgba(34,211,238,0.1)] backdrop-blur-2xl">
       <header className="border-b border-border/40 bg-gradient-to-br from-cyan-500/10 via-transparent to-violet-500/10 px-5 py-4">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
@@ -142,7 +142,7 @@ export default function RagChatbot() {
             <button
               type="button"
               onClick={() => setOpen(false)}
-              aria-label="Minimizar asistente"
+              aria-label="Minimize assistant"
               className="rounded-lg p-2 text-on-surface-variant hover:bg-on-surface/5"
             >
               <Minimize2 size={15} />
@@ -150,7 +150,7 @@ export default function RagChatbot() {
             <button
               type="button"
               onClick={() => setOpen(false)}
-              aria-label="Cerrar asistente"
+              aria-label="Close assistant"
               className="rounded-lg p-2 text-on-surface-variant hover:bg-on-surface/5"
             >
               <X size={16} />
@@ -158,8 +158,8 @@ export default function RagChatbot() {
           </div>
         </div>
         <div className="mt-4 flex items-center gap-2 rounded-xl border border-cyan-400/15 bg-cyan-400/5 px-3 py-2 text-[10px] text-on-surface-variant">
-          <Sparkles size={13} className="text-cyan-300" /> Respuestas basadas en
-          conocimiento interno autorizado.
+          <Sparkles size={13} className="text-cyan-300" /> Answers based on
+          authorized internal knowledge.
         </div>
       </header>
       <div className="flex-1 space-y-4 overflow-y-auto px-4 py-5">
@@ -179,7 +179,7 @@ export default function RagChatbot() {
               {message.sources && message.sources.length > 0 && (
                 <div className="flex flex-wrap gap-1 px-1">
                   <span className="text-[9px] uppercase text-on-surface-variant">
-                    Fuentes:
+                    Sources:
                   </span>
                   {message.sources.map((source) => (
                     <span
@@ -192,7 +192,7 @@ export default function RagChatbot() {
                 </div>
               )}
               <span className="px-1 text-[9px] text-on-surface-variant">
-                {message.from === "user" ? "Tú" : "SIG Assistant"} ·{" "}
+                {message.from === "user" ? "You" : "SIG Assistant"} ·{" "}
                 {message.time}
               </span>
             </div>
@@ -201,7 +201,7 @@ export default function RagChatbot() {
         {messages.length === starterMessages.length && (
           <div className="space-y-2 pt-2">
             <p className="px-1 text-[9px] font-black uppercase tracking-[0.18em] text-on-surface-variant">
-              Sugerencias
+              Suggestions
             </p>
             {suggestions.map(({ icon: Icon, label, color }) => (
               <button
@@ -230,7 +230,7 @@ export default function RagChatbot() {
               }
             }}
             rows={1}
-            placeholder="Escribe tu consulta…"
+            placeholder="Type your question…"
             disabled={isSending}
             className="max-h-24 min-h-6 flex-1 resize-none bg-transparent py-1 text-sm text-on-surface outline-none placeholder:text-on-surface-variant"
           />
@@ -238,7 +238,7 @@ export default function RagChatbot() {
             type="button"
             onClick={() => void sendMessage()}
             disabled={!draft.trim() || isSending}
-            aria-label="Enviar consulta"
+            aria-label="Send question"
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-cyan-400 text-slate-950 disabled:opacity-30"
           >
             {isSending ? (
@@ -252,7 +252,7 @@ export default function RagChatbot() {
           <p className="mt-2 text-center text-[10px] text-red-400">{error}</p>
         )}
         <p className="mt-2 text-center text-[9px] text-on-surface-variant">
-          Respuestas basadas en conocimiento autorizado.
+          Answers based on authorized knowledge.
         </p>
       </footer>
     </section>

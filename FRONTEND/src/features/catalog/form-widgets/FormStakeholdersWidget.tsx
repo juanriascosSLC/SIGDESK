@@ -24,23 +24,23 @@ export function FormStakeholdersWidget({ context }: { context: FormPageContext }
       data-testid="stakeholder-picker"
     >
       <div className="mb-4">
-        <h2 className="text-sm font-black text-on-surface">Personas y áreas interesadas</h2>
+        <h2 className="text-sm font-black text-on-surface">Stakeholders and Interested Teams</h2>
         <p className="mt-1 text-xs text-on-surface-variant">
-          Recibirán las novedades del registro sin convertirse en responsables ni ampliar sus permisos.
+          They will receive record updates without becoming assignees or gaining extra permissions.
         </p>
       </div>
-      {loading && <p className="text-sm text-on-surface-variant">Cargando directorio…</p>}
+      {loading && <p className="text-sm text-on-surface-variant">Loading directory…</p>}
       {errorMessage && (
         <div className="flex items-center justify-between gap-3 text-sm text-amber-300">
           <span>{errorMessage}</span>
-          <button type="button" onClick={onRetry} className="font-bold text-cyan-400">Reintentar</button>
+          <button type="button" onClick={onRetry} className="font-bold text-cyan-400">Retry</button>
         </div>
       )}
       {directory && (
         <div className="grid gap-5 md:grid-cols-2">
           <div>
             <p className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wide text-on-surface-variant">
-              <Building2 className="h-4 w-4" /> Áreas / equipos
+              <Building2 className="h-4 w-4" /> Areas / teams
             </p>
             <div className="max-h-44 space-y-1 overflow-y-auto">
               {directory.units.map((unit) => (
@@ -53,7 +53,7 @@ export function FormStakeholdersWidget({ context }: { context: FormPageContext }
           </div>
           <div>
             <p className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wide text-on-surface-variant">
-              <Users className="h-4 w-4" /> Personas
+              <Users className="h-4 w-4" /> People
             </p>
             <div className="max-h-44 space-y-1 overflow-y-auto">
               {directory.users.map((person) => (

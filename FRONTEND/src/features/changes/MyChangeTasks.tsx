@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { ApiError } from '@/lib/apiClient';
 import { useAuth } from '@/features/auth/useAuth';
+import { USER_UNAVAILABLE_LABEL } from '@/features/tickets/identity-labels';
 import { PERMISSIONS } from '@/features/auth/permissions';
 import {
   listAssignedChangeTasks,
@@ -189,7 +190,10 @@ function AssignedTaskCard({
   // says which team it was directed to when it was created.
   const department = task.organization?.departmentName || task.area || '—';
   const team = task.organization?.teamName || task.team || '—';
-  const assignee = task.organization?.assigneeName || task.assigneeId;
+  // Never the raw id as a fallback: an id with no resolved name reads as
+  // "User unavailable", distinct from genuinely having no individual
+  // assignee (team-only), which the render below phrases separately.
+  const assignee = task.organization?.assigneeName || (task.assigneeId ? USER_UNAVAILABLE_LABEL : '');
 
   return (
     <article className="flex flex-col rounded-2xl border border-border/30 bg-surface-container p-4">

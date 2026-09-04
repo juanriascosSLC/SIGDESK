@@ -1,4 +1,50 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
+
+export type MutationAuditRecord = {
+  method: string;
+  sourceUrl: string;
+  destinationUrl: string;
+  destinationOrigin: string;
+  destinationPort: number;
+  /** The `X-E2E-Run-Token` header value on the ACTUAL response, or `null`
+   *  if absent. Only `cmd/e2e_server`'s own middleware stamps this — a
+   *  shared/production backend never will — so this is independent proof
+   *  the mutation was served by this specific isolated process instance,
+   *  not merely by something answering on the expected port (a port the
+   *  OS can recycle between runs). */
+  responseRunToken: string | null;
+};
+
+export type MutationAuditor = {
+  mutations: MutationAuditRecord[];
+  record: (record: MutationAuditRecord) => void;
+  /** Validates the COMPLETE isolated origin (scheme + host + port), not
+   *  only the port number, and that every mutation's actual response
+   *  carried the expected `X-E2E-Run-Token` — both must hold for every
+   *  recorded mutation. */
+  assertAllMutationsIsolated: (isolated: { origin: string; runToken: string }) => void;
+};
+
+export function createMutationAuditor(): MutationAuditor {
+  const mutations: MutationAuditRecord[] = [];
+  return {
+    mutations,
+    record: (r) => mutations.push(r),
+    assertAllMutationsIsolated: ({ origin, runToken }) => {
+      expect(mutations.length, 'Expected at least one mutation during test').toBeGreaterThan(0);
+      for (const m of mutations) {
+        expect(
+          m.destinationOrigin,
+          `Mutating request ${m.method} ${m.sourceUrl} reached ${m.destinationUrl} (origin ${m.destinationOrigin}) instead of isolated origin ${origin}`,
+        ).toBe(origin);
+        expect(
+          m.responseRunToken,
+          `Mutating request ${m.method} ${m.sourceUrl} got a response with X-E2E-Run-Token '${m.responseRunToken ?? '<absent>'}' — expected '${runToken}'. A matching origin alone doesn't prove THIS process served it (the port can be recycled between runs); the header is what does.`,
+        ).toBe(runToken);
+      }
+    },
+  };
+}
 
 /**
  * Real organization_service shapes (Docs/plans/conexion-backend-frontend-identidad-rol-plan.md
@@ -134,6 +180,14 @@ type AuthMockOptions = {
   /** Integrated specs forward domain calls to Kong. Guard-only specs can
    *  turn that off so an absent backend cannot leave route.fetch pending. */
   forwardUnmatched?: boolean;
+  /** Isolated tickets/catalog/entities/sla service base URL. When provided,
+   *  routes to /catalog/**, /entities/**, /tickets/**, and /sla/** are forwarded
+   *  to this isolated URL instead of the shared Kong API. */
+  catalogApiUrl?: string;
+  /** Cryptographically signed JWT token to return in POST /v1/session. */
+  sessionToken?: string;
+  /** Auditor to record and assert destination of mutating requests. */
+  mutationAuditor?: MutationAuditor;
 };
 
 /**
@@ -145,8 +199,9 @@ type AuthMockOptions = {
 async function mockAuthenticatedIdentity(
   page: Page,
   identity: MockIdentity,
-  { forwardUnmatched = true }: AuthMockOptions = {},
+  options: AuthMockOptions = {},
 ) {
+  const { forwardUnmatched = true, catalogApiUrl, sessionToken } = options;
   // SIGTools always lives under /api/v1/web-auth on its own origin
   // (sigtoolsClient.ts hardcodes that regardless of VITE_API_URL) —
   // independent of the Gateway change above, so this pattern is unaffected.
@@ -180,7 +235,9 @@ async function mockAuthenticatedIdentity(
           contentType: 'application/json',
           body: JSON.stringify({
             access_token:
-              process.env.PLAYWRIGHT_SIGDESK_TOKEN ?? `e2e-token-${identity.username}`,
+              sessionToken ??
+              process.env.PLAYWRIGHT_SIGDESK_TOKEN ??
+              `e2e-token-${identity.username}`,
             expires_in: 900,
             role_id: identity.roleId,
             permissions: identity.permissions,
@@ -216,6 +273,57 @@ async function mockAuthenticatedIdentity(
         return;
       }
 
+      const method = route.request().method();
+      const isMutating = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+
+      if (isMutating && (requestURL.pathname.startsWith('/assets') || requestURL.pathname.startsWith('/resources'))) {
+        throw new Error(
+          `MUTATION FORBIDDEN: Mutating request to read-only resource route: ${method} ${requestURL.pathname}`,
+        );
+      }
+
+      // Ruteo aislado para tests de Catalog Builder: si se configuró catalogApiUrl,
+      // todas las peticiones a Catalog, Entities, Tickets y SLA van al servicio aislado.
+      // Dependencias de solo lectura compartidas (como /assets/**) continúan por Kong.
+      if (catalogApiUrl) {
+        const p = requestURL.pathname;
+        if (
+          p.startsWith('/catalog/') ||
+          p === '/catalog' ||
+          p.startsWith('/entities/') ||
+          p === '/entities' ||
+          p.startsWith('/tickets/') ||
+          p === '/tickets' ||
+          p.startsWith('/sla/') ||
+          p === '/sla'
+        ) {
+          const destUrl = `${catalogApiUrl.replace(/\/$/, '')}${p}${requestURL.search}`;
+          try {
+            const response = await route.fetch({
+              url: destUrl,
+            });
+            // Recorded AFTER the fetch, not before: the response — and
+            // specifically its X-E2E-Run-Token header — is what the
+            // auditor needs, and doesn't exist until the isolated process
+            // has actually answered.
+            if (isMutating && options.mutationAuditor) {
+              options.mutationAuditor.record({
+                method,
+                sourceUrl: route.request().url(),
+                destinationUrl: destUrl,
+                destinationOrigin: new URL(destUrl).origin,
+                destinationPort: parseInt(new URL(destUrl).port || '80', 10),
+                responseRunToken: response.headers()['x-e2e-run-token'] ?? null,
+              });
+            }
+            await route.fulfill({ response });
+          } catch {
+            await route.abort().catch(() => {});
+          }
+          return;
+        }
+      }
+
       // El try/catch NO oculta fallos del backend: un 4xx o 5xx llega como
       // respuesta y se reenvia tal cual. Lo unico que atrapa es que el contexto
       // se cierre con una peticion en vuelo al terminar la prueba —el navegador
@@ -223,9 +331,24 @@ async function mockAuthenticatedIdentity(
       // was not a part of any test» y bastaba para devolver codigo 1 con todas
       // las pruebas en verde.
       try {
-        const response = await route.fetch({
-          url: `${SIG_DESK_API_BASE}${requestURL.pathname}${requestURL.search}`,
-        });
+        const sharedDestUrl = `${SIG_DESK_API_BASE}${requestURL.pathname}${requestURL.search}`;
+        const response = await route.fetch({ url: sharedDestUrl });
+        // Only reached when catalogApiUrl is set but this path wasn't one
+        // of the isolated-routed prefixes above — i.e. a mutation that
+        // went to the SHARED backend during what's supposed to be an
+        // isolated-catalog test. Recording it is deliberate: the shared
+        // backend never stamps X-E2E-Run-Token, so assertAllMutationsIsolated
+        // will correctly fail on it as a real leak, not silently miss it.
+        if (isMutating && options.mutationAuditor && catalogApiUrl) {
+          options.mutationAuditor.record({
+            method,
+            sourceUrl: route.request().url(),
+            destinationUrl: sharedDestUrl,
+            destinationOrigin: new URL(sharedDestUrl).origin,
+            destinationPort: parseInt(new URL(SIG_DESK_API_BASE).port || '80', 10),
+            responseRunToken: response.headers()['x-e2e-run-token'] ?? null,
+          });
+        }
         await route.fulfill({ response });
       } catch {
         // La ruta se abandona en silencio: nadie espera ya esa respuesta.

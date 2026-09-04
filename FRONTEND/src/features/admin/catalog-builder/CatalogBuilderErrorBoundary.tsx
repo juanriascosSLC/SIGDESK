@@ -34,21 +34,21 @@ export class CatalogBuilderErrorBoundary extends Component<Props, State> {
             <AlertTriangle className="h-6 w-6" />
           </div>
           <h1 className="mt-5 text-2xl font-black text-on-surface">
-            Catalog Builder encontró un problema
+            Catalog Builder encountered an issue
           </h1>
           <p className="mt-2 text-sm leading-6 text-on-surface-variant">
-            Tus definiciones siguen seguras. Puedes reintentar el módulo sin recargar ni perder el resto de la sesión.
+            Your definitions remain safe. You can retry the module without reloading or losing the rest of your session.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <a href="/app" className="secondary-button">
-              <ArrowLeft className="h-4 w-4" /> Volver al inicio
+              <ArrowLeft className="h-4 w-4" /> Back to home
             </a>
             <button
               type="button"
               onClick={() => this.setState({ error: null })}
               className="primary-button"
             >
-              <RefreshCw className="h-4 w-4" /> Reintentar módulo
+              <RefreshCw className="h-4 w-4" /> Retry module
             </button>
           </div>
         </section>

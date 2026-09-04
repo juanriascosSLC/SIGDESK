@@ -234,13 +234,13 @@ test('editar un ticket con el layout de edición diseñado nunca borra campos fu
 
   await page.goto(`/app/tickets/${encodeURIComponent(entity.humanId)}`);
   await expect(page.getByTestId('ticket-detail')).toBeVisible();
-  await page.getByRole('button', { name: 'Editar datos' }).click();
+  await page.getByRole('button', { name: 'Edit fields' }).click();
 
   // `site` no se renderiza siquiera — está fuera del layout de edición.
   await expect(page.getByTestId('catalog-input-site')).toHaveCount(0);
   await page.getByTestId('catalog-input-category').selectOption('software');
-  await page.getByRole('button', { name: 'Guardar cambios' }).click();
-  await expect(page.getByText('Los datos se guardaron', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByText('Changes saved', { exact: false })).toBeVisible();
 
   const updated = await jsonOrFailure<Entity>(
     await request.get(`${apiBaseURL}/entities/INC/${entity.id}`),
