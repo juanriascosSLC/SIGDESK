@@ -38,7 +38,7 @@ export default function ServicesDashboard() {
   const [scope, setScope] = useState<Scope>('mine');
   const [kpiFilter, setKpiFilter] = useState<KpiKey | null>(null);
   const query = useQuery({ queryKey: ['services', 'srv-tickets'], queryFn: listSrvTickets });
-  const tickets = query.data ?? [];
+  const tickets = useMemo(() => query.data ?? [], [query.data]);
 
   const scoped = useMemo(
     () => tickets.filter((ticket) => ticketVisibleInScope(ticket, scope)),
