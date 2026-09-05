@@ -27,8 +27,14 @@ export async function listRecurringProblems(dealershipId: string): Promise<Recur
   return mockQuery(MOCK_RECURRING_PROBLEMS.filter((p) => p.dealershipId === dealershipId));
 }
 
+/**
+ * Excludes the error-demo sentinel — it's an E2E fixture meant to be hit
+ * directly by id (getSrvTicket), never to appear as a normal-looking row a
+ * real agent could click into and land on a guaranteed error page (Codex
+ * structured review finding).
+ */
 export async function listSrvTickets(): Promise<SrvTicket[]> {
-  return mockQuery(MOCK_SRV_TICKETS);
+  return mockQuery(MOCK_SRV_TICKETS.filter((t) => t.id !== ERROR_DEMO_SRV_ID));
 }
 
 export async function getSrvTicket(id: string): Promise<SrvTicket> {

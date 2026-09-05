@@ -19,10 +19,17 @@ test('ticket rows meet the 44px minimum touch target', async ({ page }) => {
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
 });
 
-test('KPI tiles collapse to a 2-column grid below the sm breakpoint', async ({ page }) => {
+test('KPI tiles actually scroll horizontally below the sm breakpoint, not just wrap into a static grid', async ({ page }) => {
   await mockAuthenticatedSupervisor(page, { forwardUnmatched: false });
   await page.setViewportSize({ width: 375, height: 800 });
   await page.goto('/app/services');
-  const grid = page.getByTestId('services-kpi-requires-action').locator('..');
-  await expect(grid).toHaveClass(/grid-cols-2/);
+  const row = page.getByTestId('services-kpi-requires-action').locator('..');
+  // A static 2x2 grid (the original, buggy implementation) has
+  // scrollWidth === clientWidth — nothing to scroll. The 4 tiles at
+  // w-[45%] each in a flex row genuinely overflow.
+  const { scrollWidth, clientWidth } = await row.evaluate((el) => ({
+    scrollWidth: el.scrollWidth,
+    clientWidth: el.clientWidth,
+  }));
+  expect(scrollWidth).toBeGreaterThan(clientWidth);
 });

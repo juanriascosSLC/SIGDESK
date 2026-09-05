@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { AlertTriangle, Loader2, MapPin } from 'lucide-react';
 import { DepartmentScope } from '@/components/layout/DepartmentScope';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -72,6 +72,15 @@ export default function SrvDetail() {
       <PageHeader
         title={ticket.title}
         description={ticket.humanId}
+        eyebrow={
+          <Link
+            to={`/app/services/dealerships/${ticket.dealershipId}`}
+            className="mb-1 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-services-accent hover:underline"
+          >
+            <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+            View dealership
+          </Link>
+        }
         actions={<StatusBadge label={SRV_STATUS_LABELS[ticket.status]} tone={SRV_STATUS_TONES[ticket.status]} />}
       />
 
