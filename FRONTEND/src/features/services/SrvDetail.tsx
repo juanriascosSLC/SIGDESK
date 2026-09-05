@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { LoadingState, ErrorState } from '@/components/ui/states';
 import { getSrvTicket, getDealership } from './api';
 import { SubcontractorPicker } from './SubcontractorPicker';
+import { POCCard } from './POCCard';
 
 export default function SrvDetail() {
   const { id } = useParams<{ id: string }>();
@@ -49,15 +50,19 @@ export default function SrvDetail() {
     >
       <PageHeader title={ticket.title} description={ticket.humanId} />
 
-      {dealershipQuery.data ? (
-        <SubcontractorPicker
-          region={dealershipQuery.data.region}
-          selectedId={subcontractorId ?? ticket.subcontractorId}
-          onSelect={setSubcontractorId}
-        />
-      ) : (
-        <Card><LoadingState label="Loading dealership context…" compact /></Card>
-      )}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <POCCard dealershipId={ticket.dealershipId} />
+
+        {dealershipQuery.data ? (
+          <SubcontractorPicker
+            region={dealershipQuery.data.region}
+            selectedId={subcontractorId ?? ticket.subcontractorId}
+            onSelect={setSubcontractorId}
+          />
+        ) : (
+          <Card><LoadingState label="Loading dealership context…" compact /></Card>
+        )}
+      </div>
     </DepartmentScope>
   );
 }
