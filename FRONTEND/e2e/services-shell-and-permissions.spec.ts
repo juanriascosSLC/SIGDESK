@@ -20,3 +20,9 @@ test('an identity without sigdesk.changes.view cannot reach /app/services', asyn
   await page.goto('/app/services');
   await expect(page).not.toHaveURL(/\/app\/services/);
 });
+
+test('the Services nav link itself is hidden for an identity without sigdesk.changes.view', async ({ page }) => {
+  await mockAuthenticatedTaskExecutor(page, { forwardUnmatched: false });
+  await page.goto('/app');
+  await expect(page.locator('#app-nav').getByRole('link', { name: 'Services' })).toHaveCount(0);
+});
