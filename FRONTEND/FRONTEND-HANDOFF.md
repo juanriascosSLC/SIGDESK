@@ -2,7 +2,7 @@
 
 > Fuente de verdad para el equipo que implementará el nuevo backend.
 >
-> Estado del documento: 29 de agosto de 2026. El frontend vive en este repositorio raíz y el backend integrado vive en `../BACKEND` como repositorio Git independiente. Los contratos de esta guía están implementados en `tickets_service`, `problem_service`, `change_service`, `organization_service` y Kong; desplegarlos requiere reiniciar los procesos/containers con la versión actual del código.
+> Estado del documento: 29 de agosto de 2026, actualizado el 5 de septiembre de 2026 con la primera pasada del departamento Services (mock-only, ver §§4, 5, 11 y 13). El frontend vive en este repositorio raíz y el backend integrado vive en `../BACKEND` como repositorio Git independiente. Los contratos de esta guía están implementados en `tickets_service`, `problem_service`, `change_service`, `organization_service` y Kong; desplegarlos requiere reiniciar los procesos/containers con la versión actual del código.
 
 ## 1. Qué es esta entrega
 
@@ -69,7 +69,9 @@ FRONTEND/
 │  ├─ App.tsx                    Rutas, guards y composición de layouts
 │  ├─ main.tsx                   React root, QueryClient y error boundary
 │  ├─ index.css                  Tema, tokens y estilos globales
-│  ├─ components/                Componentes transversales y error boundary
+│  ├─ components/                Componentes transversales, error boundary y
+│  │                             `layout/DepartmentScope` (primitiva de
+│  │                             theming por departamento, ej. Services)
 │  ├─ layouts/                   Workspace de agente y portal de usuario
 │  ├─ lib/                       Clientes HTTP, token y utilidades
 │  ├─ store/                     Persistencia del tema
@@ -86,6 +88,8 @@ FRONTEND/
 │     ├─ reports/                Reportes
 │     ├─ dashboard/              Tablero general
 │     ├─ endUser/                Portal y solicitudes del usuario
+│     ├─ services/               Services (SRV): dashboard, vista de dealership,
+│     │                          detalle de ticket — mock-only PR1, sin backend
 │     └─ settings/               SLA, ChatOps y API keys
 ├─ package.json                  Scripts y dependencias
 ├─ vite.config.ts               Alias `@`, React, Tailwind y puerto 3003
@@ -123,6 +127,7 @@ FRONTEND/
 | `/app/tickets`, `/app/tickets/list`, `/app/tickets/:id` | `tickets:read:<scope>` |
 | `/app/problems`, `/app/problems/:id` | `problems:read:<scope>` |
 | `/app/changes`, `/app/changes/:id` | `changes:read:<scope>` |
+| `/app/services`, `/app/services/dealerships/:dealershipId`, `/app/services/tickets/:id` | `changes:read:<scope>` — reuso temporal de `sigdesk.changes.view` hasta que exista `sigdesk.services.view` en SIGTools (ver §11); mock-only, sin backend propio todavía |
 | `/app/knowledge*` | Usuario autenticado del workspace |
 | `/app/reports` | Usuario autenticado del workspace |
 | `/app/automations*` | Usuario autenticado del workspace |
@@ -424,6 +429,7 @@ La resolución declara uno de estos modos: `latest-compatible`, `previous-compat
 | Changes / RFC | Runtime propio, layout histórico, aprobación/implementación, Tasks y relaciones | Operativo en `change_service`; INC→RFC es transaccional |
 | SLA Policies | CRUD de draft, publish, preview y assessments conectado | Motor de calendarios y evaluación |
 | Automations | Diseñador visual principalmente demostrativo/local | CRUD, publicación, ejecución, delays, logs y retries |
+| Services (SRV) | PR1: dashboard, vista de dealership con problemas recurrentes, detalle de ticket con checklist de equipamiento — todo mock-only, standalone (no registrado en `TicketWidgetRegistry`), datos locales en `features/services/mockData.ts` | `entity_key SRV` en Catalog Builder (ADR pendiente), permiso propio `sigdesk.services.view` (hoy toma prestado `changes.view`); PR2 (cotización/invoice + embed de `WorkflowBuilder`) queda en `TODOS.md` |
 | Knowledge Base | Datos locales/demostrativos | Artículos, categorías, búsqueda, permisos y publicación |
 | Dashboard | Métricas demostrativas | Agregaciones reales |
 | Reports | Visualización demostrativa | Métricas, consultas y exportaciones |
@@ -459,6 +465,15 @@ El backend debe ser la autoridad. El caché del navegador y los guards son optim
 | `users-roles-milestone3.spec.ts` | Guards RBAC con permisos `entidad:acción:alcance` |
 | `configured-record-detail.spec.ts` | PRB/RFC renderizan su layout histórico con widgets reales |
 | `incident-change-atomic.spec.ts` | INC→RFC usa una sola operación transaccional |
+| `services-dashboard.spec.ts` | KPI tiles, tabs de scope y lista de tickets del dashboard de Services |
+| `services-department-journey.spec.ts` | Recorrido completo mock: dashboard → dealership → detalle de SRV |
+| `services-equipment-checklist.spec.ts` | Checklist de equipamiento obligatorio en el detalle de SRV |
+| `services-next-action-blockers.spec.ts` | Pill de estado, Next Action y banner de bloqueos en el detalle de SRV |
+| `services-poc-card.spec.ts` | `POCCard` en el detalle de SRV |
+| `services-recurring-problems.spec.ts` | `RecurringProblemsPanel` en la vista de dealership |
+| `services-responsive-a11y.spec.ts` | Activación por teclado, touch targets y layout móvil del KPI |
+| `services-shell-and-permissions.spec.ts` | Guard de permiso y entrada de navegación de `/app/services*` |
+| `services-subcontractor-picker.spec.ts` | `SubcontractorPicker` en el detalle de SRV |
 
 `npm run test:e2e` necesita un frontend y una API compatibles. La base SIG-DESK se puede sobrescribir con `PLAYWRIGHT_API_URL`; las llamadas directas del runner aceptan `PLAYWRIGHT_SIGDESK_TOKEN`. Los fixtures interceptan SIGTools y el intercambio `/v1/session`, pero los recorridos de catálogo/tickets requieren los servicios reales. Hasta que el repositorio backend y su entorno reproducible estén disponibles, CI debe ejecutar typecheck, lint y build y activar cada E2E integrado al disponer de sus dependencias.
 
