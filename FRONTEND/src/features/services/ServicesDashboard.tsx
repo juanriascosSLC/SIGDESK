@@ -72,6 +72,7 @@ export default function ServicesDashboard() {
             <button
               key={tile.key}
               type="button"
+              aria-pressed={active}
               data-testid={`services-kpi-${tile.key}`}
               onClick={() => setKpiFilter(active ? null : tile.key)}
               className={`min-h-[44px] rounded-2xl border p-4 text-left transition-colors ${
@@ -103,32 +104,38 @@ export default function ServicesDashboard() {
         aria-label="Ticket scope"
       />
 
-      {query.isLoading ? (
-        <LoadingState label="Loading Services tickets…" />
-      ) : query.isError ? (
-        <ErrorState error={query.error} onRetry={() => query.refetch()} />
-      ) : visible.length === 0 ? (
-        <EmptyState icon="inbox" title="No tickets in this view" description="Try a different scope or clear the KPI filter." />
-      ) : (
-        <ul className="space-y-2">
-          {visible.map((ticket) => (
-            <li key={ticket.id}>
-              <button
-                type="button"
-                data-testid={`services-ticket-row-${ticket.id}`}
-                onClick={() => navigate(`/app/services/tickets/${ticket.id}`)}
-                className="flex min-h-[44px] w-full items-center justify-between gap-3 rounded-xl border border-services-border bg-services-surface-container px-4 py-3 text-left hover:bg-services-surface-container-low"
-              >
-                <div className="min-w-0">
-                  <div className="font-mono text-[11px] font-bold text-services-accent">{ticket.humanId}</div>
-                  <div className="truncate text-sm font-semibold">{ticket.title}</div>
-                </div>
-                <StatusBadge label={SRV_STATUS_LABELS[ticket.status]} tone={SRV_STATUS_TONES[ticket.status]} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      {/* Tabs.tsx wires aria-controls={`panel-${key}`} on each tab, expecting
+          a matching id to exist — only one scope's results render at a time,
+          so a single panel whose id tracks the active scope satisfies that
+          contract instead of leaving it a dangling reference. */}
+      <div id={`panel-${scope}`} role="tabpanel" aria-labelledby={`tab-${scope}`}>
+        {query.isLoading ? (
+          <LoadingState label="Loading Services tickets…" />
+        ) : query.isError ? (
+          <ErrorState error={query.error} onRetry={() => query.refetch()} />
+        ) : visible.length === 0 ? (
+          <EmptyState icon="inbox" title="No tickets in this view" description="Try a different scope or clear the KPI filter." />
+        ) : (
+          <ul className="space-y-2">
+            {visible.map((ticket) => (
+              <li key={ticket.id}>
+                <button
+                  type="button"
+                  data-testid={`services-ticket-row-${ticket.id}`}
+                  onClick={() => navigate(`/app/services/tickets/${ticket.id}`)}
+                  className="flex min-h-[44px] w-full items-center justify-between gap-3 rounded-xl border border-services-border bg-services-surface-container px-4 py-3 text-left hover:bg-services-surface-container-low"
+                >
+                  <div className="min-w-0">
+                    <div className="font-mono text-[11px] font-bold text-services-accent">{ticket.humanId}</div>
+                    <div className="truncate text-sm font-semibold">{ticket.title}</div>
+                  </div>
+                  <StatusBadge label={SRV_STATUS_LABELS[ticket.status]} tone={SRV_STATUS_TONES[ticket.status]} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </DepartmentScope>
   );
 }

@@ -47,7 +47,6 @@ export const MOCK_SRV_TICKETS: SrvTicket[] = [
       { id: 'eq-3', label: 'Insulated gloves, size L', quantity: 1, status: 'in_transit', isValidating: true },
     ],
     subcontractorId: 'sub-nighthawk',
-    pocId: 'poc-1',
     assignedScope: 'mine',
     createdAt: '2026-09-01T10:00:00Z',
   },

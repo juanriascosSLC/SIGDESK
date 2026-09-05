@@ -22,6 +22,17 @@ import { POCCard } from './POCCard';
 export default function SrvDetail() {
   const { id } = useParams<{ id: string }>();
   const [subcontractorId, setSubcontractorId] = useState<string | undefined>(undefined);
+  // Adjusting state during render (not in an effect) when the route param
+  // changes — React's own recommended pattern for "reset local state when a
+  // prop changes" without an extra render flash. Without this, a
+  // subcontractor picked while viewing one SRV ticket stayed "selected" when
+  // navigating to a different ticket via back/forward, since :id changing
+  // alone doesn't remount SrvDetail (adversarial review finding).
+  const [lastSeenId, setLastSeenId] = useState(id);
+  if (id !== lastSeenId) {
+    setLastSeenId(id);
+    setSubcontractorId(undefined);
+  }
 
   const ticketQuery = useQuery({
     queryKey: ['services', 'srv-ticket', id],

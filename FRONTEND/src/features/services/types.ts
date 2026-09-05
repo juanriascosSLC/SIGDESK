@@ -61,7 +61,6 @@ export interface SrvTicket {
   priority: 'Low' | 'Medium' | 'High' | 'Critical';
   equipment: EquipmentChecklistItem[];
   subcontractorId?: string;
-  pocId?: string;
   /**
    * Placeholder grouping for ServicesDashboard's My Work/Team/All tabs —
    * SRV has no real assignment model yet (Open Questions,
