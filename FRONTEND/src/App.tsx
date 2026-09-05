@@ -24,6 +24,9 @@ const ChangeDetail = React.lazy(() => import('./features/changes/ChangeDetail'))
 const MyChangeTasks = React.lazy(() => import('./features/changes/MyChangeTasks'));
 const AutomationsList = React.lazy(() => import('./features/automations/AutomationsList'));
 const WorkflowBuilder = React.lazy(() => import('./features/automations/WorkflowBuilder'));
+const ServicesDashboard = React.lazy(() => import('./features/services/ServicesDashboard'));
+const DealershipView = React.lazy(() => import('./features/services/DealershipView'));
+const SrvDetail = React.lazy(() => import('./features/services/SrvDetail'));
 const KnowledgeBase = React.lazy(() => import('./features/knowledge/KnowledgeBase'));
 const ArticleDetail = React.lazy(() => import('./features/knowledge/ArticleDetail'));
 const SlaPolicies = React.lazy(() => import('./features/settings/SlaPolicies'));
@@ -273,6 +276,25 @@ function AppRoutes() {
               <Route path="/problems/:id" element={
                 <ProtectedRoute requiredPermission={PERMISSIONS.problemsView}>
                   <ProblemDetail />
+                </ProtectedRoute>
+              } />
+              {/* Services department slice (PR1) — mock-only, gated on the
+                  already-real sigdesk.changes.view until sigdesk.services.view
+                  exists in SIGTools (services-department-frontend.md,
+                  Constraints). */}
+              <Route path="/services" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.changesView}>
+                  <ServicesDashboard />
+                </ProtectedRoute>
+              } />
+              <Route path="/services/dealerships/:dealershipId" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.changesView}>
+                  <DealershipView />
+                </ProtectedRoute>
+              } />
+              <Route path="/services/tickets/:id" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.changesView}>
+                  <SrvDetail />
                 </ProtectedRoute>
               } />
               <Route path="/automations" element={
