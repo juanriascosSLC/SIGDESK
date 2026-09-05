@@ -6,9 +6,16 @@ import { DepartmentScope } from '@/components/layout/DepartmentScope';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import { Button } from '@/components/ui/Button';
 import { LoadingState, ErrorState } from '@/components/ui/states';
 import { getSrvTicket, getDealership } from './api';
-import { EQUIPMENT_ITEM_LABELS, EQUIPMENT_ITEM_TONES } from './presentation';
+import {
+  EQUIPMENT_ITEM_LABELS,
+  EQUIPMENT_ITEM_TONES,
+  SRV_STATUS_LABELS,
+  SRV_STATUS_TONES,
+} from './presentation';
 import { SubcontractorPicker } from './SubcontractorPicker';
 import { POCCard } from './POCCard';
 
@@ -51,7 +58,39 @@ export default function SrvDetail() {
       department="services"
       className="bg-services-background text-services-on-surface min-h-full space-y-6 p-6 lg:p-8"
     >
-      <PageHeader title={ticket.title} description={ticket.humanId} />
+      <PageHeader
+        title={ticket.title}
+        description={ticket.humanId}
+        actions={<StatusBadge label={SRV_STATUS_LABELS[ticket.status]} tone={SRV_STATUS_TONES[ticket.status]} />}
+      />
+
+      {/* Next Action — the single primary button on the screen (Design
+          Review Pass 1). PR1 has no per-status action copy beyond this one
+          blocking check (Design Review Pass 7 leaves exact per-stage copy
+          an open decision for PR2's stepper work). */}
+      <Card className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-xs font-bold uppercase tracking-wider text-services-on-surface-variant">
+            Next Action
+          </div>
+          <p className="mt-1 text-sm">
+            {ticket.status === 'requires_action'
+              ? 'Confirm the missing equipment below before dispatch.'
+              : 'No blocking action right now.'}
+          </p>
+        </div>
+        <Button disabled={!ticket.equipment.some((item) => item.status === 'missing')}>
+          Resolve blockers
+        </Button>
+      </Card>
+
+      {/* Blockers — never hidden behind a tab (Design Review Pass 1). */}
+      {ticket.equipment.some((item) => item.status === 'missing') && (
+        <div className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          Missing equipment is blocking dispatch — see the checklist below.
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <POCCard dealershipId={ticket.dealershipId} />
