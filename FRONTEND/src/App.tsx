@@ -282,18 +282,22 @@ function AppRoutes() {
                   already-real sigdesk.changes.view until sigdesk.services.view
                   exists in SIGTools (services-department-frontend.md,
                   Constraints). */}
+              {/* fallbackTo="/app" is deliberate: ProtectedRoute's default is
+                  "/portal", the END-USER portal, so a staff agent who lacks
+                  the permission would be ejected from the agent workspace
+                  entirely rather than sent somewhere useful inside it. */}
               <Route path="/services" element={
-                <ProtectedRoute requiredPermission={PERMISSIONS.changesView}>
+                <ProtectedRoute requiredPermission={PERMISSIONS.changesView} fallbackTo="/app">
                   <ServicesDashboard />
                 </ProtectedRoute>
               } />
               <Route path="/services/dealerships/:dealershipId" element={
-                <ProtectedRoute requiredPermission={PERMISSIONS.changesView}>
+                <ProtectedRoute requiredPermission={PERMISSIONS.changesView} fallbackTo="/app">
                   <DealershipView />
                 </ProtectedRoute>
               } />
               <Route path="/services/tickets/:id" element={
-                <ProtectedRoute requiredPermission={PERMISSIONS.changesView}>
+                <ProtectedRoute requiredPermission={PERMISSIONS.changesView} fallbackTo="/app">
                   <SrvDetail />
                 </ProtectedRoute>
               } />
