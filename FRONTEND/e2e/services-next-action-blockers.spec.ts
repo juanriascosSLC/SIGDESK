@@ -18,7 +18,15 @@ test('a ticket with no missing equipment shows no blocker banner, and the primar
   await mockAuthenticatedSupervisor(page, { forwardUnmatched: false });
   await page.goto('/app/services/tickets/srv-1002');
   await expect(page.getByText('Missing equipment is blocking dispatch')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Resolve blockers' })).toBeDisabled();
+
+  // The assertion's INTENT is unchanged — no blocker banner, and the primary
+  // action is not actionable. What changed in PR2 is the label: the Next
+  // Action copy now comes from the visit's stage (spec §4) instead of always
+  // reading "Resolve blockers". srv-1002 sits at Approval waiting on someone
+  // else, so a button still saying "Resolve blockers" would have been naming
+  // an action that does not apply here.
+  await expect(page.getByTestId('srv-next-action-button')).toBeDisabled();
+  await expect(page.getByTestId('srv-next-action-button')).toHaveText('Waiting on approval');
 });
 
 test('a broken SRV ticket shows ErrorState with a visible retry, not a silent blank page', async ({ page }) => {

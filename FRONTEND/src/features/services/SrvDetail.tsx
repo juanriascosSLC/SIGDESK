@@ -15,9 +15,12 @@ import {
   EQUIPMENT_ITEM_TONES,
   SRV_STATUS_LABELS,
   SRV_STATUS_TONES,
+  nextActionFor,
 } from './presentation';
 import { SubcontractorPicker } from './SubcontractorPicker';
 import { POCCard } from './POCCard';
+import { StatusStepper } from './StatusStepper';
+import { QuoteCard } from './QuoteCard';
 
 export default function SrvDetail() {
   const { id } = useParams<{ id: string }>();
@@ -63,6 +66,7 @@ export default function SrvDetail() {
   }
 
   const ticket = ticketQuery.data;
+  const nextAction = nextActionFor(ticket);
 
   return (
     <DepartmentScope
@@ -84,24 +88,33 @@ export default function SrvDetail() {
         actions={<StatusBadge label={SRV_STATUS_LABELS[ticket.status]} tone={SRV_STATUS_TONES[ticket.status]} />}
       />
 
-      {/* Next Action — the single primary button on the screen (Design
-          Review Pass 1). PR1 has no per-status action copy beyond this one
-          blocking check (Design Review Pass 7 leaves exact per-stage copy
-          an open decision for PR2's stepper work). */}
-      <Card className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-xs font-bold uppercase tracking-wider text-services-on-surface-variant">
-            Next Action
+      {/* Progress stepper first, Next Action second — the information
+          hierarchy fixed in /plan-design-review Pass 1. */}
+      <Card>
+        <StatusStepper
+          currentStage={ticket.currentStage}
+          flag={ticket.stageFlag}
+          returnedBy={ticket.returnedBy}
+        />
+
+        {/* Next Action — the single primary button on the screen (Design
+            Review Pass 1). Copy now varies per stage (spec §4) instead of
+            the generic PR1 pair, and the button is disabled with an explicit
+            "waiting on X" whenever the actor is someone else: a primary
+            button never lies (docs/design-rules.md R-5). */}
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-services-border pt-4">
+          <div>
+            <div className="text-xs font-bold uppercase tracking-wider text-services-on-surface-variant">
+              Next Action
+            </div>
+            <p className="mt-1 text-sm" data-testid="srv-next-action-description">
+              {nextAction.description}
+            </p>
           </div>
-          <p className="mt-1 text-sm">
-            {ticket.status === 'requires_action'
-              ? 'Confirm the missing equipment below before dispatch.'
-              : 'No blocking action right now.'}
-          </p>
+          <Button disabled={nextAction.disabled} data-testid="srv-next-action-button">
+            {nextAction.label}
+          </Button>
         </div>
-        <Button disabled={!ticket.equipment.some((item) => item.status === 'missing')}>
-          Resolve blockers
-        </Button>
       </Card>
 
       {/* Blockers — never hidden behind a tab (Design Review Pass 1). */}
@@ -164,6 +177,10 @@ export default function SrvDetail() {
           <Card><LoadingState label="Loading dealership context…" compact /></Card>
         )}
       </div>
+
+      {/* Both money documents for this visit (step 5). Below the checklist:
+          equipment blocks dispatch, money does not. */}
+      <QuoteCard srvId={ticket.id} coveredTickets={ticket.coveredTickets} />
     </DepartmentScope>
   );
 }
