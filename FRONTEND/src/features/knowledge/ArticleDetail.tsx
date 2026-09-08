@@ -6,10 +6,12 @@ import { getKnowledge, type KnowledgeArticle } from './api';
 /**
  * See KnowledgeBase.tsx for the merge note: this branch's "no backend yet"
  * empty state was dropped in favour of main's real implementation against
- * `knowledge_service`, and the two follow-ups recorded there (the stale
- * beta-ux-honesty assertions, and the absolute `/app/knowledge` navigation
- * on a component that also renders under `/portal/knowledge`) apply to this
- * screen too.
+ * `knowledge_service`. The stale beta-ux-honesty assertions recorded there
+ * have since been rewritten against this real detail screen — including its
+ * "does not exist, or you do not have permission" path and the front-matter
+ * stripping below. The other follow-up still applies here: the absolute
+ * `/app/knowledge` navigation on a component that also renders under
+ * `/portal/knowledge`.
  */
 export default function ArticleDetail() {
   const { id = '' } = useParams();

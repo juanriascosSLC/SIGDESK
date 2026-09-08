@@ -97,23 +97,90 @@ test.describe('static: no functional native dialogs or dead links in production 
   });
 });
 
-test('Knowledge Base is honest about having no backend, on both surfaces', async ({ page }) => {
+// Both Knowledge tests below were "is honest about having no backend" when
+// this audit suite was written, and that premise died in the merge of
+// origin/main: `knowledge_service` exists and main shipped a real
+// KnowledgeBase/ArticleDetail against `GET /knowledge/articles` (see
+// src/features/knowledge/api.ts). Asserting "no backend yet" now asserts a
+// lie, so — exactly like the Portal My Tickets test below — the honesty
+// claim is re-pointed at what is true today rather than deleted: real
+// service data is what renders, the old fabricated fixtures never come
+// back, the counter is derived instead of invented, and a failing or
+// missing article says so instead of falling back to something plausible.
+const KB_ARTICLE = {
+  id: 7,
+  article_id: 7,
+  numero_visible: 'KB-2001',
+  version: 3,
+  titulo: 'Restablecer la VPN corporativa',
+  categoria: 'Redes',
+  etiquetas: ['vpn', 'acceso'],
+  audiencia: 'interna',
+  contenido: '---\nowner: redes\n---\nPaso 1: cerrar el cliente de VPN.',
+  estado: 'publicado',
+  actualizado_en: '2026-09-01T10:00:00Z',
+};
+
+/** `?q=*` rather than `?*`: the list call is `/knowledge/articles?q=<term>`
+ *  and the detail call is `/knowledge/articles/<numero>`, and a bare `?*`
+ *  can swallow the detail path too depending on how the glob treats `?`. */
+const KB_LIST_GLOB = '**/knowledge/articles?q=*';
+
+function json(body: unknown) {
+  return { status: 200, contentType: 'application/json', body: JSON.stringify(body) };
+}
+
+test('Knowledge Base renders real knowledge_service data, not the old fabricated articles', async ({ page }) => {
   await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
+  await stubNotifications(page);
+  await page.route(KB_LIST_GLOB, (route) => route.fulfill(json({ items: [KB_ARTICLE] })));
+  await page.route('**/knowledge/articles/KB-2001', (route) => route.fulfill(json(KB_ARTICLE)));
 
   await page.goto('/app/knowledge');
-  await expect(page.getByText(/available yet/i)).toBeVisible();
+  // What the service returned is what the screen shows.
+  await expect(page.getByText('Restablecer la VPN corporativa')).toBeVisible();
+  await expect(page.getByText('KB-2001 · v3')).toBeVisible();
+  // The counter badge is computed from the response, not a made-up total:
+  // one article in, "1" on screen.
+  await expect(page.getByText(/^1 manuals available$/)).toBeVisible();
+  // The pre-backend fixtures are gone for good, whatever the service returns.
   await expect(page.getByText('KB-1024')).toHaveCount(0);
   await expect(page.getByText(/66 articles/i)).toHaveCount(0);
 
-  await page.goto('/app/knowledge/KB-1024');
-  await expect(page.getByText(/available yet/i)).toBeVisible();
+  // Detail reaches the same service and renders its content — including
+  // stripping the YAML front matter instead of showing it as prose.
+  await page.getByRole('button', { name: /Restablecer la VPN corporativa/ }).click();
+  await expect(page).toHaveURL(/\/app\/knowledge\/KB-2001$/);
+  await expect(page.getByText(/Paso 1: cerrar el cliente de VPN/)).toBeVisible();
+  await expect(page.getByText('owner: redes')).toHaveCount(0);
   await expect(page.getByText(/power-cycle/i)).toHaveCount(0);
+
+  // An article that isn't there says so. `forwardUnmatched: false` answers
+  // this one 404, which is the real "wrong id / not authorized" path.
+  await page.goto('/app/knowledge/KB-9999');
+  await expect(page.getByText(/does not exist, or you do not have permission/i)).toBeVisible();
+  await expect(page.getByText('Restablecer la VPN corporativa')).toHaveCount(0);
+
+  // And a service that fails admits it rather than degrading into a
+  // cheerful empty state that reads like "there is no documentation".
+  await page.unroute(KB_LIST_GLOB);
+  await page.route(KB_LIST_GLOB, (route) =>
+    route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'boom' }) }),
+  );
+  await page.goto('/app/knowledge');
+  await expect(page.getByText(/could not load the authorized manuals/i)).toBeVisible();
+  await expect(page.getByText('KB-2001')).toHaveCount(0);
 });
 
-test('Knowledge Base shows the same honest state from the end-user portal', async ({ page }) => {
+test('Knowledge Base serves the same real articles on the end-user portal', async ({ page }) => {
   await mockAuthenticatedRequester(page, { forwardUnmatched: false });
+  await page.route(KB_LIST_GLOB, (route) => route.fulfill(json({ items: [KB_ARTICLE] })));
+
   await page.goto('/portal/knowledge');
-  await expect(page.getByText(/available yet/i)).toBeVisible();
+  // A requester with `knowledge:read:global` sees the real article, not a
+  // placeholder and not the old hardcoded one.
+  await expect(page.getByText('Restablecer la VPN corporativa')).toBeVisible();
+  await expect(page.getByText('KB-2001 · v3')).toBeVisible();
   await expect(page.getByText('KB-1024')).toHaveCount(0);
 });
 
@@ -141,6 +208,56 @@ test('Portal My Tickets renders real data, not the old hardcoded rows', async ({
   await expect(page.getByText('INC-009001')).toBeVisible();
   await expect(page.getByText('INC-202611')).toHaveCount(0);
   await expect(page.getByText('REQ-202590')).toHaveCount(0);
+});
+
+/**
+ * The first test in this file bans `window.prompt` statically. On its own
+ * that rule is satisfiable by simply breaking the control it guarded, so
+ * this covers the other half: the in-app comment box that replaced the
+ * assistant's feedback prompt still collects the text and still posts it.
+ * A native prompt reappearing here would be caught twice over — by the
+ * static rule, and by `nativeDialogs` below.
+ */
+test('Assistant feedback collects its comment in-app, with no native dialog, and posts it', async ({ page }) => {
+  await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
+  await stubNotifications(page);
+
+  await page.route('**/ia_advisor/chat', (route) =>
+    route.fulfill(json({ answer: 'Open the ticket and press Resolve.', rag_available: true, sources: [] })),
+  );
+  const feedbackBodies: Record<string, unknown>[] = [];
+  await page.route('**/ia_advisor/feedback', (route) => {
+    feedbackBodies.push(JSON.parse(route.request().postData() ?? '{}'));
+    return route.fulfill(json({ ok: true }));
+  });
+  const nativeDialogs: string[] = [];
+  page.on('dialog', (dialog) => {
+    nativeDialogs.push(dialog.type());
+    void dialog.dismiss();
+  });
+
+  await page.goto('/app');
+  await page.getByRole('button', { name: 'Open SIG Assistant' }).click();
+  await page.getByPlaceholder(/type your question/i).fill('How do I resolve a ticket?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+  await expect(page.getByText('Open the ticket and press Resolve.')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Unhelpful answer' }).click();
+  const reasonDialog = page.getByRole('dialog');
+  await expect(reasonDialog).toBeVisible();
+  await reasonDialog.getByRole('textbox').fill('It skipped the approval step.');
+  await reasonDialog.getByRole('button', { name: 'Send feedback' }).click();
+
+  // The thumb only latches once the POST succeeded, so this also proves the
+  // request went out rather than the dialog just closing.
+  await expect(page.getByText('Gracias')).toBeVisible();
+  expect(nativeDialogs, `native dialogs opened: ${nativeDialogs.join(', ')}`).toEqual([]);
+  expect(feedbackBodies).toHaveLength(1);
+  expect(feedbackBodies[0]).toMatchObject({
+    rating: 'not_useful',
+    comment: 'It skipped the approval step.',
+    question: 'How do I resolve a ticket?',
+  });
 });
 
 test('Reports shows no invented metrics', async ({ page }) => {

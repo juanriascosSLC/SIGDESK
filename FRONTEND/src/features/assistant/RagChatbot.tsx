@@ -13,6 +13,7 @@ import {
   RotateCcw,
   X,
 } from "lucide-react";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { ApiError, apiRequest } from "../../lib/apiClient";
 import { answerLatestTicketForSite, answerTicketByCode, answerTicketFollowUp, answerTicketsByStatus } from './site-ticket-lookup';
 
@@ -132,6 +133,11 @@ export default function RagChatbot() {
   });
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** The message whose 👎 is awaiting an optional comment, or null. Holding
+   *  the object (not an index) keeps `submitFeedback`'s `item === message`
+   *  identity check valid while the dialog is open — appending new messages
+   *  rebuilds the array but preserves each existing item's reference. */
+  const [pendingFeedback, setPendingFeedback] = useState<ChatMessage | null>(null);
 
   useEffect(() => {
     try { sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ messages: compact(messages), focusedTicketId })); } catch { /* optional */ }
@@ -256,13 +262,31 @@ export default function RagChatbot() {
     setMessages(starterMessages); rememberTicket(null); setError(null);
     try { sessionStorage.removeItem(SESSION_STORAGE_KEY); } catch { /* optional */ }
   };
-  const sendFeedback = async (message: ChatMessage, rating: "useful" | "not_useful") => {
-    if (!message.question || message.feedback) return;
-    const comment = rating === "not_useful" ? window.prompt("What was missing, or how would you improve this answer? (optional)") ?? "" : "";
+  /** Posts the feedback exactly as main shipped it: `comment` is the free
+   *  text or `""`, and the thumb only latches once the POST succeeded. */
+  const submitFeedback = async (message: ChatMessage, rating: "useful" | "not_useful", comment: string) => {
     try {
       await apiRequest("/ia_advisor/feedback", { method: "POST", body: JSON.stringify({ rating, comment, question: message.question, answer: message.text, sources: message.sources ?? [] }) });
       setMessages((current) => current.map((item) => item === message ? { ...item, feedback: rating } : item));
     } catch { setError("Could not record your feedback."); }
+  };
+
+  /** 👍 posts straight away with no comment; 👎 opens the reason dialog that
+   *  replaced `window.prompt(...)` (banned by beta-ux-honesty.spec.ts — a
+   *  native dialog is unstyleable, untestable and untranslatable). The
+   *  comment stays OPTIONAL, so confirming an empty textarea reproduces the
+   *  old "dismiss the prompt, send the rating anyway" path. Cancel/Escape
+   *  sends nothing instead of silently recording the rating: `onClose` is
+   *  also Escape and the backdrop, and submitting on those would be a lying
+   *  control. Nothing is lost — `feedback` only latches on success, so the
+   *  thumbs stay live and the rating can be given again. */
+  const requestFeedback = (message: ChatMessage, rating: "useful" | "not_useful") => {
+    if (!message.question || message.feedback) return;
+    if (rating === "not_useful") {
+      setPendingFeedback(message);
+      return;
+    }
+    void submitFeedback(message, "useful", "");
   };
 
   // Merge of two intentional changes: main reshaped this trigger into a
@@ -289,6 +313,7 @@ export default function RagChatbot() {
     );
 
   return (
+    <>
     <section className="fixed bottom-[calc(56px+env(safe-area-inset-bottom)+1rem)] right-4 md:bottom-6 md:right-6 z-40 flex h-[min(680px,calc(100vh-48px-56px))] md:h-[min(680px,calc(100vh-48px))] w-[min(420px,calc(100vw-32px))] flex-col overflow-hidden rounded-3xl border border-cyan-400/25 bg-surface-container-lowest/95 shadow-[0_24px_80px_rgba(0,0,0,0.55),0_0_35px_rgba(34,211,238,0.1)] backdrop-blur-2xl">
       <header className="border-b border-border/40 bg-gradient-to-br from-cyan-500/10 via-transparent to-violet-500/10 px-5 py-4">
         <div className="flex items-start justify-between">
@@ -365,8 +390,8 @@ export default function RagChatbot() {
               {message.from === "assistant" && message.question && (
                 <div className="flex items-center gap-1 px-1 text-[10px] text-on-surface-variant">
                   <span>¿Te sirvió?</span>
-                  <button type="button" onClick={() => void sendFeedback(message, "useful")} disabled={Boolean(message.feedback)} className={message.feedback === "useful" ? "text-emerald-400" : "hover:text-emerald-400"} aria-label="Helpful answer"><ThumbsUp size={12} /></button>
-                  <button type="button" onClick={() => void sendFeedback(message, "not_useful")} disabled={Boolean(message.feedback)} className={message.feedback === "not_useful" ? "text-red-400" : "hover:text-red-400"} aria-label="Unhelpful answer"><ThumbsDown size={12} /></button>
+                  <button type="button" onClick={() => requestFeedback(message, "useful")} disabled={Boolean(message.feedback)} className={message.feedback === "useful" ? "text-emerald-400" : "hover:text-emerald-400"} aria-label="Helpful answer"><ThumbsUp size={12} /></button>
+                  <button type="button" onClick={() => requestFeedback(message, "not_useful")} disabled={Boolean(message.feedback)} className={message.feedback === "not_useful" ? "text-red-400" : "hover:text-red-400"} aria-label="Unhelpful answer"><ThumbsDown size={12} /></button>
                   {message.feedback && <span>Gracias</span>}
                 </div>
               )}
@@ -435,5 +460,21 @@ export default function RagChatbot() {
         </p>
       </footer>
     </section>
+    <ConfirmDialog
+      open={pendingFeedback !== null}
+      onClose={() => setPendingFeedback(null)}
+      onConfirm={(reason) => {
+        const target = pendingFeedback;
+        setPendingFeedback(null);
+        if (target) void submitFeedback(target, "not_useful", reason ?? "");
+      }}
+      title="Improve this answer"
+      description="Your note goes to the team reviewing the assistant. Optional — you can send the rating on its own."
+      confirmLabel="Send feedback"
+      reasonLabel="What was missing, or how would you improve this answer?"
+      reasonPlaceholder="Leave blank to send just the rating."
+      reasonRequired={false}
+    />
+    </>
   );
 }

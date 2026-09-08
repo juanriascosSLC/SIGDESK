@@ -16,11 +16,14 @@ import { listKnowledge, type KnowledgeArticle } from './api';
  * merge — keeping the empty state would have deleted a shipped feature and
  * kept a comment that is no longer true.
  *
- * Two follow-ups this merge does NOT decide (they need a human call):
- *  1. `FRONTEND/e2e/beta-ux-honesty.spec.ts` still asserts that this screen
- *     and ArticleDetail are "honest about having no backend" (3 tests).
- *     Those assertions now contradict reality and need to be rewritten
- *     against the real list/detail, not silently deleted.
+ * Follow-up 1 is now DONE: `FRONTEND/e2e/beta-ux-honesty.spec.ts` asserted
+ * that this screen and ArticleDetail were "honest about having no backend",
+ * which contradicted reality after the merge. Those tests were rewritten
+ * against the real list/detail (real data renders, the old fabricated
+ * KB-1024 fixtures stay gone, the counter is derived from the response, and
+ * a 500/404 says so) rather than deleted.
+ *
+ * Still open, and NOT decided here (needs a human call):
  *  2. App.tsx renders this component on BOTH `/app/knowledge` (agent) and
  *     `/portal/knowledge` (end user), but the navigation below is absolute
  *     `/app/knowledge*` as main wrote it, and `/knowledge/new` only exists
