@@ -404,7 +404,7 @@ function CreateRoleForm({
       className="bg-surface-container-low border border-cyan-500/30 rounded-3xl p-5 space-y-3"
     >
       <h3 className="text-xs font-black uppercase tracking-wider text-on-surface-variant">
-        Nuevo rol
+        New role
       </h3>
       <input
         value={name}
@@ -762,7 +762,7 @@ function UsersTab() {
                 Role in SIG-DESK
               </th>
               <th className="px-6 py-4 font-bold uppercase tracking-wider text-xs text-right">
-                Acciones
+                Actions
               </th>
             </tr>
           </thead>
@@ -968,7 +968,7 @@ function UserRow({
         ) : user.companyId ? (
           <span className="text-xs font-mono text-on-surface-variant">{user.companyId}</span>
         ) : (
-          <span className="text-xs italic text-on-surface-variant">Sin unidad</span>
+          <span className="text-xs italic text-on-surface-variant">No organizational unit</span>
         )}
       </td>
       <td className="px-6 py-4">
@@ -992,7 +992,7 @@ function UserRow({
           <span className="text-xs font-mono text-on-surface-variant">{user.roleId}</span>
         ) : (
           <span className="text-xs italic text-on-surface-variant">
-            sin rol asignado — no puede operar
+            no role assigned — cannot operate
           </span>
         )}
       </td>

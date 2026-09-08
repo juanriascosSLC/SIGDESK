@@ -168,7 +168,7 @@ export default function ChangeBoard() {
               className="primary-button disabled:opacity-40"
             >
               <Plus className="h-4 w-4" />
-              Nueva RFC
+              New RFC
             </button>
           )}
         </div>
@@ -177,9 +177,9 @@ export default function ChangeBoard() {
 
         <div className="mb-6 grid gap-4 sm:grid-cols-3">
           {[
-            { label: 'Cambios abiertos', value: openCount, Icon: ClipboardList, color: 'text-primary' },
-            { label: 'Esperando CAB', value: cabCount, Icon: ShieldCheck, color: 'text-amber-400' },
-            { label: 'Programados / activos', value: scheduledCount, Icon: CalendarClock, color: 'text-emerald-400' },
+            { label: 'Open changes', value: openCount, Icon: ClipboardList, color: 'text-primary' },
+            { label: 'Awaiting CAB', value: cabCount, Icon: ShieldCheck, color: 'text-amber-400' },
+            { label: 'Scheduled / active', value: scheduledCount, Icon: CalendarClock, color: 'text-emerald-400' },
           ].map(({ label, value, Icon, color }) => (
             <div
               key={label}
@@ -225,12 +225,12 @@ export default function ChangeBoard() {
 
         {changesQuery.isLoading && (
           <div className="rounded-2xl border border-border/40 bg-surface-container-low p-12 text-center text-on-surface-variant font-medium">
-            Cargando solicitudes de cambio…
+            Loading change requests…
           </div>
         )}
         {changesQuery.isError && (
           <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-red-300 font-medium">
-            No se pudieron cargar los cambios: {changesQuery.error.message}
+            Could not load change requests: {changesQuery.error.message}
           </div>
         )}
         {!changesQuery.isLoading && !changesQuery.isError && (
@@ -288,7 +288,7 @@ export default function ChangeBoard() {
                     })}
                     {items.length === 0 && (
                       <div className="rounded-2xl border border-dashed border-border/30 p-8 text-center text-xs text-on-surface-variant/60 italic">
-                        Sin RFC en esta etapa
+                        No RFCs in this stage
                       </div>
                     )}
                   </div>

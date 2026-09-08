@@ -111,7 +111,27 @@ export function ProblemChangeDialog({
         if (!isFieldRequired(field, formData) && (value === '' || value == null)) continue;
         data[field.key] = value;
       }
-      const change = await createChange(data, idempotencyKey.current);
+      // Propagates the PRB's own validated asset snapshot to the new RFC
+      // (Asset/CMDB operational-history correction — future-record
+      // correctness): mirrors exactly how IncidentChangeDialog already
+      // forwards ticket.assetContext for INC -> RFC. Without this, an RFC
+      // created through this normal workflow would never populate
+      // rfc_asset_links, and the only way to still find it from the asset
+      // would be relation traversal (via_incident/via_problem) — real, but
+      // never a substitute for the RFC having its own snapshot when one is
+      // available at creation time.
+      const change = await createChange(
+        data,
+        idempotencyKey.current,
+        problem.assetContext
+          ? {
+              siteAssetId: problem.assetContext.siteAssetId,
+              links: problem.assetContext.links
+                .filter((link) => link.assetId !== problem.assetContext?.siteAssetId)
+                .map((link) => ({ assetId: link.assetId, role: link.role })),
+            }
+          : undefined,
+      );
       await createEntityRelation('PRB', problem.id, 'resolvedBy', 'RFC', change.id);
       return change;
     },

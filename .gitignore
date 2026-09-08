@@ -32,5 +32,6 @@ Thumbs.db
 !.vscode/launch.json
 .run
 .tmp
+.test-cache
 # Exploracion de diseno desechable (fase 4 de frontendengineer)
 .design-scratch/

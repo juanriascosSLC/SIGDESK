@@ -10,7 +10,7 @@ export function MergedTicketsWidget({ context }: { context: TicketPageContext })
       <div className="flex items-center justify-between mb-3 pb-2 border-b border-border/40">
         <h4 className="text-xs font-bold text-on-surface-variant uppercase tracking-wider flex items-center gap-2">
           <Merge className="w-3.5 h-3.5 text-primary" />
-          Tickets combinados en {ticket.id}
+          Tickets merged into {ticket.id}
         </h4>
         <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[10px] font-black text-primary">
           {ticket.mergedCount}
@@ -38,7 +38,7 @@ export function MergedTicketsWidget({ context }: { context: TicketPageContext })
                   onClick={() => mergedTickets.onUnmerge(merged.id)}
                   className="px-3 py-1 rounded-lg border border-border/50 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider opacity-0 group-hover:opacity-100 hover:text-red-400 hover:border-red-500/30 transition-all shrink-0"
                 >
-                  Separar
+                  Unmerge
                 </button>
               )}
             </div>

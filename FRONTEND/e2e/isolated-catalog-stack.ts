@@ -96,6 +96,16 @@ export type IsolatedStackOptions = {
   forceReadinessTimeout?: boolean;
   /** Overrides the readiness poll deadline (default 15000ms). */
   readinessTimeoutMs?: number;
+  /** E2E contamination remediation, Workstream A, Correction 4 (2026-09-06):
+   *  point the spawned process's organization_service dependency at a
+   *  run-owned double (e.g. `startIsolatedOrganizationStub()`) instead of
+   *  the shared `RESOURCE_SERVICE_URL`-style default. Falls back to
+   *  `process.env.ORGANIZATION_SERVICE_URL`/`ORGANIZATION_INTERNAL_SECRET`
+   *  (i.e. the shared instance) when not given, unchanged from before this
+   *  option existed — so every spec that doesn't pass this keeps its prior
+   *  behavior exactly. */
+  organizationServiceUrl?: string;
+  organizationInternalSecret?: string;
 };
 
 function sleep(ms: number): Promise<void> {
@@ -462,6 +472,15 @@ export async function startIsolatedCatalogStack(
           // request outright regardless of what this process would do.
           RESOURCE_SERVICE_URL: process.env.RESOURCE_SERVICE_URL || 'http://localhost:8082',
           RESOURCE_INTERNAL_SECRET: process.env.RESOURCE_INTERNAL_SECRET || 'dev-only-resource-internal-secret-32-chars-min',
+          // Organization: same read-only-dependency treatment as
+          // Assets/Resources above. `options.organizationServiceUrl` lets a
+          // caller (e.g. incident-flow.spec.ts) point this at a run-owned
+          // `startIsolatedOrganizationStub()` instead of the shared
+          // instance — falls back to the previous shared-instance default
+          // when not given, so every other spec's behavior is unchanged.
+          ORGANIZATION_SERVICE_URL: options.organizationServiceUrl ?? process.env.ORGANIZATION_SERVICE_URL ?? '',
+          ORGANIZATION_INTERNAL_SECRET:
+            options.organizationInternalSecret ?? process.env.ORGANIZATION_INTERNAL_SECRET ?? '',
           PORT: '0',
         },
         stdio: ['ignore', 'pipe', 'pipe'],

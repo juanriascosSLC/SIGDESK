@@ -113,7 +113,25 @@ export function IncidentProblemDialog({
           if (!isFieldRequired(field, formData) && (value === '' || value == null)) continue;
           data[field.key] = value;
         }
-        problem = await createEntity('PRB', data, idempotencyKey.current);
+        // Propagates the INC's own validated asset snapshot to the new PRB
+        // (Asset/CMDB operational-history correction — future-record
+        // correctness): mirrors exactly how IncidentChangeDialog already
+        // forwards ticket.assetContext for INC -> RFC. Without this, a PRB
+        // created through this normal workflow would never populate
+        // problem_asset_links — the only way to still find it from the
+        // asset would be relation traversal (via_incident), which is real
+        // but never a substitute for the PRB having its own snapshot when
+        // one is available at creation time.
+        problem = await createEntity('PRB', data, idempotencyKey.current, {
+          assetContext: ticket.assetContext
+            ? {
+                siteAssetId: ticket.assetContext.siteAssetId,
+                links: ticket.assetContext.links
+                  .filter((link) => link.assetId !== ticket.assetContext?.siteAssetId)
+                  .map((link) => ({ assetId: link.assetId, role: link.role })),
+              }
+            : undefined,
+        });
       }
       await createEntityRelation(
         'PRB',

@@ -136,25 +136,25 @@ test('las tarjetas arrancan colapsadas y resumen el campo en una línea', async 
 
   const titulo = tarjeta(page, 'titulo');
   await expect(titulo).toBeVisible();
-  await expect(titulo.getByText('Texto corto')).toBeVisible();
-  await expect(titulo.getByText('obligatorio')).toBeVisible();
+  await expect(titulo.getByText('Short text')).toBeVisible();
+  await expect(titulo.getByText('required')).toBeVisible();
   await expect(
-    titulo.getByLabel('Etiqueta', { exact: true }),
+    titulo.getByLabel('Label', { exact: true }),
     'colapsada no muestra los controles',
   ).toHaveCount(0);
 
-  await expect(tarjeta(page, 'prioridad').getByText('2 opciones')).toBeVisible();
+  await expect(tarjeta(page, 'prioridad').getByText('2 options')).toBeVisible();
 });
 
 test('expandir es un acordeón: solo un campo abierto a la vez', async ({ page }) => {
   await abrirCampos(page);
 
-  await tarjeta(page, 'titulo').getByRole('button', { name: /Configurar el campo/ }).click();
-  await expect(tarjeta(page, 'titulo').getByLabel('Etiqueta', { exact: true })).toBeVisible();
+  await tarjeta(page, 'titulo').getByRole('button', { name: /Configure field/ }).click();
+  await expect(tarjeta(page, 'titulo').getByLabel('Label', { exact: true })).toBeVisible();
 
-  await tarjeta(page, 'prioridad').getByRole('button', { name: /Configurar el campo/ }).click();
-  await expect(tarjeta(page, 'prioridad').getByLabel('Etiqueta', { exact: true })).toBeVisible();
-  await expect(tarjeta(page, 'titulo').getByLabel('Etiqueta', { exact: true })).toHaveCount(0);
+  await tarjeta(page, 'prioridad').getByRole('button', { name: /Configure field/ }).click();
+  await expect(tarjeta(page, 'prioridad').getByLabel('Label', { exact: true })).toBeVisible();
+  await expect(tarjeta(page, 'titulo').getByLabel('Label', { exact: true })).toHaveCount(0);
 });
 
 // Las acciones destructivas están en la cabecera, visibles sin expandir: un
@@ -164,10 +164,10 @@ test('duplicar, eliminar y mover están disponibles sin expandir', async ({ page
   await abrirCampos(page);
   const titulo = tarjeta(page, 'titulo');
 
-  await expect(titulo.getByRole('button', { name: 'Eliminar campo' })).toBeVisible();
-  await expect(titulo.getByRole('button', { name: 'Duplicar campo' })).toBeVisible();
-  await expect(titulo.getByRole('button', { name: 'Bajar campo' })).toBeVisible();
-  await expect(titulo.getByRole('button', { name: 'Subir campo' }), 'el primero no sube').toBeDisabled();
+  await expect(titulo.getByRole('button', { name: 'Delete field' })).toBeVisible();
+  await expect(titulo.getByRole('button', { name: 'Duplicate field' })).toBeVisible();
+  await expect(titulo.getByRole('button', { name: 'Move field down' })).toBeVisible();
+  await expect(titulo.getByRole('button', { name: 'Move field up' }), 'el primero no sube').toBeDisabled();
 });
 
 test('un campo nuevo se abre solo: sin configurar no sirve de nada', async ({ page }) => {
@@ -176,10 +176,10 @@ test('un campo nuevo se abre solo: sin configurar no sirve de nada', async ({ pa
   await page.getByTestId('catalog-add-field').click();
 
   const nueva = page.getByTestId(/^catalog-field-editor-/).last();
-  await expect(nueva.getByLabel('Etiqueta')).toBeVisible();
+  await expect(nueva.getByLabel('Label')).toBeVisible();
   // Contrato que catalog-builder-runtime.spec.ts usa: el primer input del
   // cuerpo es la etiqueta.
-  await expect(nueva.locator('input').first()).toHaveValue(/Nuevo campo/);
+  await expect(nueva.locator('input').first()).toHaveValue(/New field/);
 });
 
 // Duplicar junto al original, no al final: se duplica para tener dos variantes
@@ -187,16 +187,16 @@ test('un campo nuevo se abre solo: sin configurar no sirve de nada', async ({ pa
 test('la copia queda junto al original y con clave propia', async ({ page }) => {
   await abrirCampos(page);
 
-  await tarjeta(page, 'titulo').getByRole('button', { name: 'Duplicar campo' }).click();
+  await tarjeta(page, 'titulo').getByRole('button', { name: 'Duplicate field' }).click();
 
   const spec = await leerSpec(page);
   expect(spec.fields.map((field) => field.key)).toEqual([
     'titulo',
-    'tituloCopia',
+    'tituloCopy',
     'prioridad',
     'cantidad',
   ]);
-  expect(spec.fields[1].label).toBe('Título (copia)');
+  expect(spec.fields[1].label).toBe('Título (copy)');
   expect(spec.fields[1].required, 'la copia conserva las reglas').toBe(true);
 });
 
@@ -207,10 +207,10 @@ test('el buscador filtra y desactiva el reordenamiento mientras filtra', async (
 
   await expect(tarjeta(page, 'prioridad')).toBeVisible();
   await expect(tarjeta(page, 'titulo')).toHaveCount(0);
-  await expect(page.getByText('el orden no se puede cambiar mientras filtras')).toBeVisible();
-  await expect(tarjeta(page, 'prioridad').getByRole('button', { name: 'Bajar campo' })).toBeDisabled();
+  await expect(page.getByText(/ordering disabled while filtering/)).toBeVisible();
+  await expect(tarjeta(page, 'prioridad').getByRole('button', { name: 'Move field down' })).toBeDisabled();
 
-  await page.getByRole('button', { name: 'Limpiar la búsqueda' }).click();
+  await page.getByRole('button', { name: 'Clear search' }).click();
   await expect(tarjeta(page, 'titulo')).toBeVisible();
 });
 
@@ -219,7 +219,7 @@ test('una búsqueda sin resultados lo dice en vez de mostrar una lista vacía', 
 
   await page.getByTestId('catalog-field-search').fill('nada-de-esto-existe');
 
-  await expect(page.getByText('Ningún campo coincide')).toBeVisible();
+  await expect(page.getByText(/No fields match/)).toBeVisible();
 });
 
 // Las reglas nuevas se guardan en la definición, que es lo que el servidor
@@ -227,11 +227,11 @@ test('una búsqueda sin resultados lo dice en vez de mostrar una lista vacía', 
 test('las restricciones numéricas llegan a la definición', async ({ page }) => {
   await abrirCampos(page);
   const cantidad = tarjeta(page, 'cantidad');
-  await cantidad.getByRole('button', { name: /Configurar el campo/ }).click();
+  await cantidad.getByRole('button', { name: /Configure field/ }).click();
 
-  await cantidad.getByLabel('Valor mínimo').fill('1');
-  await cantidad.getByLabel('Valor máximo').fill('99');
-  await cantidad.getByLabel('Incremento').fill('1');
+  await cantidad.getByLabel('Minimum value').fill('1');
+  await cantidad.getByLabel('Maximum value').fill('99');
+  await cantidad.getByLabel('Step').fill('1');
 
   const spec = await leerSpec(page);
   const field = spec.fields.find((candidate) => candidate.key === 'cantidad')!;
@@ -243,7 +243,7 @@ test('las restricciones numéricas llegan a la definición', async ({ page }) =>
 test('el texto de ayuda y el valor por defecto llegan a la definición', async ({ page }) => {
   await abrirCampos(page);
   const titulo = tarjeta(page, 'titulo');
-  await titulo.getByRole('button', { name: /Configurar el campo/ }).click();
+  await titulo.getByRole('button', { name: /Configure field/ }).click();
 
   await page.getByTestId('catalog-field-help-titulo').fill('Resume el problema en una línea.');
   await page.getByTestId('catalog-field-default-titulo').fill('Fallo en ');
@@ -260,7 +260,7 @@ test('el texto de ayuda y el valor por defecto llegan a la definición', async (
 test('cambiar el tipo de lista a número descarta las opciones', async ({ page }) => {
   await abrirCampos(page);
   const prioridad = tarjeta(page, 'prioridad');
-  await prioridad.getByRole('button', { name: /Configurar el campo/ }).click();
+  await prioridad.getByRole('button', { name: /Configure field/ }).click();
 
   await page.getByTestId('catalog-field-type-prioridad').selectOption('number');
 
@@ -273,7 +273,7 @@ test('cambiar el tipo de lista a número descarta las opciones', async ({ page }
 test('el formato exigido solo se ofrece donde tiene sentido', async ({ page }) => {
   await abrirCampos(page);
   const titulo = tarjeta(page, 'titulo');
-  await titulo.getByRole('button', { name: /Configurar el campo/ }).click();
+  await titulo.getByRole('button', { name: /Configure field/ }).click();
 
   await expect(page.getByTestId('catalog-field-format-titulo')).toBeVisible();
   await page.getByTestId('catalog-field-format-titulo').selectOption('email');
@@ -283,7 +283,7 @@ test('el formato exigido solo se ofrece donde tiene sentido', async ({ page }) =
 
   // Un tipo con nombre ya implica su formato: el control desaparece y la clave
   // redundante se limpia.
-  await titulo.getByRole('button', { name: /Configurar el campo/ }).click();
+  await titulo.getByRole('button', { name: /Configure field/ }).click();
   await page.getByTestId('catalog-field-type-titulo').selectOption('email');
   await expect(page.getByTestId('catalog-field-format-titulo')).toHaveCount(0);
 
@@ -297,12 +297,12 @@ test.describe('editor de opciones', () => {
   test('la clave guardada es visible y editable, no derivada en silencio', async ({ page }) => {
     await abrirCampos(page);
     const prioridad = tarjeta(page, 'prioridad');
-    await prioridad.getByRole('button', { name: /Configurar el campo/ }).click();
+    await prioridad.getByRole('button', { name: /Configure field/ }).click();
 
     const opciones = page.getByTestId('catalog-field-options-prioridad');
-    await expect(opciones.getByLabel('Clave de la opción 1')).toHaveValue('alta');
+    await expect(opciones.getByLabel('Option 1 key')).toHaveValue('alta');
 
-    await opciones.getByLabel('Clave de la opción 1').fill('critica');
+    await opciones.getByLabel('Option 1 key').fill('critica');
 
     const spec = await leerSpec(page);
     const field = spec.fields.find((candidate) => candidate.key === 'prioridad')!;
@@ -314,11 +314,11 @@ test.describe('editor de opciones', () => {
   test('una clave fijada a mano no sigue a la etiqueta', async ({ page }) => {
     await abrirCampos(page);
     const prioridad = tarjeta(page, 'prioridad');
-    await prioridad.getByRole('button', { name: /Configurar el campo/ }).click();
+    await prioridad.getByRole('button', { name: /Configure field/ }).click();
     const opciones = page.getByTestId('catalog-field-options-prioridad');
 
-    await opciones.getByLabel('Clave de la opción 1').fill('p1');
-    await opciones.getByLabel('Etiqueta de la opción 1').fill('Crítica');
+    await opciones.getByLabel('Option 1 key').fill('p1');
+    await opciones.getByLabel('Option 1 label').fill('Crítica');
 
     const spec = await leerSpec(page);
     const options = spec.fields.find((candidate) => candidate.key === 'prioridad')!
@@ -329,13 +329,13 @@ test.describe('editor de opciones', () => {
   test('pegar una lista crea las opciones de golpe', async ({ page }) => {
     await abrirCampos(page);
     const prioridad = tarjeta(page, 'prioridad');
-    await prioridad.getByRole('button', { name: /Configurar el campo/ }).click();
+    await prioridad.getByRole('button', { name: /Configure field/ }).click();
 
-    await page.getByRole('button', { name: /Pegar lista/ }).click();
+    await page.getByRole('button', { name: /Paste list/ }).click();
     await page
       .getByTestId('catalog-field-paste-options-prioridad')
       .fill('Crítica\nAlta\nMedia\nBaja');
-    await page.getByRole('button', { name: /Reemplazar las 2/ }).click();
+    await page.getByRole('button', { name: /Replace all 2/ }).click();
 
     const spec = await leerSpec(page);
     const options = spec.fields.find((candidate) => candidate.key === 'prioridad')!
@@ -347,9 +347,9 @@ test.describe('editor de opciones', () => {
   test('la estrella fija el valor por defecto dentro de las opciones publicadas', async ({ page }) => {
     await abrirCampos(page);
     const prioridad = tarjeta(page, 'prioridad');
-    await prioridad.getByRole('button', { name: /Configurar el campo/ }).click();
+    await prioridad.getByRole('button', { name: /Configure field/ }).click();
 
-    await page.getByRole('button', { name: 'Marcar «Baja» por defecto' }).click();
+    await page.getByRole('button', { name: 'Set "Baja" as default' }).click();
 
     const spec = await leerSpec(page);
     expect(spec.fields.find((candidate) => candidate.key === 'prioridad')!.defaultValue).toBe('baja');
@@ -358,10 +358,10 @@ test.describe('editor de opciones', () => {
   test('borrar la opción marcada limpia el valor por defecto', async ({ page }) => {
     await abrirCampos(page);
     const prioridad = tarjeta(page, 'prioridad');
-    await prioridad.getByRole('button', { name: /Configurar el campo/ }).click();
+    await prioridad.getByRole('button', { name: /Configure field/ }).click();
 
-    await page.getByRole('button', { name: 'Marcar «Baja» por defecto' }).click();
-    await page.getByRole('button', { name: 'Eliminar la opción 2' }).click();
+    await page.getByRole('button', { name: 'Set "Baja" as default' }).click();
+    await page.getByRole('button', { name: 'Delete option 2' }).click();
 
     const spec = await leerSpec(page);
     const field = spec.fields.find((candidate) => candidate.key === 'prioridad')!;
@@ -371,12 +371,12 @@ test.describe('editor de opciones', () => {
   test('avisa de las claves repetidas, que después no se pueden distinguir', async ({ page }) => {
     await abrirCampos(page);
     const prioridad = tarjeta(page, 'prioridad');
-    await prioridad.getByRole('button', { name: /Configurar el campo/ }).click();
+    await prioridad.getByRole('button', { name: /Configure field/ }).click();
     const opciones = page.getByTestId('catalog-field-options-prioridad');
 
-    await opciones.getByLabel('Clave de la opción 2').fill('alta');
+    await opciones.getByLabel('Option 2 key').fill('alta');
 
-    await expect(page.getByText(/claves repetidas/)).toBeVisible();
+    await expect(page.getByText(/Duplicate keys detected/)).toBeVisible();
   });
 });
 
@@ -385,7 +385,7 @@ test.describe('editor de opciones', () => {
 test('la vista previa renderiza el campo con el renderer de producción', async ({ page }) => {
   await abrirCampos(page);
   const prioridad = tarjeta(page, 'prioridad');
-  await prioridad.getByRole('button', { name: /Configurar el campo/ }).click();
+  await prioridad.getByRole('button', { name: /Configure field/ }).click();
 
   const preview = prioridad.getByTestId('catalog-input-prioridad');
   await expect(preview).toBeVisible();
@@ -402,14 +402,14 @@ test('la vista previa renderiza el campo con el renderer de producción', async 
 test('ya no hay interruptores de visibilidad que no gobiernen nada', async ({ page }) => {
   await abrirCampos(page);
   const titulo = tarjeta(page, 'titulo');
-  await titulo.getByRole('button', { name: /Configurar el campo/ }).click();
+  await titulo.getByRole('button', { name: /Configure field/ }).click();
 
   await expect(page.getByText('Mostrar al crear')).toHaveCount(0);
   await expect(page.getByText('Mostrar en resumen')).toHaveCount(0);
-  await expect(titulo.getByText('Dónde aparece')).toBeVisible();
+  await expect(titulo.getByText('Where it appears')).toBeVisible();
   // Esta definición no tiene páginas materializadas todavía: decir «no
   // aparece en Crear» sería una alarma falsa, así que se explica en su lugar.
-  await expect(titulo.getByText(/no tiene páginas materializadas/)).toBeVisible();
+  await expect(titulo.getByText(/does not have materialized pages/)).toBeVisible();
 });
 
 // Con páginas materializadas se informa en cuáles está el campo y en cuáles
@@ -417,12 +417,12 @@ test('ya no hay interruptores de visibilidad que no gobiernen nada', async ({ pa
 test('con páginas materializadas se dice en cuáles aparece el campo', async ({ page }) => {
   await abrirCampos(page, conPaginaDeCreacion);
   const titulo = tarjeta(page, 'titulo');
-  await titulo.getByRole('button', { name: /Configurar el campo/ }).click();
+  await titulo.getByRole('button', { name: /Configure field/ }).click();
 
   await expect(page.getByTestId('catalog-field-surface-titulo-createPage')).toBeVisible();
-  await expect(titulo.getByText(/Diseñador de plantilla/)).toBeVisible();
+  await expect(titulo.getByText(/Template designer/)).toBeVisible();
 
   const cantidad = tarjeta(page, 'cantidad');
-  await cantidad.getByRole('button', { name: /Configurar el campo/ }).click();
-  await expect(cantidad.getByText(/Hoy no aparece en Crear/)).toBeVisible();
+  await cantidad.getByRole('button', { name: /Configure field/ }).click();
+  await expect(cantidad.getByText(/Currently does not appear in Create/)).toBeVisible();
 });

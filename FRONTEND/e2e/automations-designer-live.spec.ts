@@ -39,6 +39,14 @@ import { expect, test, type ConsoleMessage, type Page } from '@playwright/test';
 const PILA_REAL = process.env.PLAYWRIGHT_LIVE_STACK === '1';
 const API = (process.env.PLAYWRIGHT_API_URL ?? 'http://127.0.0.1:8000').replace(/\/$/, '');
 const JWT_SECRET = process.env.PLAYWRIGHT_JWT_SECRET ?? 'dev-only-change-me-do-not-use-in-prod';
+// Correction "ORGANIZATION RESIDUE, run-beta-release-gate.ps1" (2026-09-07):
+// esta prueba limpia lo que siembra por psql directo contra la base real de
+// Organization/Workflow (ver `limpiar` más abajo) — tiene que apuntar a la
+// base DESECHABLE que la compuerta esté usando en esta corrida, nunca a
+// '..._local' a secas. Sin PLAYWRIGHT_DATABASE_SUFFIX (un desarrollador
+// corriendo `npm run test:e2e` a mano contra su propia pila local) el
+// default 'local' sigue siendo correcto.
+const DATABASE_SUFFIX = process.env.PLAYWRIGHT_DATABASE_SUFFIX ?? 'local';
 
 test.skip(!PILA_REAL, 'Requiere la pila real: exporta PLAYWRIGHT_LIVE_STACK=1');
 
@@ -159,13 +167,13 @@ function psql(base: string, sql: string) {
  *  WHERE ni un borrado por patrón amplio. */
 function limpiar(marca: string) {
   const como = `'%${marca}%'`;
-  psql('sigdesk_workflow_local', `
+  psql(`sigdesk_workflow_${DATABASE_SUFFIX}`, `
     DELETE FROM workflow_auditoria WHERE workflow_id IN (SELECT id FROM workflows WHERE categoria_id LIKE ${como});
     DELETE FROM workflow_outbox    WHERE workflow_id IN (SELECT id FROM workflows WHERE categoria_id LIKE ${como});
     DELETE FROM workflow_ejecuciones WHERE workflow_id IN (SELECT id FROM workflows WHERE categoria_id LIKE ${como});
     DELETE FROM workflow_reglas    WHERE workflow_id IN (SELECT id FROM workflows WHERE categoria_id LIKE ${como});
     DELETE FROM workflows WHERE categoria_id LIKE ${como};`);
-  psql('sigdesk_organization_local', `
+  psql(`sigdesk_organization_${DATABASE_SUFFIX}`, `
     DELETE FROM usuarios WHERE nombre LIKE ${como};
     DELETE FROM permisos WHERE role_id IN (SELECT id FROM roles WHERE nombre LIKE ${como});
     DELETE FROM roles WHERE nombre LIKE ${como};
@@ -181,7 +189,7 @@ test.describe('diseñador de Automations sobre la pila real', () => {
 
   test.afterEach(() => {
     for (const id of workflowsCreados) {
-      psql('sigdesk_workflow_local', `
+      psql(`sigdesk_workflow_${DATABASE_SUFFIX}`, `
         DELETE FROM workflow_auditoria WHERE workflow_id = '${id}';
         DELETE FROM workflow_outbox WHERE workflow_id = '${id}';
         DELETE FROM workflow_ejecuciones WHERE workflow_id = '${id}';
@@ -211,8 +219,8 @@ test.describe('diseñador de Automations sobre la pila real', () => {
     // y el drop y termina arrastrándose un bloque distinto del que se agarró:
     // pasó, y el canvas acabó con un disparador "Estado modificado".
     const canvas = page.locator('.react-flow__pane');
-    await page.getByPlaceholder('Buscar bloque…').fill('Asignar autom');
-    const bloque = page.getByRole('button', { name: /Asignar automáticamente/ });
+    await page.getByPlaceholder('Search block…').fill('Assign autom');
+    const bloque = page.getByRole('button', { name: /Assign Automatically/ });
     await expect(bloque).toHaveCount(1);
     await expect(bloque).toBeVisible();
 
@@ -220,15 +228,15 @@ test.describe('diseñador de Automations sobre la pila real', () => {
     const antes = await nodos.count();
     await bloque.dragTo(canvas, { targetPosition: { x: 520, y: 260 } });
     await expect(nodos).toHaveCount(antes + 1);
-    await expect(page.getByTestId('canvas-dirty')).toHaveText('Cambios sin guardar');
+    await expect(page.getByTestId('canvas-dirty')).toHaveText('Unsaved changes');
 
     // ── Conectar el disparador con la acción, arrastrando el conector ─────
     //
     // Sin esta conexión el compilador marca la acción como "no conectada al
     // disparador" y la publicación queda bloqueada — con razón: un bloque
     // suelto en el lienzo no se ejecuta.
-    const nodoAsignacion = nodos.filter({ hasText: 'Asignar automáticamente' }).first();
-    const nodoTrigger = nodos.filter({ hasText: 'INC creado' }).first();
+    const nodoAsignacion = nodos.filter({ hasText: 'Assign Automatically' }).first();
+    const nodoTrigger = nodos.filter({ hasText: 'INC Created' }).first();
 
     // "Ordenar" encuadra el diagrama antes de conectar.
     //
@@ -237,7 +245,7 @@ test.describe('diseñador de Automations sobre la pila real', () => {
     // fuera de vista, y el mousedown no caía sobre él —la línea de conexión no
     // llegaba a arrancar—. Es además lo que haría una persona: ordenar el
     // lienzo para ver lo que va a conectar.
-    await page.getByRole('button', { name: 'Ordenar' }).click();
+    await page.getByRole('button', { name: 'Arrange' }).click();
     await page.waitForTimeout(700);
     const conexionesIniciales = await page.locator('.react-flow__edge').count();
 
@@ -267,9 +275,9 @@ test.describe('diseñador de Automations sobre la pila real', () => {
     await page.getByTestId('assignment-mode-user').click();
 
     // El directorio viene de Organization REAL, sin interceptar nada.
-    await page.getByRole('combobox', { name: 'Área' }).selectOption({ label: destino.depto.nombre });
-    await page.getByRole('combobox', { name: 'Equipo' }).selectOption({ label: destino.equipo.nombre });
-    await page.getByRole('combobox', { name: 'Persona' })
+    await page.getByRole('combobox', { name: 'Area' }).selectOption({ label: destino.depto.nombre });
+    await page.getByRole('combobox', { name: 'Team' }).selectOption({ label: destino.equipo.nombre });
+    await page.getByRole('combobox', { name: 'Person' })
       .selectOption({ label: `${destino.persona.nombre} · ${marca.toLowerCase()}@live.local` });
     await expect(nodoAsignacion).toContainText(destino.persona.nombre);
 
@@ -298,7 +306,7 @@ test.describe('diseñador de Automations sobre la pila real', () => {
     // ── Guardar el borrador: POST real ────────────────────────────────────
     await page.getByTestId('canvas-save-draft').click();
     await page.waitForURL(/\/app\/automations\/[0-9a-f-]{36}$/, { timeout: 30_000 });
-    await expect(page.getByTestId('canvas-estado')).toContainText('borrador');
+    await expect(page.getByTestId('canvas-estado')).toContainText('Draft');
 
     // ── Recargar y comprobar que el diagrama vuelve igual ────────────────
     //
@@ -318,11 +326,11 @@ test.describe('diseñador de Automations sobre la pila real', () => {
     expect(asignacionGuardada, 'el layout guardado debe incluir el bloque de asignación').toBeTruthy();
 
     const conexionesAntes = await page.locator('.react-flow__edge').count();
-    const cajaTriggerAntes = await page.locator('.react-flow__node').filter({ hasText: 'INC creado' }).first().boundingBox();
+    const cajaTriggerAntes = await page.locator('.react-flow__node').filter({ hasText: 'INC Created' }).first().boundingBox();
 
     await page.reload();
     await expect(page.getByTestId('workflow-visual-editor')).toBeVisible();
-    const nodoTrasRecarga = page.locator('.react-flow__node').filter({ hasText: 'Asignar automáticamente' }).first();
+    const nodoTrasRecarga = page.locator('.react-flow__node').filter({ hasText: 'Assign Automatically' }).first();
     await expect(nodoTrasRecarga).toBeVisible();
 
     // Se deja constancia visual del diagrama recargado. No se asertan
@@ -349,7 +357,7 @@ test.describe('diseñador de Automations sobre la pila real', () => {
     // este segundo guardado escribiría posiciones distintas.
     await nodoTrasRecarga.click();
     await page.getByTestId('canvas-save-draft').click();
-    await expect(page.getByTestId('canvas-dirty')).toHaveText('Guardado');
+    await expect(page.getByTestId('canvas-dirty')).toHaveText('Saved');
     const reguardado = await llamarAPI<{ layout: Layout }>('GET', `/workflows/${idBorrador}`);
     const asignacionReguardada = reguardado.layout.nodes.find((n) => n.data.catalogKey === 'action.assign');
     expect(asignacionReguardada!.position).toEqual(asignacionGuardada!.position);
@@ -359,7 +367,7 @@ test.describe('diseñador de Automations sobre la pila real', () => {
     // ── Provocar un error, pulsarlo y ver que enfoca el nodo ──────────────
     await nodoTrasRecarga.click();
     await expect(page.getByTestId('assignment-editor')).toBeVisible();
-    await page.getByRole('combobox', { name: 'Área' }).selectOption('');
+    await page.getByRole('combobox', { name: 'Area' }).selectOption('');
     await page.getByTestId('canvas-validate').click();
     const errorAnclado = page.getByTestId('validation-issue-anchored').first();
     await expect(errorAnclado).toBeVisible();
@@ -368,16 +376,16 @@ test.describe('diseñador de Automations sobre la pila real', () => {
     await expect(page.getByTestId('workflow-node-invalid')).toBeVisible();
 
     // ── Corregirlo y publicar: POST real ─────────────────────────────────
-    await page.getByRole('combobox', { name: 'Área' }).selectOption({ label: destino.depto.nombre });
-    await page.getByRole('combobox', { name: 'Equipo' }).selectOption({ label: destino.equipo.nombre });
-    await page.getByRole('combobox', { name: 'Persona' })
+    await page.getByRole('combobox', { name: 'Area' }).selectOption({ label: destino.depto.nombre });
+    await page.getByRole('combobox', { name: 'Team' }).selectOption({ label: destino.equipo.nombre });
+    await page.getByRole('combobox', { name: 'Person' })
       .selectOption({ label: `${destino.persona.nombre} · ${marca.toLowerCase()}@live.local` });
     await expect(page.getByTestId('workflow-node-invalid')).toHaveCount(0);
 
     await page.getByTestId('canvas-save-draft').click();
-    await expect(page.getByTestId('canvas-dirty')).toHaveText('Guardado');
+    await expect(page.getByTestId('canvas-dirty')).toHaveText('Saved');
     await page.getByTestId('canvas-publish').click();
-    await expect(page.getByTestId('canvas-estado')).toContainText('publicado', { timeout: 30_000 });
+    await expect(page.getByTestId('canvas-estado')).toContainText('Published', { timeout: 30_000 });
 
     // ── Comprobar el efecto en el backend real ───────────────────────────
     const publicado = await llamarAPI<{

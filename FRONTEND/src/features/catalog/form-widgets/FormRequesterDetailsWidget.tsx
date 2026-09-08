@@ -17,7 +17,7 @@ export function FormRequesterDetailsWidget({ context }: { context: FormPageConte
     >
       <h3 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-on-surface-variant">
         <UserRound className="h-4 w-4 text-primary" />
-        Solicitante
+        Requester
       </h3>
       <p className="text-sm font-medium text-on-surface">{context.requester.displayName}</p>
       {context.requester.email && (

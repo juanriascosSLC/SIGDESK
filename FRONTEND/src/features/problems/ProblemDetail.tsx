@@ -51,7 +51,10 @@ function displayValue(field: FieldDefinition, value: unknown): string {
 }
 
 function relationHref(relation: EntityRelation, problemId: string): string {
-  const outbound = relation.sourceEntityId === problemId;
+  // Fixed 2026-09-06 (same class of bug as RelationsWidget.tsx/tickets —
+  // see its comment): a raw id match alone isn't enough, since ids are
+  // only unique within one entity type. This page is always a PRB.
+  const outbound = relation.sourceEntityId === problemId && relation.sourceEntityKey === 'PRB';
   const key = outbound ? relation.targetEntityKey : relation.sourceEntityKey;
   const id = outbound ? relation.targetHumanId : relation.sourceHumanId;
   if (key === 'INC') return `/app/tickets/${encodeURIComponent(id)}`;
@@ -124,7 +127,7 @@ export default function ProblemDetail() {
     onSuccess: (updated) => {
       queryClient.setQueryData(['problems', id], updated);
       void queryClient.invalidateQueries({ queryKey: ['problems'] });
-      setNotice(`Estado actualizado a ${stateLabels[updated.state] ?? updated.state}.`);
+      setNotice(`Status updated to ${stateLabels[updated.state] ?? updated.state}.`);
     },
   });
   const createRelationMutation = useMutation({
@@ -434,7 +437,7 @@ export default function ProblemDetail() {
         <section className="rounded-3xl border border-border/40 bg-surface-container-low p-6">
           <div className="mb-5 flex items-center gap-2">
             <GitBranch className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-black text-on-surface">Relaciones de negocio</h2>
+            <h2 className="text-lg font-black text-on-surface">Business relations</h2>
           </div>
           <p className="mb-5 text-sm text-on-surface-variant">
             Links keep both IDs, the definition versions, and the relational contract they were created with.
@@ -480,7 +483,8 @@ export default function ProblemDetail() {
 
           <div className="grid gap-3 md:grid-cols-2">
             {relations.map((relation) => {
-              const outbound = relation.sourceEntityId === problem.id;
+              // Same fix as relationHref above.
+              const outbound = relation.sourceEntityId === problem.id && relation.sourceEntityKey === 'PRB';
               const entityKey = outbound ? relation.targetEntityKey : relation.sourceEntityKey;
               const humanId = outbound ? relation.targetHumanId : relation.sourceHumanId;
               const label = outbound ? relation.relationLabel : relation.inverseLabel;
@@ -489,7 +493,7 @@ export default function ProblemDetail() {
                   <Link to={relationHref(relation, problem.id)} className="min-w-0 flex-1">
                     <div className="text-[10px] font-black uppercase text-on-surface-variant">{label}</div>
                     <div className="mt-1 font-mono text-sm font-bold text-primary">{humanId}</div>
-                    <div className="text-xs text-on-surface-variant">{entityKey} · contrato v{relation.contractVersion}</div>
+                    <div className="text-xs text-on-surface-variant">{entityKey} · contract v{relation.contractVersion}</div>
                   </Link>
                   {can(PERMISSIONS.problemsEdit) && (
                     <button
