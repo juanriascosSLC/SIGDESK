@@ -14,6 +14,20 @@ import type { WorkflowNode, WorkflowNodeData } from './CustomNodes';
 export type CatalogGroup = 'Triggers' | 'Conditions' | 'Control' | 'Actions';
 export type SupportStatus = 'operational' | 'planned';
 
+// English display labels for the (Spanish-valued) priority enum stored on a
+// ticket/condition node. Shared between the editor's own priority dropdown
+// (WorkflowCanvasEditor) and the canvas node's summary text (CustomNodes) —
+// a single source so both never drift: CustomNodes used to interpolate the
+// raw enum value directly ("Priority = critica"), a real English-localization
+// gap only the canvas summary had, found live while migrating this
+// workstream's E2E specs.
+export const priorityLabels: Record<string, string> = {
+  baja: 'Low',
+  media: 'Medium',
+  alta: 'High',
+  critica: 'Critical',
+};
+
 export interface WorkflowCatalogItem {
   key: string;
   group: CatalogGroup;

@@ -32,3 +32,4 @@ Thumbs.db
 !.vscode/launch.json
 .run
 .tmp
+.test-cache

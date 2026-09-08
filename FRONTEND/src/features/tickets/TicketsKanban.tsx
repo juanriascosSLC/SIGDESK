@@ -126,13 +126,13 @@ function KanbanColumn({
             <div className="flex flex-col gap-1.5 mb-3 text-[11px] text-on-surface-variant">
               {ticket.site && (
                 <div className="flex justify-between items-center">
-                  <span className="text-on-surface-variant/70">Sitio:</span>
+                  <span className="text-on-surface-variant/70">Site:</span>
                   <span className="font-semibold text-on-surface">{ticket.site}</span>
                 </div>
               )}
               {ticket.assetId && (
                 <div className="flex justify-between items-center">
-                  <span className="text-on-surface-variant/70">Activo:</span>
+                  <span className="text-on-surface-variant/70">Asset:</span>
                   <span className="font-mono text-on-surface font-semibold">{ticket.assetId}</span>
                 </div>
               )}

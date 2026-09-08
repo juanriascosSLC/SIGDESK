@@ -77,17 +77,37 @@ export function toDesignerRegion(region: LayoutRegion): DesignerRegionLayout {
 }
 
 // Compiles the row/cell editing model back to placements with deterministic
-// row/column coordinates: row index = position in `rows`, column = running
-// sum of the spans of the cells before it in that row.
+// row/column coordinates: column = running sum of the spans of the cells
+// before it in that row.
+//
+// Row numbers are NOT simply the row's array index. Fixed 2026-09-06: this
+// used to write `row: rowIndex`, the position of the bucket in
+// `designerRegion.rows` — but `toDesignerRegion` buckets placements by their
+// RAW historical `row` number, and a `rowSpan > 1` placement (e.g. a
+// textarea spanning 2 rows) makes that raw numbering skip a row. Writing
+// back the bucket's array INDEX instead of its actual row silently
+// collapsed that reserved gap on every single edit — including edits to a
+// completely different region, since every region is recompiled on every
+// commit — corrupting `row` for every cell after the first `rowSpan > 1`
+// placement and producing overlapping placements the backend correctly
+// rejects at publish (`validar_page_layout.go`'s interval-overlap check).
+// The fix: advance a running row cursor by each row's own tallest
+// `rowSpan` (default 1) instead of by a flat +1, so a bucket that
+// legitimately started at historical row 3 (because the previous bucket's
+// rowSpan:2 occupied rows 1-2) is written back as row 3, not row 2.
 export function fromDesignerRegion(designerRegion: DesignerRegionLayout): PagePlacement[] {
   const result: PagePlacement[] = [];
-  designerRegion.rows.forEach((row, rowIndex) => {
+  let rowCursor = 0;
+  for (const row of designerRegion.rows) {
     let column = 0;
+    let tallestRowSpanInRow = 1;
     for (const cell of row.cells) {
-      result.push({ ...cell.placement, row: rowIndex, column, columnSpan: cell.span });
+      tallestRowSpanInRow = Math.max(tallestRowSpanInRow, cell.placement.rowSpan ?? 1);
+      result.push({ ...cell.placement, row: rowCursor, column, columnSpan: cell.span });
       column += cell.span;
     }
-  });
+    rowCursor += tallestRowSpanInRow;
+  }
   return result;
 }
 

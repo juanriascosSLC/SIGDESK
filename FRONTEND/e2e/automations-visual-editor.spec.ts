@@ -72,7 +72,7 @@ function historicalDefinition(id: string, version: number, priority: string, x: 
           type: 'condition',
           position: { x, y },
           data: {
-            catalogKey: 'condition.priority', label: 'Prioridad', title: 'Prioridad',
+            catalogKey: 'condition.priority', label: 'Priority', title: 'Priority',
             supportStatus: 'operational', color: 'amber', conditionMode: 'priority', priority,
           },
         },
@@ -164,15 +164,15 @@ test('el canvas publica el mismo grafo que luego vuelve a renderizar y conserva 
   await expect(page.getByTestId('workflow-visual-editor')).toBeVisible();
   await expect(page.locator('.react-flow__node')).toHaveCount(4);
 
-  const priorityNode = page.locator('.react-flow__node').filter({ hasText: 'Prioridad' }).first();
+  const priorityNode = page.locator('.react-flow__node').filter({ hasText: 'Priority' }).first();
   await priorityNode.click();
-  await page.getByRole('combobox', { name: 'Prioridad', exact: true }).selectOption('alta');
-  await expect(priorityNode).toContainText('Prioridad = alta');
-  await page.getByLabel('Versión').fill('7');
+  await page.getByRole('combobox', { name: 'Priority', exact: true }).selectOption('alta');
+  await expect(priorityNode).toContainText('Priority = High');
+  await page.getByLabel('Version').fill('7');
 
   await Promise.all([
     page.waitForURL(/\/app\/automations\/workflow-visual-e2e$/),
-    page.getByRole('button', { name: 'Publicar versión' }).click(),
+    page.getByRole('button', { name: 'Publish version' }).click(),
   ]);
 
   expect(posted).toBeDefined();
@@ -198,23 +198,23 @@ test('el canvas publica el mismo grafo que luego vuelve a renderizar y conserva 
   expect(posted!.layout.nodes.find((node) => node.type === 'condition')?.data.priority).toBe('alta');
 
   await expect(page.locator('.react-flow__node')).toHaveCount(4);
-  await expect(page.locator('.react-flow__node').filter({ hasText: 'Prioridad = alta' })).toBeVisible();
+  await expect(page.locator('.react-flow__node').filter({ hasText: 'Priority = High' })).toBeVisible();
   // La insignia muestra el estado REAL y la versión, no un texto fijo: ahora
   // una versión puede estar en borrador, publicada o archivada.
   // La versión la fija el propio test más arriba; lo que se comprueba es que
   // la insignia refleja el ESTADO real y la versión, no un texto fijo.
-  await expect(page.getByTestId('canvas-estado')).toContainText('publicado');
+  await expect(page.getByTestId('canvas-estado')).toContainText('Published');
   await expect(page.getByTestId('canvas-estado')).toContainText('v');
 
-  await page.getByRole('button', { name: 'Ver ejecuciones' }).click();
-  await expect(page.getByRole('heading', { name: 'Historial real de ejecuciones' })).toBeVisible();
+  await page.getByRole('button', { name: 'View executions' }).click();
+  await expect(page.getByRole('heading', { name: 'Live execution history' })).toBeVisible();
   await expect(page.getByText('INC-E2E-001', { exact: true })).toBeVisible();
   await expect(page.getByText('completada', { exact: true })).toBeVisible();
   await expect(page.getByText('INC-E2E-002', { exact: true })).toBeVisible();
   // Dentro de la tabla del historial: "Asignar automáticamente" es ahora también
   // el nombre del bloque en la paleta, así que buscarlo en toda la página
   // encontraría dos elementos distintos.
-  await expect(page.getByRole('table').getByText('Asignar automáticamente', { exact: true })).toBeVisible();
+  await expect(page.getByRole('table').getByText('Assign automatically', { exact: true })).toBeVisible();
   await expect(page.getByText('omitida', { exact: true })).toBeVisible();
   await expect(page.getByText('El ticket ya tenía una asignación y overwrite_existing está desactivado.', { exact: true })).toBeVisible();
 });
@@ -232,7 +232,7 @@ test('un bloque próximo se diseña visualmente, pero el compilador bloquea una 
     1,
   );
   expect(connectedCompilation.payload).toBeUndefined();
-  expect(connectedCompilation.errors).toContain('“Invocar webhook” está en preparación y todavía no puede publicarse.');
+  expect(connectedCompilation.errors).toContain("“Invoke Webhook” is under development and cannot be published yet.");
 
   await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
   await stubWorkflowAPI(page, async (route) => {
@@ -242,7 +242,7 @@ test('un bloque próximo se diseña visualmente, pero el compilador bloquea una 
   await page.goto('/app/automations/new');
   await expect(page.locator('.react-flow__node')).toHaveCount(4);
 
-  const webhook = page.getByRole('button', { name: /Invocar webhook/ });
+  const webhook = page.getByRole('button', { name: /Invoke Webhook/ });
   await webhook.scrollIntoViewIfNeeded();
   const pane = page.locator('.react-flow__pane');
   const paneBox = await pane.boundingBox();
@@ -260,19 +260,19 @@ test('un bloque próximo se diseña visualmente, pero el compilador bloquea una 
     clientY: paneBox!.y + Math.min(500, paneBox!.height - 80),
   });
   await expect(page.locator('.react-flow__node')).toHaveCount(5);
-  await expect(page.locator('.react-flow__node').filter({ hasText: 'Invocar webhook' })).toBeVisible();
+  await expect(page.locator('.react-flow__node').filter({ hasText: 'Invoke Webhook' })).toBeVisible();
 
-  await page.getByRole('button', { name: /Validar/ }).click();
-  await expect(page.getByText('“Invocar webhook” está en el canvas como diseño futuro, pero no se publicará.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Publicar versión' })).toBeEnabled();
+  await page.getByRole('button', { name: /Validate/ }).click();
+  await expect(page.getByText("“Invoke Webhook” is on the canvas as a future design and will not be published.")).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Publish version' })).toBeEnabled();
 
-  const validationOverlay = page.locator('.fixed.inset-0').filter({ hasText: 'Validación previa' });
+  const validationOverlay = page.locator('.fixed.inset-0').filter({ hasText: 'Pre-validation' });
   await validationOverlay.getByRole('button').click();
-  const plannedNode = page.locator('.react-flow__node').filter({ hasText: 'Invocar webhook' });
+  const plannedNode = page.locator('.react-flow__node').filter({ hasText: 'Invoke Webhook' });
   await plannedNode.click();
-  await page.getByRole('button', { name: 'Eliminar' }).click();
+  await page.getByRole('button', { name: 'Delete' }).click();
   await expect(plannedNode).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Publicar versión' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Publish version' })).toBeEnabled();
 });
 
 test('una asignación publicada sin layout conserva su modo, destino y política de sobrescritura', () => {
@@ -368,7 +368,7 @@ test('la asignación por equipo no inventa persona y una asignación incompleta 
   assignment.data.teamId = '';
   const incomplete = compileVisualWorkflow([trigger, assignment], [edge], 5);
   expect(incomplete.payload).toBeUndefined();
-  expect(incomplete.errors).toContain('Completa área y equipo en “Asignar automáticamente”.');
+  expect(incomplete.errors).toContain("Complete area and team in “Assign Automatically”.");
   // El error viaja anclado al nodo, que es lo que permite resaltarlo y enfocarlo.
   expect(incomplete.issues.some((issue) => issue.nodeId === assignment.id)).toBe(true);
 });
@@ -389,25 +389,25 @@ test('el selector de asignación usa Organization, recupera un fallo y limpia se
   );
 
   await page.goto('/app/automations/new');
-  await page.getByRole('button', { name: /Asignar automáticamente/ }).click();
-  await expect(page.getByText('No se pudo consultar Organization')).toBeVisible();
-  await page.getByRole('button', { name: 'Reintentar directorio' }).click();
+  await page.getByRole('button', { name: /Assign Automatically/ }).click();
+  await expect(page.getByText('Could not query Organization')).toBeVisible();
+  await page.getByRole('button', { name: 'Retry directory' }).click();
 
   // El modo se elige dentro del bloque, no eligiendo otro bloque distinto.
   await page.getByTestId('assignment-mode-user').click();
-  await page.getByRole('combobox', { name: 'Área' }).selectOption('department-services');
-  await page.getByRole('combobox', { name: 'Equipo' }).selectOption('team-services');
-  await page.getByRole('combobox', { name: 'Persona' }).selectOption('user-services-1');
-  await page.getByLabel('Reasignar si ya tiene responsable').check();
+  await page.getByRole('combobox', { name: 'Area' }).selectOption('department-services');
+  await page.getByRole('combobox', { name: 'Team' }).selectOption('team-services');
+  await page.getByRole('combobox', { name: 'Person' }).selectOption('user-services-1');
+  await page.getByLabel(/Reassign if already assigned/).check();
 
-  const assignmentNode = page.locator('.react-flow__node').filter({ hasText: 'Asignar automáticamente' });
+  const assignmentNode = page.locator('.react-flow__node').filter({ hasText: 'Assign Automatically' });
   await expect(assignmentNode).toContainText('Agente Services');
   await expect(assignmentNode).toContainText('Servicios');
 
-  await page.getByRole('combobox', { name: 'Área' }).selectOption('department-it');
-  await expect(page.getByRole('combobox', { name: 'Equipo' })).toHaveValue('');
-  await expect(page.getByRole('combobox', { name: 'Persona' })).toHaveValue('');
-  await expect(assignmentNode).toContainText('sin seleccionar');
+  await page.getByRole('combobox', { name: 'Area' }).selectOption('department-it');
+  await expect(page.getByRole('combobox', { name: 'Team' })).toHaveValue('');
+  await expect(page.getByRole('combobox', { name: 'Person' })).toHaveValue('');
+  await expect(assignmentNode).toContainText('unselected');
   expect(directoryAttempts).toBe(3);
 });
 
@@ -435,14 +435,14 @@ test('un fallo de publicación conserva el canvas y permite reintentar sin dupli
   });
 
   await page.goto('/app/automations/new');
-  await page.getByRole('button', { name: 'Publicar versión' }).click();
+  await page.getByRole('button', { name: 'Publish version' }).click();
   await expect(page.getByText('Temporal no está disponible; vuelve a intentar.')).toBeVisible();
   await expect(page).toHaveURL(/\/app\/automations\/new$/);
   await expect(page.locator('.react-flow__node')).toHaveCount(4);
 
   await Promise.all([
     page.waitForURL(/\/app\/automations\/workflow-retry-e2e$/),
-    page.getByRole('button', { name: 'Publicar versión' }).click(),
+    page.getByRole('button', { name: 'Publish version' }).click(),
   ]);
   expect(attempts).toBe(2);
   await expect(page.locator('.react-flow__node')).toHaveCount(4);
@@ -458,18 +458,18 @@ test('dos versiones publicadas conservan por separado condición y posición del
   });
 
   await page.goto('/app/automations/workflow-history-v1');
-  const v1Condition = page.locator('.react-flow__node').filter({ hasText: 'Prioridad = critica' });
+  const v1Condition = page.locator('.react-flow__node').filter({ hasText: 'Priority = Critical' });
   await expect(v1Condition).toBeVisible();
   await expect(v1Condition).toHaveAttribute('style', /translate\(420px, 190px\)/);
 
   await page.goto('/app/automations/workflow-history-v2');
-  const v2Condition = page.locator('.react-flow__node').filter({ hasText: 'Prioridad = alta' });
+  const v2Condition = page.locator('.react-flow__node').filter({ hasText: 'Priority = High' });
   await expect(v2Condition).toBeVisible();
   await expect(v2Condition).toHaveAttribute('style', /translate\(710px, 330px\)/);
 
   await page.goto('/app/automations/workflow-history-v1');
-  await expect(page.locator('.react-flow__node').filter({ hasText: 'Prioridad = critica' })).toBeVisible();
-  await expect(page.locator('.react-flow__node').filter({ hasText: 'Prioridad = alta' })).toHaveCount(0);
+  await expect(page.locator('.react-flow__node').filter({ hasText: 'Priority = Critical' })).toBeVisible();
+  await expect(page.locator('.react-flow__node').filter({ hasText: 'Priority = High' })).toHaveCount(0);
 });
 
 test('lectura y administración de Automations respetan permisos distintos', async ({ page }) => {

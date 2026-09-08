@@ -5,6 +5,6 @@ export const ticketFieldLabels: Record<string, string> = {
   requester: REQUESTER_LABEL,
   assignee: ASSIGNED_TO_LABEL,
   createdAt: 'Created date',
-  status: 'Estado',
-  mergedCount: 'Tickets combinados',
+  status: 'Status',
+  mergedCount: 'Merged tickets',
 };

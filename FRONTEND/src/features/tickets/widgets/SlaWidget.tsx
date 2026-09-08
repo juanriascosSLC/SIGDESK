@@ -1,5 +1,6 @@
 import { AlertTriangle, Timer } from 'lucide-react';
 import type { SlaAssessment } from '@/features/sla/api';
+import { formatDateTime } from '@/i18n/format';
 import type { TicketPageContext } from './context';
 
 type SlaMetricView = {
@@ -41,18 +42,18 @@ function slaMetric(assessment: SlaAssessment, kind: 'response' | 'resolution'): 
   const breached =
     (kind === 'response' ? assessment.responseBreached : assessment.resolutionBreached) || remaining < 0;
   const pct = Math.max(0, Math.min(100, 100 - (remaining / (targetMinutes * 60_000)) * 100));
-  let label = `${formatDuration(remaining)} restantes`;
+  let label = `${formatDuration(remaining)} remaining`;
   if (completedAt) {
-    label = breached ? 'Incumplido' : 'Cumplido';
+    label = breached ? 'Breached' : 'Met';
   } else if (breached) {
-    label = `Vencido hace ${formatDuration(remaining)}`;
+    label = `Overdue by ${formatDuration(remaining)}`;
   } else if (pausedAt) {
-    label = `${formatDuration(remaining)} al pausar`;
+    label = `${formatDuration(remaining)} remaining when paused`;
   }
   return {
     pct,
     label,
-    deadline: dueAt.toLocaleString(),
+    deadline: formatDateTime(dueAt, 'en-US'),
     completed: Boolean(completedAt),
     breached,
     paused: Boolean(pausedAt && !completedAt),
@@ -115,7 +116,7 @@ export function SlaWidget({ context }: { context: TicketPageContext }) {
           <div className="flex flex-wrap items-center justify-end gap-2">
             {assessment.pausedAt && !assessment.resolvedAt && (
               <span className="text-[10px] font-black text-violet-300 bg-violet-500/10 border border-violet-500/20 rounded-full px-3 py-1">
-                RELOJ PAUSADO
+                CLOCK PAUSED
               </span>
             )}
             <span className="text-[10px] font-bold text-on-surface-variant bg-surface-container border border-border/50 rounded-full px-3 py-1">
@@ -130,10 +131,10 @@ export function SlaWidget({ context }: { context: TicketPageContext }) {
         )}
       </div>
       {loading ? (
-        <p className="text-sm text-on-surface-variant">Calculando objetivos SLA…</p>
+        <p className="text-sm text-on-surface-variant">Calculating SLA targets…</p>
       ) : assessment ? (
         <div className="flex flex-wrap gap-8">
-          <SlaBar title="Primera respuesta" metric={slaMetric(assessment, 'response')} />
+          <SlaBar title="First response" metric={slaMetric(assessment, 'response')} />
           <SlaBar title="Resolution" metric={slaMetric(assessment, 'resolution')} />
         </div>
       ) : (

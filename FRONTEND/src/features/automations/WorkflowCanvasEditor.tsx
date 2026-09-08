@@ -61,6 +61,7 @@ import {
   graphFromDefinition,
   esAccionDeAsignacion,
   nodeFromCatalog,
+  priorityLabels,
   workflowCatalog,
   type CatalogGroup,
   type WorkflowCatalogItem,
@@ -83,13 +84,6 @@ const groupIcons = {
   Conditions: GitBranch,
   Control: Clock3,
   Actions: Sparkles,
-};
-
-const priorityLabels = {
-  baja: 'Low',
-  media: 'Medium',
-  alta: 'High',
-  critica: 'Critical',
 };
 
 function initialGraph(definition?: WorkflowDefinition) {

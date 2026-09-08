@@ -195,7 +195,7 @@ export function fieldDisplayLabel(field: Pick<FieldDefinition, 'key' | 'label'>)
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replace(/[_-]+/g, ' ')
     .trim();
-  return readable ? readable.charAt(0).toUpperCase() + readable.slice(1) : 'Campo';
+  return readable ? readable.charAt(0).toUpperCase() + readable.slice(1) : 'Field';
 }
 
 export type DetailFieldSource = 'catalog' | 'ticket';

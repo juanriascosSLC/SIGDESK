@@ -128,10 +128,10 @@ async function performDrag(
 }
 
 async function ensureAssetDetailsSlot(page: Page) {
-  let slot = page.locator('[data-testid^="page-designer-slot-cell-"]').filter({ hasText: 'Detalles del activo' }).first();
+  let slot = page.locator('[data-testid^="page-designer-slot-cell-"]').filter({ hasText: 'Asset Details' }).first();
   if (!(await slot.count())) {
     await page.getByTestId('page-designer-palette-widget-assetDetails').click();
-    slot = page.locator('[data-testid^="page-designer-slot-cell-"]').filter({ hasText: 'Detalles del activo' }).first();
+    slot = page.locator('[data-testid^="page-designer-slot-cell-"]').filter({ hasText: 'Asset Details' }).first();
   }
   await expect(slot).toBeVisible();
   return slot;
@@ -146,7 +146,7 @@ test('drag from palette into an empty region still works', async ({ page }) => {
     false,
   );
   await expect(
-    page.getByTestId('page-designer-region-wrapper-footer').getByText('Soluciones sugeridas').first(),
+    page.getByTestId('page-designer-region-wrapper-footer').getByText('Suggested Solutions').first(),
   ).toBeVisible();
 });
 
@@ -178,7 +178,7 @@ test('drag an existing slot from the sidebar into main still works', async ({ pa
     false,
   );
   await expect(
-    page.getByTestId('page-designer-region-wrapper-main').getByText('Detalles del activo').first(),
+    page.getByTestId('page-designer-region-wrapper-main').getByText('Asset Details').first(),
   ).toBeVisible();
 });
 
@@ -186,7 +186,7 @@ test('a fixed region rejects everything the palette offers', async ({ page }) =>
   await openPageDesignerForINC(page, false);
   const header = page.getByTestId('page-designer-region-wrapper-header');
   await performDrag(page, page.getByTestId('page-designer-palette-widget-suggestedSolutions'), header, false, false);
-  await expect(header.getByText('Soluciones sugeridas')).toHaveCount(0);
+  await expect(header.getByText('Suggested Solutions')).toHaveCount(0);
   // Still exactly the one locked widget it started with.
   await expect(header.getByTestId(/^page-designer-slot-/)).toHaveCount(1);
 });
@@ -195,31 +195,31 @@ test('click-to-add, resize from the panel, Delete and Ctrl+Z', async ({ page }) 
   await openPageDesignerForINC(page);
 
   await page.getByTestId('page-designer-palette-content-divider').click();
-  const slot = page.getByTestId(/^page-designer-slot-cell-/).filter({ hasText: 'Separador' });
+  const slot = page.getByTestId(/^page-designer-slot-cell-/).filter({ hasText: 'Divider' });
   await expect(slot).toHaveCount(1);
-  await expect(page.getByTestId('page-designer-properties').getByText('Elemento estructural')).toBeVisible();
+  await expect(page.getByTestId('page-designer-properties').getByText('Structural element')).toBeVisible();
 
   // Width control in the properties panel drives the same resize path the
   // drag handle does.
-  await page.getByTestId('page-designer-properties').getByRole('button', { name: /La mitad/ }).click();
-  await expect(slot).toHaveAttribute('aria-label', /6 de 12 columnas/);
+  await page.getByTestId('page-designer-properties').getByRole('button', { name: /Half/ }).click();
+  await expect(slot).toHaveAttribute('aria-label', /6 of 12 columns/);
 
   // Delete removes the selection; Ctrl+Z brings it back.
   await page.keyboard.press('Delete');
-  await expect(page.getByTestId(/^page-designer-slot-cell-/).filter({ hasText: 'Separador' })).toHaveCount(0);
+  await expect(page.getByTestId(/^page-designer-slot-cell-/).filter({ hasText: 'Divider' })).toHaveCount(0);
   await page.keyboard.press('Control+z');
-  await expect(page.getByTestId(/^page-designer-slot-cell-/).filter({ hasText: 'Separador' })).toHaveCount(1);
+  await expect(page.getByTestId(/^page-designer-slot-cell-/).filter({ hasText: 'Divider' })).toHaveCount(1);
 });
 
 test('move-to-region from the properties panel relocates the element', async ({ page }) => {
   await openPageDesignerForINC(page);
   const assetSlot = await ensureAssetDetailsSlot(page);
   await assetSlot.click();
-  await page.getByTestId('page-designer-properties').getByRole('button', { name: 'Secciones inferiores' }).click();
+  await page.getByTestId('page-designer-properties').getByRole('button', { name: 'Footer sections' }).click();
   await expect(
     page
       .getByTestId('page-designer-region-wrapper-footer')
-      .getByText('Detalles del activo').first(),
+      .getByText('Asset Details').first(),
   ).toBeVisible();
 });
 
@@ -256,7 +256,7 @@ test('the resize handle still drags, and canvas widgets are inert', async ({ pag
   const resolveBox = await resolve.boundingBox();
   if (!resolveBox) throw new Error('no Resolve box');
   await page.mouse.click(resolveBox.x + resolveBox.width / 2, resolveBox.y + resolveBox.height / 2);
-  await expect(page.getByTestId('page-designer-properties').getByText('Barra de acciones').first()).toBeVisible();
+  await expect(page.getByTestId('page-designer-properties').getByText('Action Bar').first()).toBeVisible();
   // Status untouched: the actions bar still offers Resolve, not Reopen.
   await expect(resolve).toBeVisible();
 });

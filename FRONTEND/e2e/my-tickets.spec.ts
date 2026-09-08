@@ -137,7 +137,7 @@ test('an expired session signs the user out to a real login screen, not a blank 
 
   await page.goto('/portal/tickets');
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole('button', { name: /iniciar sesión/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
 });
 
 test('tickets_service down shows a real error with retry, and recovers', async ({ page }) => {
