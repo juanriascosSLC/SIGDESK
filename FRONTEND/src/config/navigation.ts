@@ -13,6 +13,7 @@ import {
   Timer,
   MessageSquare,
   Settings,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/features/auth/permissions';
@@ -166,6 +167,15 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Server,
     section: 'itsm',
     permission: (ctx) => ctx.can(PERMISSIONS.assetsView),
+    surfaces: ['sidebar', 'drawer'],
+  },
+  {
+    key: 'services',
+    label: 'Services',
+    route: '/app/services',
+    icon: Wrench,
+    section: 'itsm',
+    permission: (ctx) => ctx.can(PERMISSIONS.changesView),
     surfaces: ['sidebar', 'drawer'],
   },
   {
