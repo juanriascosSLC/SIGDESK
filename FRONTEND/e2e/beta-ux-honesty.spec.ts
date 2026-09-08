@@ -97,23 +97,23 @@ test.describe('static: no functional native dialogs or dead links in production 
   });
 });
 
-test('Knowledge Base is honest about having no backend, on both surfaces', async ({ page }) => {
+test('Knowledge Base explains an unreachable service without inventing articles', async ({ page }) => {
   await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
 
   await page.goto('/app/knowledge');
-  await expect(page.getByText(/available yet/i)).toBeVisible();
+  await expect(page.getByText('Knowledge Base is unavailable')).toBeVisible();
   await expect(page.getByText('KB-1024')).toHaveCount(0);
   await expect(page.getByText(/66 articles/i)).toHaveCount(0);
 
   await page.goto('/app/knowledge/KB-1024');
-  await expect(page.getByText(/available yet/i)).toBeVisible();
+  await expect(page.getByText('Could not load article')).toBeVisible();
   await expect(page.getByText(/power-cycle/i)).toHaveCount(0);
 });
 
-test('Knowledge Base shows the same honest state from the end-user portal', async ({ page }) => {
+test('Knowledge Base shows the same unavailable state from the end-user portal', async ({ page }) => {
   await mockAuthenticatedRequester(page, { forwardUnmatched: false });
   await page.goto('/portal/knowledge');
-  await expect(page.getByText(/available yet/i)).toBeVisible();
+  await expect(page.getByText('Knowledge Base is unavailable')).toBeVisible();
   await expect(page.getByText('KB-1024')).toHaveCount(0);
 });
 

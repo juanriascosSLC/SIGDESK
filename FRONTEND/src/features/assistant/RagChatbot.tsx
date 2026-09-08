@@ -13,37 +13,41 @@ import {
 import { ApiError, apiRequest } from "../../lib/apiClient";
 
 type ChatSource = { type: string; id: string; score: number };
+type Confidence = { level: "high" | "medium" | "low"; reasons: string[] };
 type ChatMessage = {
   from: "assistant" | "user";
   text: string;
   time: string;
   sources?: ChatSource[];
+  confidence?: Confidence;
+  ragAvailable?: boolean;
 };
 type ChatResponse = {
   answer: string;
   rag_available: boolean;
   sources: ChatSource[];
+  confidence?: Confidence;
 };
 
 const starterMessages: ChatMessage[] = [
   {
     from: "assistant",
-    text: "Hi, I'm the SIG-DESK assistant. I can look up tickets and authorized knowledge.",
+    text: "Hi, I'm the SIG-DESK assistant. I can help you find information you are allowed to view.",
     time: "Now",
   },
   { from: "assistant", text: "What do you need help with today?", time: "Now" },
 ];
 
 const suggestions = [
-  { icon: Ticket, label: "How do I review a ticket?", color: "text-cyan-400" },
+  { icon: Ticket, label: "How can I check a ticket?", color: "text-cyan-400" },
   {
     icon: BookOpen,
-    label: "Search the Knowledge Base",
+    label: "Search your permitted knowledge",
     color: "text-violet-400",
   },
   {
     icon: ShieldCheck,
-    label: "Look up a policy",
+    label: "Find a policy or procedure",
     color: "text-amber-400",
   },
 ];
@@ -77,6 +81,8 @@ export default function RagChatbot() {
           text: response.answer,
           time: "Now",
           sources: response.sources,
+          confidence: response.confidence,
+          ragAvailable: response.rag_available,
         },
       ]);
     } catch (requestError) {
@@ -133,8 +139,8 @@ export default function RagChatbot() {
                 SIG Assistant
               </h2>
               <p className="mt-0.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-emerald-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> RAG
-                system
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Knowledge
+                assistant
               </p>
             </div>
           </div>
@@ -158,8 +164,8 @@ export default function RagChatbot() {
           </div>
         </div>
         <div className="mt-4 flex items-center gap-2 rounded-xl border border-cyan-400/15 bg-cyan-400/5 px-3 py-2 text-[10px] text-on-surface-variant">
-          <Sparkles size={13} className="text-cyan-300" /> Answers based on
-          authorized internal knowledge.
+          <Sparkles size={13} className="text-cyan-300" /> Uses only the
+          tickets and knowledge you are permitted to view.
         </div>
       </header>
       <div className="flex-1 space-y-4 overflow-y-auto px-4 py-5">
@@ -179,7 +185,7 @@ export default function RagChatbot() {
               {message.sources && message.sources.length > 0 && (
                 <div className="flex flex-wrap gap-1 px-1">
                   <span className="text-[9px] uppercase text-on-surface-variant">
-                    Sources:
+                    References:
                   </span>
                   {message.sources.map((source) => (
                     <span
@@ -190,6 +196,16 @@ export default function RagChatbot() {
                     </span>
                   ))}
                 </div>
+                )}
+              {message.from === "assistant" && message.ragAvailable === false && (
+                <p className="px-1 text-[10px] text-amber-300" role="status">
+                  Knowledge search is temporarily unavailable. This answer was not based on internal records.
+                </p>
+              )}
+              {message.from === "assistant" && message.confidence?.level === "low" && message.ragAvailable !== false && (
+                <p className="px-1 text-[10px] text-amber-300" role="status">
+                  Needs verification: there was not enough supporting information to confirm this answer.
+                </p>
               )}
               <span className="px-1 text-[9px] text-on-surface-variant">
                 {message.from === "user" ? "You" : "SIG Assistant"} ·{" "}
@@ -230,7 +246,7 @@ export default function RagChatbot() {
               }
             }}
             rows={1}
-            placeholder="Type your question…"
+            placeholder="Ask a question…"
             disabled={isSending}
             className="max-h-24 min-h-6 flex-1 resize-none bg-transparent py-1 text-sm text-on-surface outline-none placeholder:text-on-surface-variant"
           />
@@ -252,7 +268,7 @@ export default function RagChatbot() {
           <p className="mt-2 text-center text-[10px] text-red-400">{error}</p>
         )}
         <p className="mt-2 text-center text-[9px] text-on-surface-variant">
-          Answers based on authorized knowledge.
+          Information is provided for guidance; verify important details in the referenced record.
         </p>
       </footer>
     </section>
