@@ -19,6 +19,7 @@ type Spec = {
   fields: Array<Record<string, unknown>>;
   views?: Record<string, string[]>;
   createPage?: unknown;
+  layouts?: unknown;
 };
 
 const definicion = {
@@ -170,6 +171,37 @@ test('duplicar, eliminar y mover están disponibles sin expandir', async ({ page
   await expect(titulo.getByRole('button', { name: 'Subir campo' }), 'el primero no sube').toBeDisabled();
 });
 
+test('escribir la etiqueta conserva el foco y no desplaza la tarjeta', async ({ page }) => {
+  await abrirCampos(page);
+
+  const titulo = tarjeta(page, 'titulo');
+  await titulo.getByRole('button', { name: /Configurar el campo/ }).click();
+  const etiqueta = page.getByLabel('Etiqueta', { exact: true });
+  await etiqueta.focus();
+  await etiqueta.press('End');
+  await etiqueta.type(' actualizado');
+
+  await expect(etiqueta).toHaveValue('Título actualizado');
+  await expect(etiqueta).toBeFocused();
+});
+
+test('activar bindsTo vuelve a colocar el campo en Crear', async ({ page }) => {
+  await abrirCampos(page, conPaginaDeCreacion);
+
+  const cantidad = tarjeta(page, 'cantidad');
+  await cantidad.getByRole('button', { name: /Configurar el campo/ }).click();
+  await page.getByTestId('catalog-field-bindsto-cantidad').selectOption('assetId');
+
+  const spec = await leerSpec(page);
+  const createPage = spec.createPage as {
+    default: { main: { placements: Array<{ fieldKey?: string }> } };
+  };
+  expect(
+    createPage.default.main.placements.some((placement) => placement.fieldKey === 'cantidad'),
+    'un campo vinculado debe quedar disponible en el formulario de creación',
+  ).toBeTruthy();
+});
+
 test('un campo nuevo se abre solo: sin configurar no sirve de nada', async ({ page }) => {
   await abrirCampos(page);
 
@@ -180,6 +212,30 @@ test('un campo nuevo se abre solo: sin configurar no sirve de nada', async ({ pa
   // Contrato que catalog-builder-runtime.spec.ts usa: el primer input del
   // cuerpo es la etiqueta.
   await expect(nueva.locator('input').first()).toHaveValue(/Nuevo campo/);
+});
+
+test('Dispositivo del sitio agrega el sitio necesario antes del dispositivo', async ({ page }) => {
+  await abrirCampos(page);
+
+  await page.getByTitle('Crear tipo específico').click();
+  // Renamed on merge: this branch's quick-field palette is in English, so
+  // "Dispositivo del sitio" is "Site Device" and the site field it
+  // materializes is labelled "Affected Site".
+  await page.getByRole('button', { name: 'Site Device' }).click();
+
+  const spec = await leerSpec(page);
+  const siteIndex = spec.fields.findIndex((field) => field.bindsTo === 'siteAssetId');
+  const deviceIndex = spec.fields.findIndex((field) => field.bindsTo === 'assetId');
+  expect(siteIndex).toBeGreaterThanOrEqual(0);
+  expect(deviceIndex).toBe(siteIndex + 1);
+  expect(spec.fields[siteIndex]).toMatchObject({ label: 'Affected Site', required: false });
+  expect(spec.fields[deviceIndex]).toMatchObject({
+    label: 'Dispositivo del sitio', required: false,
+  });
+  expect(spec.views?.create?.slice(-2)).toEqual([
+    spec.fields[siteIndex].key,
+    spec.fields[deviceIndex].key,
+  ]);
 });
 
 // Duplicar junto al original, no al final: se duplica para tener dos variantes

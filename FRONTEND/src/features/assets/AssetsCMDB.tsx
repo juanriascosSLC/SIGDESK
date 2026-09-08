@@ -113,7 +113,20 @@ export default function AssetsCMDB() {
           <h1 className="mt-2 text-3xl font-black text-on-surface">Inventario operativo</h1>
           <p className="mt-2 max-w-3xl text-sm text-on-surface-variant">Vista de solo lectura sincronizada desde SIGInventory. SIG-DESK conserva referencias estables y snapshots históricos; la información maestra continúa perteneciendo a Inventory.</p>
         </div>
-        <button type="button" onClick={() => { void sitesQuery.refetch(); void assetsQuery.refetch(); void assetTypesQuery.refetch(); }} className="secondary-button"><RefreshCw className="h-4 w-4" />Sincronizar</button>
+        <button
+          type="button"
+          onClick={() => {
+            void sitesQuery.refetch();
+            // `refetch()` deliberately bypasses React Query's `enabled`
+            // flag. Do not turn an empty site list into the malformed route
+            // `/assets/sites//assets` while Inventory is unavailable.
+            if (effectiveSite) {
+              void assetsQuery.refetch();
+              void assetTypesQuery.refetch();
+            }
+          }}
+          className="secondary-button"
+        ><RefreshCw className="h-4 w-4" />Sincronizar</button>
       </header>
 
       {stale && (

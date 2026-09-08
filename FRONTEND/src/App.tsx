@@ -29,6 +29,7 @@ const DealershipView = React.lazy(() => import('./features/services/DealershipVi
 const SrvDetail = React.lazy(() => import('./features/services/SrvDetail'));
 const KnowledgeBase = React.lazy(() => import('./features/knowledge/KnowledgeBase'));
 const ArticleDetail = React.lazy(() => import('./features/knowledge/ArticleDetail'));
+const KnowledgeEditor = React.lazy(() => import('./features/knowledge/KnowledgeEditor'));
 const SlaPolicies = React.lazy(() => import('./features/settings/SlaPolicies'));
 const Reports = React.lazy(() => import('./features/reports/Reports'));
 const ProblemsList = React.lazy(() => import('./features/problems/ProblemsList'));
@@ -38,6 +39,7 @@ const EndUserDashboard = React.lazy(() => import('./features/endUser/EndUserDash
 const MyTickets = React.lazy(() => import('./features/endUser/MyTickets'));
 const UsersManager = React.lazy(() => import('./features/admin/UsersManager'));
 const CatalogBuilder = React.lazy(() => import('./features/admin/CatalogBuilder'));
+const AssistantFeedback = React.lazy(() => import('./features/admin/AssistantFeedback'));
 const Dashboard = React.lazy(() =>
   import('./features/dashboard/Dashboard').then((module) => ({ default: module.Dashboard })),
 );
@@ -258,6 +260,11 @@ function AppRoutes() {
                   <ArticleDetail />
                 </ProtectedRoute>
               } />
+              <Route path="/knowledge/new" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.knowledgeView}>
+                  <KnowledgeEditor />
+                </ProtectedRoute>
+              } />
               <Route path="/reports" element={
                 <ProtectedRoute requiredPermission={PERMISSIONS.reportsView}>
                   <Reports />
@@ -321,6 +328,11 @@ function AppRoutes() {
               <Route path="/admin/users" element={
                 <ProtectedRoute requireCondition={canManageUsersAndRoles} fallbackTo="/app">
                   <UsersManager />
+                </ProtectedRoute>
+              } />
+              <Route path="/admin/assistant-feedback" element={
+                <ProtectedRoute requireCondition={canManageUsersAndRoles} fallbackTo="/app">
+                  <AssistantFeedback />
                 </ProtectedRoute>
               } />
               <Route

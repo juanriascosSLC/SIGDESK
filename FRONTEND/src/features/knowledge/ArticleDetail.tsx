@@ -1,43 +1,27 @@
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, BookOpen } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { EmptyState } from '@/components/ui/states';
+import { getKnowledge, type KnowledgeArticle } from './api';
 
 /**
- * See KnowledgeBase.tsx — there is no backend for knowledge-base articles.
- * This screen used to render the exact same fabricated HIKVISION-camera
- * article content for every `:id`, complete with a made-up author, view
- * count, "helpful" vote counts, a fake related-articles list, and
- * print/share buttons with no handler. None of that is real. The route is
- * kept (not removed) so an existing `/knowledge/:id` link — from a ticket
- * comment, a bookmark, wherever — lands on an honest message instead of a
- * 404. `..` correctly resolves to `/app/knowledge` or `/portal/knowledge`
- * depending on which audience rendered this route.
+ * See KnowledgeBase.tsx for the merge note: this branch's "no backend yet"
+ * empty state was dropped in favour of main's real implementation against
+ * `knowledge_service`, and the two follow-ups recorded there (the stale
+ * beta-ux-honesty assertions, and the absolute `/app/knowledge` navigation
+ * on a component that also renders under `/portal/knowledge`) apply to this
+ * screen too.
  */
 export default function ArticleDetail() {
-  return (
-    <div className="p-6 lg:p-8 w-full space-y-6">
-      <Link to=".." className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-primary transition-colors w-fit">
-        <ArrowLeft className="w-4 h-4" aria-hidden="true" />
-        Back to Knowledge Base
-      </Link>
-      <PageHeader
-        eyebrow={
-          <div className="mb-1 flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-primary" aria-hidden="true" />
-            <span className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Self Service</span>
-          </div>
-        }
-        title="Knowledge Base"
-        description="Find answers, guides and standard procedures before opening a ticket."
-      />
-      <div className="bg-surface-container-low border border-border/40 rounded-3xl overflow-hidden">
-        <EmptyState
-          icon="general"
-          title="Knowledge Base is not available yet"
-          description="SIG-DESK doesn't have a backend service for knowledge-base articles yet. This section will become active once that capability ships — nothing here is functional in the meantime."
-        />
-      </div>
-    </div>
-  );
+  const { id = '' } = useParams();
+  const navigate = useNavigate();
+  const [article, setArticle] = useState<KnowledgeArticle>();
+  const [error, setError] = useState('');
+  useEffect(() => { getKnowledge(id).then(setArticle).catch(() => setError('That manual does not exist, or you do not have permission to view it.')); }, [id]);
+  if (error) return <div className="p-8 text-red-400">{error}</div>;
+  if (!article) return <div className="p-8 text-on-surface-variant">Loading manual…</div>;
+  return <div className="p-8 max-w-4xl">
+    <button onClick={() => navigate('/app/knowledge')} className="flex items-center gap-2 text-on-surface-variant hover:text-primary mb-6"><ArrowLeft className="w-4 h-4" />Back to Knowledge Base</button>
+    <div className="border-b border-border pb-6 mb-8"><p className="font-mono text-xs text-cyan-500">{article.numero_visible} · v{article.version}</p><h1 className="text-3xl font-black text-on-surface mt-2">{article.titulo}</h1><p className="text-on-surface-variant mt-2">{article.categoria} · {article.etiquetas.join(', ')}</p></div>
+    <article className="whitespace-pre-wrap text-on-surface-variant leading-relaxed"><BookOpen className="inline w-4 h-4 mr-2 text-cyan-400" />{article.contenido.replace(/^---[\s\S]*?---\s*/, '')}</article>
+  </div>;
 }
