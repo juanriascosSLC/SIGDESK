@@ -12,7 +12,7 @@ import {
 import { BindingPicker } from '@/features/catalog/BindingPicker';
 import { DynamicField } from '@/features/catalog/DynamicField';
 import type { FormPageContext, FormSlaPreview } from '@/features/catalog/form-widgets/context';
-import { assetTypeMatches } from '@/features/assets/api';
+import { recursoTypeMatches } from '@/features/assets/api';
 import { SAMPLE_BINDING_ITEMS, sampleDataFor } from './sample-values';
 
 const SAMPLE_STAKEHOLDER_DIRECTORY = {
@@ -76,7 +76,7 @@ export function useSimulatedFormContext(
     if (field.bindsTo) {
       const pickerKind = bindingKindOf(field.bindsTo);
       const items = (SAMPLE_BINDING_ITEMS[field.bindsTo] ?? []).filter(
-        (item) => pickerKind !== 'recurso' || assetTypeMatches(item.tipo, field.resourceType),
+        (item) => pickerKind !== 'recurso' || recursoTypeMatches(item.tipo, field.resourceType),
       );
       const shared = {
         label: placement.label || field.label,
