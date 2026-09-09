@@ -502,7 +502,7 @@ function OrganizationTab() {
         <div>
           <h2 className="font-bold text-on-surface">Organizational structure</h2>
           <p className="text-xs text-on-surface-variant mt-1">
-            Company → areas/departments → teams. You can expand this structure as the company needs it.
+            Organizational unit → areas/departments → teams. You can expand this structure as the organization needs it.
           </p>
         </div>
         {canCreate && (
@@ -548,7 +548,7 @@ function OrganizationTab() {
               className="bg-surface-container border border-border/50 rounded-lg px-3 py-2 text-sm text-on-surface outline-none focus:border-cyan-500/50"
             >
               <option value="empresa" disabled={rootExists}>
-                Company{rootExists ? ' (already exists)' : ''}
+                Organizational unit{rootExists ? ' (already exists)' : ''}
               </option>
               <option value="departamento">Department</option>
               <option value="equipo">Team</option>
@@ -591,7 +591,7 @@ function OrganizationTab() {
       <div className="bg-surface-container-low border border-border/40 rounded-3xl overflow-hidden">
         {ordered.length === 0 ? (
           <p className="p-8 text-sm text-center text-on-surface-variant">
-            Create the root company to start the organizational structure.
+            Create the root organizational unit to start the organizational structure.
           </p>
         ) : (
           <div className="divide-y divide-border/20">
