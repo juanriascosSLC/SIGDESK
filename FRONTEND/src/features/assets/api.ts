@@ -38,9 +38,21 @@ export interface AssetPage {
 const RESOURCE_PAGE_SIZE = 100;
 const MAX_RESOURCE_PAGES = 100;
 
-export function assetTypeMatches(assetType: string | undefined, filter: string | undefined): boolean {
+/**
+ * Matches against the Recurso taxonomy (`Docs/glossary.md`: "hardware,
+ * licencia de software, o infraestructura de red") — despite the old name
+ * ("assetTypeMatches"), this has never understood Asset's real taxonomy
+ * (`Kind`: site/system/device/component, glossary "Ítem de inventario
+ * (proyección externa)"). Renamed 2026-09-09 after an audit found it being
+ * applied to real Asset data in `CatalogForm.tsx` (fixed alongside this),
+ * which silently mismatched the two taxonomies. Only ever call this for
+ * `kind === 'recurso'` bindings — see `useSimulatedFormContext.tsx` for the
+ * pattern this now matches. An Asset-taxonomy equivalent (`Kind`-based) is
+ * a separate, not-yet-written function — do not extend this one to cover it.
+ */
+export function recursoTypeMatches(recursoType: string | undefined, filter: string | undefined): boolean {
   if (!filter) return true;
-  const normalizedType = (assetType ?? '').toLowerCase().replaceAll('_', '-');
+  const normalizedType = (recursoType ?? '').toLowerCase().replaceAll('_', '-');
   const normalizedFilter = filter.toLowerCase().replaceAll('_', '-');
   if (normalizedType === normalizedFilter) return true;
   if (normalizedFilter === 'hardware') return !['software', 'license', 'site'].includes(normalizedType);
