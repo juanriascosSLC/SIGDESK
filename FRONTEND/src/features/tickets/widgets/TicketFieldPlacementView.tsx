@@ -58,7 +58,14 @@ export function TicketFieldPlacementView({
     const { ticket } = context;
     switch (placement.fieldKey) {
       case 'humanId':
-        value = ticket.id;
+        // Bug found 2026-09-09: this showed ticket.id (the internal BIGINT
+        // PK) under the "Ticket number" placement label. ticket.humanId is
+        // the actual Numero visible (e.g. "INC-000123") -- see the
+        // id-vs-humanId distinction documented in features/tickets/api.ts.
+        // `humanId` is optional on the Ticket type, and the internal id is
+        // NOT an acceptable fallback (that is the bug above), so an absent
+        // Numero visible falls through to this view's own "no value" dash.
+        value = ticket.humanId ?? '—';
         break;
       case 'requester':
         value = ticket.requesterDisplayName;

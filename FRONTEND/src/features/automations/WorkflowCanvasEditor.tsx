@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useMemo, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import {
   addEdge,
   Background,
@@ -66,6 +66,7 @@ import {
   type CatalogGroup,
   type WorkflowCatalogItem,
 } from './visual-model';
+import { useAutomationsBasePath } from './basePath';
 
 const nodeTypes = {
   trigger: TriggerNode,
@@ -152,6 +153,7 @@ function CanvasEditor({
   onCrearBorrador, creandoBorrador = false,
 }: WorkflowCanvasEditorProps) {
   const navigate = useNavigate();
+  const basePath = useAutomationsBasePath();
   const start = useMemo(() => initialGraph(definition), [definition]);
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>(start.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(start.edges.map(edgeStyle));
@@ -172,6 +174,24 @@ function CanvasEditor({
   const [pasado, setPasado] = useState<Array<{ nodes: WorkflowNode[]; edges: Edge[] }>>([]);
   const [futuro, setFuturo] = useState<Array<{ nodes: WorkflowNode[]; edges: Edge[] }>>([]);
   const [sinGuardar, setSinGuardar] = useState(false);
+  // Bug corregido 2026-09-09: "Saved" se mostraba de forma optimista en el
+  // mismo onClick que disparaba la mutación async, antes de que resolviera.
+  // Si la petición fallaba (red, 409, 422), el badge ya decía "Saved" en
+  // verde con nada persistido realmente. Ahora solo se limpia `sinGuardar`
+  // cuando `saving`/`publishing` (controlados por el padre, ver
+  // WorkflowBuilder.tsx) pasan de true a false SIN que haya quedado un
+  // `saveError`/`publishError` — es decir, cuando la mutación resolvió con
+  // éxito, no cuando el usuario apretó el botón.
+  const eraGuardando = useRef(false);
+  useEffect(() => {
+    if (eraGuardando.current && !saving && !saveError) setSinGuardar(false);
+    eraGuardando.current = saving;
+  }, [saving, saveError]);
+  const eraPublicando = useRef(false);
+  useEffect(() => {
+    if (eraPublicando.current && !publishing && !publishError) setSinGuardar(false);
+    eraPublicando.current = publishing;
+  }, [publishing, publishError]);
 
   const recordar = useCallback(() => {
     setPasado((current) => [...current.slice(-49), { nodes, edges }]);
@@ -370,7 +390,7 @@ function CanvasEditor({
     <div className="flex h-full min-h-[700px] flex-col bg-background" data-testid="workflow-visual-editor">
       <header className="z-20 flex min-h-[76px] flex-wrap items-center justify-between gap-3 border-b border-border/50 bg-surface-container-low px-5 py-3">
         <div className="flex min-w-0 items-center gap-3">
-          <button type="button" onClick={() => navigate('/app/automations')} className="secondary-button px-3" aria-label="Back">
+          <button type="button" onClick={() => navigate(basePath)} className="secondary-button px-3" aria-label="Back">
             <ArrowLeft className="h-4 w-4" />
           </button>
           <div className="min-w-0">
@@ -430,7 +450,7 @@ function CanvasEditor({
               type="button"
               data-testid="canvas-save-draft"
               disabled={saving}
-              onClick={() => { onSaveDraft(borradorActual()); setSinGuardar(false); }}
+              onClick={() => onSaveDraft(borradorActual())}
               className="secondary-button"
             >
               <Save className="h-4 w-4" /> {saving ? 'Saving…' : 'Save draft'}
@@ -461,7 +481,6 @@ function CanvasEditor({
                 // conservando su id y su versión; el historial de ejecuciones
                 // los referencia. Si no, se usa el camino directo de siempre.
                 if (onPublishDraft) onPublishDraft(); else onPublish?.(compilation.payload);
-                setSinGuardar(false);
               }}
               className="primary-button"
             >

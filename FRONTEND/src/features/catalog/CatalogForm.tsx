@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { getTicket, priorityToApi, uploadAttachment } from '@/features/tickets/api';
-import { assetTypeMatches, listAssetSites, listSiteAssets } from '@/features/assets/api';
+import { recursoTypeMatches, listAssetSites, listSiteAssets } from '@/features/assets/api';
 import { useAuth } from '@/features/auth/useAuth';
 import { previewSlaForEntity } from '@/features/sla/api';
 import {
@@ -165,6 +165,17 @@ export default function CatalogForm() {
   //
   // (El comentario anterior citaba TODO-24, que es sobre SLOs de latencia.)
   const bindingFields = definition?.specification.fields.filter((field) => field.bindsTo) ?? [];
+  // INC is backed by the Ticket aggregate, whose resource is an invariant.
+  // A definition may leave its ordinary fields optional, but it must offer at
+  // least one way to choose the resource that anchors the incident. Without
+  // this guard a malformed published definition reaches POST /entities/INC
+  // with an empty recursoId and the user only gets a backend 4xx.
+  const incidentResourceFields = bindingFields.filter(
+    (field) =>
+      field.bindsTo === 'recursoId' ||
+      field.bindsTo === 'siteAssetId' ||
+      field.bindsTo === 'assetId',
+  );
   const needsRecursoPicker = bindingFields.some((field) => field.bindsTo === 'recursoId');
   const needsAgentePicker = bindingFields.some((field) => field.bindsTo === 'agenteItId');
   const needsSitePicker = bindingFields.some((field) => field.bindsTo === 'siteAssetId');
@@ -310,8 +321,15 @@ export default function CatalogForm() {
         const rawItems: BindingValue[] = kind === 'site' || kind === 'asset'
           ? (assetQuery.data?.items ?? []).map((item) => ({ id: item.id, displayName: item.displayName, tipo: item.assetType }))
           : bindingQuery.data ?? [];
-        const items = kind === 'recurso' || kind === 'asset'
-          ? rawItems.filter((item) => assetTypeMatches(item.tipo, field.resourceType))
+        // Only Recurso items are filtered by resourceType: recursoTypeMatches
+        // understands Recurso's taxonomy (hardware/infraestructura-red/
+        // software-licencia), not Asset's (Kind: site/system/device/
+        // component) — applying it to `kind === 'asset'` silently mismatched
+        // the two taxonomies (bug found 2026-09-09; see the function's own
+        // doc comment in features/assets/api.ts). Asset items pass through
+        // unfiltered until a Kind-based equivalent is written.
+        const items = kind === 'recurso'
+          ? rawItems.filter((item) => recursoTypeMatches(item.tipo, field.resourceType))
           : rawItems;
         const shared = {
           label: placement.label || field.label,
@@ -384,6 +402,12 @@ export default function CatalogForm() {
     // sets the ticket's SLA-driving native field, which nothing previously
     // wired a catalog field into at all.
     const hasNativePriorityField = activeKeys.includes('priority') && !bindingKeys.has('priority');
+    if (definition.entityKey.toUpperCase() === 'INC' && incidentResourceFields.length === 0) {
+      setSubmitError(
+        'This INC definition has no resource or CMDB field. Add "Site Device" in Catalog Builder → Form fields and publish it before creating the incident.',
+      );
+      return;
+    }
     const missing = definition.specification.fields.find((field) => {
       if (!activeKeys.includes(field.key) || !isFieldRequired(field, conditionData)) return false;
       const value = effectiveData[field.key];
@@ -446,6 +470,12 @@ export default function CatalogForm() {
     if (assetContext.siteAssetId || assetContext.links.length) binding.assetContext = assetContext;
     if (stakeholders.userIds.length || stakeholders.unitIds.length) {
       binding.stakeholders = stakeholders;
+    }
+    if (definition.entityKey.toUpperCase() === 'INC' && !binding.recursoId) {
+      setSubmitError(
+        'Select a resource or CMDB asset to create the incident. This link is required even when every other field is optional.',
+      );
+      return;
     }
     createMutation.mutate({
       entityData: Object.fromEntries(dataKeys.map((key) => [key, effectiveData[key]])),

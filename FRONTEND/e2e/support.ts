@@ -160,6 +160,26 @@ const taskExecutorIdentity = {
   permissions: ['change_tasks:read:propio', 'change_tasks:update:propio'],
 };
 
+/**
+ * Un agente de Services que NO puede abrir tickets de IT.
+ *
+ * Tiene `changes:read` (la puerta real de `/app/services/*` hasta que exista
+ * `sigdesk.services.view`) y deliberadamente NO tiene `tickets:read` ni
+ * `problems:read`. Es el fixture que distingue las dos mitades de la card de
+ * cotizacion: un supervisor ve los tickets cubiertos como enlaces, este
+ * usuario los ve como texto.
+ *
+ * Existe porque el caso negativo importa mas que el positivo: sin el chequeo
+ * de permiso, ese enlace lleva a una ruta protegida cuyo fallback por defecto
+ * es `/portal`, o sea que expulsa al agente del workspace de staff entero.
+ */
+const servicesAgentWithoutTicketAccessIdentity = {
+  username: 'playwright-services-only',
+  displayName: 'Playwright Services Only',
+  roleId: 'e2e-services-only-role',
+  permissions: ['changes:read:depto'],
+};
+
 /** SIG-DESK's own API, behind Kong — bare paths, no /api/v1 (see
  *  apiClient.ts). Override via PLAYWRIGHT_API_URL if the dev server under
  *  test was started with a different VITE_API_URL than this fixture. */
@@ -438,4 +458,13 @@ export async function mockAuthenticatedSupervisor(page: Page, options?: AuthMock
 /** See taskExecutorIdentity — only `change_tasks`, no `changes`. */
 export async function mockAuthenticatedTaskExecutor(page: Page, options?: AuthMockOptions) {
   await mockAuthenticatedIdentity(page, taskExecutorIdentity, options);
+}
+
+/** See servicesAgentWithoutTicketAccessIdentity — `changes:read`, but no
+ *  `tickets:read` / `problems:read`. */
+export async function mockAuthenticatedServicesAgentWithoutTicketAccess(
+  page: Page,
+  options?: AuthMockOptions,
+) {
+  await mockAuthenticatedIdentity(page, servicesAgentWithoutTicketAccessIdentity, options);
 }

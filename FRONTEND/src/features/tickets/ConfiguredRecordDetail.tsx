@@ -45,7 +45,18 @@ function recordAsTicket(record: EntityRecord): Ticket {
     description: value('description'),
     status: record.state,
     priority: value('priority') || value('riskLevel'),
-    category: value('category'),
+    // `category` carries this record's OWN entityKey, not the catalog field
+    // that happens to share the name. The Ticket contract is `category <-
+    // entityKey` (features/tickets/api.ts), and RelationsWidget relies on it
+    // to tell "this record is the relation's source" apart from "this
+    // record's id merely equals the source's id" — ids are unique only
+    // within one entity type. Reading data['category'] here left it empty for
+    // PRB/RFC (neither defines such a field), which flipped every relation on
+    // those pages to the wrong side. The catalog field, where a definition
+    // declares one, still renders through its own placement
+    // (`context.entityData[fieldKey]`), so nothing is lost by not duplicating
+    // it here.
+    category: record.entityKey,
     requesterId: record.createdBy ?? '',
     requesterDisplayName: record.createdByName || USER_UNAVAILABLE_LABEL,
     assigneeId: null,
