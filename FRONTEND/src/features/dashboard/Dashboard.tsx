@@ -100,7 +100,7 @@ export function Dashboard() {
     { to: '/app/catalog', label: 'Service Catalog', icon: FolderKanban, visible: canViewCatalog },
     { to: '/app/knowledge', label: 'Knowledge Base', icon: ShieldCheck, visible: canViewKnowledge },
     { to: '/app/admin/users', label: 'Users & Roles', icon: Users, visible: canManageUsersAndRoles },
-    { to: '/app/admin/catalog-builder', label: 'Catalog Builder', icon: FolderKanban, visible: canAuthorCatalog },
+    { to: '/app/admin/catalog-builder', label: 'Entity Builder', icon: FolderKanban, visible: canAuthorCatalog },
     { to: '/app/automations', label: 'Automations', icon: Workflow, visible: canViewAutomations },
     { to: '/app/settings/sla', label: 'SLA Policies', icon: Timer, visible: canViewSla },
   ];
