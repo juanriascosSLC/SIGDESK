@@ -237,7 +237,7 @@ export function compileVisualWorkflow(nodes: WorkflowNode[], edges: Edge[], vers
       // sin que nadie lo decidiera.
       const ausentesEstado = Array.isArray(action.data.missingReferences) ? action.data.missingReferences as string[] : [];
       if (ausentesEstado.length > 0) {
-        fallar(`“${String(action.data.label)}” points to ${ausentesEstado.join(', ')} which Catalog Builder no longer publishes. Re-select the transition.`, action.id);
+        fallar(`“${String(action.data.label)}” points to ${ausentesEstado.join(', ')} which Entity Builder no longer publishes. Re-select the transition.`, action.id);
         continue;
       }
       const transitionKey = String(action.data.transitionKey ?? '').trim();

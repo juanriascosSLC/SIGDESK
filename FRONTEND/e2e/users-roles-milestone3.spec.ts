@@ -163,5 +163,5 @@ test('un supervisor ve operación y reportes pero no administración de roles ni
   await expect(nav.getByRole('link', { name: 'Problem Mgmt' })).toBeVisible();
   await expect(nav.getByRole('link', { name: 'Reports' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Users & Roles' })).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Catalog Builder' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Entity Builder' })).toHaveCount(0);
 });

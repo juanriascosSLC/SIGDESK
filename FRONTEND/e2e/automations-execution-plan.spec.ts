@@ -160,7 +160,7 @@ test('una transición que ya no existe bloquea la publicación y se conserva', (
   const resultado = compileVisualWorkflow(conFantasma, edges, 1);
 
   expect(resultado.payload).toBeUndefined();
-  expect(resultado.errors.join(' ')).toContain('Catalog Builder no longer publishes');
+  expect(resultado.errors.join(' ')).toContain('Entity Builder no longer publishes');
   // La configuración sigue en el nodo: el compilador no la toca.
   const nodo = conFantasma.find((candidato) => candidato.id === 'state-1');
   expect(nodo?.data.transitionKey).toBe('transicion-borrada');
