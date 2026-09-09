@@ -28,13 +28,20 @@ export function RelationsWidget({ context }: { context: TicketPageContext }) {
           const outbound = relation.sourceEntityId === ticket.entityId && relation.sourceEntityKey === ticket.category;
           const entityKey = outbound ? relation.targetEntityKey : relation.sourceEntityKey;
           const humanId = outbound ? relation.targetHumanId : relation.sourceHumanId;
+          // Bug found 2026-09-09: navigation used humanId in the URL, but
+          // /app/tickets/:id (and the equivalent problems/changes routes)
+          // feed the path straight into getTicket/getEntity, which parse it
+          // as the internal int64 id -- a humanId there is a 400 per
+          // api.ts's own documented id-vs-humanId invariant. Navigate with
+          // the real entity id; keep humanId only as the visible label.
+          const entityId = outbound ? relation.targetEntityId : relation.sourceEntityId;
           const label = outbound ? relation.relationLabel : relation.inverseLabel;
           const destination =
             entityKey === 'PRB'
-              ? `/app/problems/${encodeURIComponent(humanId)}`
+              ? `/app/problems/${encodeURIComponent(entityId)}`
               : entityKey === 'RFC'
-                ? `/app/changes/${encodeURIComponent(humanId)}`
-                : `/app/tickets/${encodeURIComponent(humanId)}`;
+                ? `/app/changes/${encodeURIComponent(entityId)}`
+                : `/app/tickets/${encodeURIComponent(entityId)}`;
           return (
             <div
               key={relation.id}
