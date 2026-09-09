@@ -188,6 +188,20 @@ export const NAV_ITEMS: NavItem[] = [
     surfaces: ['sidebar', 'drawer'],
   },
   {
+    // Arrived on main while this branch was open, as an inline NavButton in
+    // the pre-refactor AgentLayout sidebar. Re-expressed here on merge so
+    // the destination keeps its nav entry on EVERY surface (the old inline
+    // list only fed the desktop rail) — the route guard in App.tsx gates on
+    // `canManageUsersAndRoles`, so this mirrors it exactly.
+    key: 'admin-assistant-feedback',
+    label: 'Assistant Feedback',
+    route: '/app/admin/assistant-feedback',
+    icon: MessageSquare,
+    section: 'administration',
+    permission: (ctx) => ctx.canManageUsersAndRoles,
+    surfaces: ['sidebar', 'drawer'],
+  },
+  {
     key: 'catalog-builder',
     label: 'Catalog Builder',
     route: '/app/admin/catalog-builder',

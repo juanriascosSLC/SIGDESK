@@ -66,6 +66,7 @@ import {
   type CatalogGroup,
   type WorkflowCatalogItem,
 } from './visual-model';
+import { useAutomationsBasePath } from './basePath';
 
 const nodeTypes = {
   trigger: TriggerNode,
@@ -152,6 +153,7 @@ function CanvasEditor({
   onCrearBorrador, creandoBorrador = false,
 }: WorkflowCanvasEditorProps) {
   const navigate = useNavigate();
+  const basePath = useAutomationsBasePath();
   const start = useMemo(() => initialGraph(definition), [definition]);
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>(start.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(start.edges.map(edgeStyle));
@@ -388,7 +390,7 @@ function CanvasEditor({
     <div className="flex h-full min-h-[700px] flex-col bg-background" data-testid="workflow-visual-editor">
       <header className="z-20 flex min-h-[76px] flex-wrap items-center justify-between gap-3 border-b border-border/50 bg-surface-container-low px-5 py-3">
         <div className="flex min-w-0 items-center gap-3">
-          <button type="button" onClick={() => navigate('/app/automations')} className="secondary-button px-3" aria-label="Back">
+          <button type="button" onClick={() => navigate(basePath)} className="secondary-button px-3" aria-label="Back">
             <ArrowLeft className="h-4 w-4" />
           </button>
           <div className="min-w-0">

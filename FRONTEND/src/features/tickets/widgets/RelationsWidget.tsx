@@ -25,6 +25,11 @@ export function RelationsWidget({ context }: { context: TicketPageContext }) {
           // itself, showing the wrong side of the relation. `ticket.category`
           // is always this ticket's own entityKey (`category <- entityKey`,
           // api.ts), so comparing it alongside the id disambiguates for real.
+          // NB: that invariant was NOT actually held by ConfiguredRecordDetail
+          // (it mapped `category` from record.data), which silently flipped
+          // every relation on the PRB/RFC detail pages. It now maps
+          // record.entityKey. Any new Ticket producer has to honour it too —
+          // configured-record-detail.spec.ts is the regression guard.
           const outbound = relation.sourceEntityId === ticket.entityId && relation.sourceEntityKey === ticket.category;
           const entityKey = outbound ? relation.targetEntityKey : relation.sourceEntityKey;
           const humanId = outbound ? relation.targetHumanId : relation.sourceHumanId;

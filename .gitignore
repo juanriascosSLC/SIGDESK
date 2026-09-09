@@ -12,6 +12,11 @@ FRONTEND/dist/
 FRONTEND/playwright-report/
 FRONTEND/test-results/
 
+# Exploración visual descartable del pipeline de frontendengineer (specs,
+# HTML de variantes, capturas, boards de comparación) — vive fuera de
+# src/, se borra al cerrar cada ciclo, nunca se comitea.
+.design-scratch/
+
 # Backend del equipo: repositorio Git independiente, clonado localmente
 # junto al frontend para integración sin mezclar historiales.
 BACKEND/

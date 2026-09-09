@@ -28,6 +28,44 @@
 **Priority:** P1
 **Depends on:** Fix de basePath + adapter mock + scoping de datos (ver ítem siguiente), PR1 mergeado.
 
+**Estado (2026-09-05, tras `/plan-ceo-review`):** PR2 entregó los pasos **5 y 7**
+más el fix de `basePath` (6a). El **paso 6 (embed de `WorkflowBuilder`) quedó
+sostenido**, no cancelado. Motivo: su única justificación declarada era empujar
+el ADR de `WF-TODO-001`/`WF-TODO-006`, y contra el código real el costo es mucho
+mayor de lo que decía este ítem — 4 archivos y 9 endpoints (no 1 y 3),
+`categoria_id` hardcodeado a `'INC'` en `visual-model.ts:283` (un workflow
+creado desde Services sería de INC), `mockQuery.ts` incapaz de sostener
+guardar/publicar/recargar sin reimplementar el camino de escritura de
+`workflow_service`, sin entrada en `navigation.ts`, y sin tomar el skin de
+departamento. La presión del ADR se ejerce desde
+`docs/handoff/2026-09-05-services-pr2.md`, a costo cero de código compartido.
+Ver `docs/specs/2026-09-05-services-pr2-invoice-workflow-stepper.md` §7.
+
+---
+
+### 15 specs de `automations-*` fallan en `riascos` (preexistente, no es de PR2)
+
+**What:** `automations-draft-designer` (4), `automations-execution-plan` (3),
+`automations-status-block` (2) y `automations-visual-editor` (6) fallan contra el
+dev server local. Síntoma típico: timeout esperando controles del canvas (ej.
+`getByRole('button', { name: /Cambiar estado/ })`).
+
+**Why:** se descubrió al usar esa suite como red de regresión del fix de
+`basePath` en PR2. Importa dejarlo escrito porque la próxima persona que toque
+`features/automations/` va a ver 15 rojos y va a creer que los rompió.
+
+**Context:** verificado por comparación directa durante PR2 (2026-09-05):
+se revirtieron los 3 archivos de automations al estado de `riascos`, se corrió
+la suite, y fallan **los mismos 15 tests, con los mismos nombres**, con y sin el
+cambio. O sea: preexistentes en `riascos`, no introducidos por el fix de
+`basePath`. No se investigó la causa raíz — puede ser dependencia de backend
+real, del stack aislado, o deriva de fixtures. Nadie corrió esta suite en el
+baseline antes de PR2, así que no se sabe desde cuándo.
+
+**Effort:** M (investigación, no arreglo conocido)
+**Priority:** P2
+**Depends on:** None.
+
 ---
 
 ### Fix de basePath en WorkflowBuilder.tsx y WorkflowCanvasEditor.tsx (navigate hardcodeado)

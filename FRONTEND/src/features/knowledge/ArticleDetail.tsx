@@ -1,37 +1,38 @@
-import { Link } from 'react-router-dom';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, BookOpen } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/states';
-import { apiRequest } from '@/lib/apiClient';
-
-type PublishedArticle = {
-  numero_visible: string;
-  titulo: string;
-  contenido: string;
-  audiencia: string;
-};
+import { getPublishedArticle } from './api';
 
 /**
- * See KnowledgeBase.tsx — the service is wired into the stack, while the
- * authenticated read contract for article details is still pending.
- * This screen used to render the exact same fabricated HIKVISION-camera
- * article content for every `:id`, complete with a made-up author, view
- * count, "helpful" vote counts, a fake related-articles list, and
- * print/share buttons with no handler. None of that is real. The route is
- * kept (not removed) so an existing `/knowledge/:id` link — from a ticket
- * comment, a bookmark, wherever — lands on an honest message instead of a
- * 404. `..` correctly resolves to `/app/knowledge` or `/portal/knowledge`
- * depending on which audience rendered this route.
+ * See KnowledgeBase.tsx for the full merge note. Short version: both sides
+ * of the merge had a real detail screen, they disagreed on the contract, and
+ * the conflict was resolved against `knowledge_service` itself — the route is
+ * `GET /knowledge/articulos/{id}` with a NUMERIC articulo_id, not
+ * `/knowledge/articles/<numero_visible>`.
+ *
+ * Kept from this branch: the YAML front-matter stripping (published content
+ * is Markdown with a front-matter block — see SIG-Desk-Backend/Docs/knowledge/,
+ * and showing it as prose was a real bug) and the permission-aware failure
+ * copy. The service answers a wrong id and an unauthorized audience through
+ * the same door (`BuscarPublicado` not-found and `PuedeLeer` denial), so one
+ * honest message covers both without leaking whether the article exists.
+ *
+ * Kept from Hector: `..` for the back link, which correctly resolves to
+ * `/app/knowledge` or `/portal/knowledge` depending on which surface rendered
+ * this route — the absolute `/app/knowledge` this branch had ejected portal
+ * users out of their own surface.
  */
 export default function ArticleDetail() {
   const { id } = useParams();
   const article = useQuery({
     queryKey: ['knowledge-article', id],
-    queryFn: () => apiRequest<PublishedArticle>(`/knowledge/articulos/${encodeURIComponent(id ?? '')}`),
+    queryFn: () => getPublishedArticle(id ?? ''),
     enabled: Boolean(id),
   });
+
+  const body = article.data?.contenido.replace(/^---[\s\S]*?---\s*/, '') ?? '';
 
   return (
     <div className="p-6 lg:p-8 w-full space-y-6">
@@ -50,7 +51,23 @@ export default function ArticleDetail() {
         description="Find answers, guides and standard procedures before opening a ticket."
       />
       <div className="bg-surface-container-low border border-border/40 rounded-3xl overflow-hidden">
-        {article.isLoading ? <EmptyState icon="general" title="Loading article" description="Loading the published article…" /> : article.isError ? <EmptyState icon="general" title="Could not load article" description={article.error.message} /> : <article className="p-6"><div className="text-xs text-on-surface-variant">{article.data?.numero_visible} · {article.data?.audiencia}</div><h1 className="mt-2 text-2xl font-bold text-on-surface">{article.data?.titulo}</h1><div className="mt-6 whitespace-pre-wrap text-sm leading-7 text-on-surface-variant">{article.data?.contenido}</div></article>}
+        {article.isLoading ? (
+          <EmptyState icon="general" title="Loading manual" description="Loading the published manual…" />
+        ) : article.isError ? (
+          <EmptyState
+            icon="general"
+            title="Could not load article"
+            description="That manual does not exist, or you do not have permission to view it."
+          />
+        ) : (
+          <article className="p-6">
+            <div className="font-mono text-xs text-cyan-500">
+              {article.data?.numero_visible} · v{article.data?.version} · {article.data?.audiencia}
+            </div>
+            <h1 className="mt-2 text-2xl font-bold text-on-surface">{article.data?.titulo}</h1>
+            <div className="mt-6 whitespace-pre-wrap text-sm leading-7 text-on-surface-variant">{body}</div>
+          </article>
+        )}
       </div>
     </div>
   );
