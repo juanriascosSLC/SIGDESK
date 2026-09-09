@@ -84,6 +84,7 @@ FRONTEND/
 │     ├─ changes/                RFC y transiciones
 │     ├─ sla/                    Tipos y cliente de SLA
 │     ├─ automations/            Diseñador visual de workflows
+│     ├─ assistant/              Chat de IA (RAG chatbot)
 │     ├─ knowledge/              Base de conocimiento
 │     ├─ reports/                Reportes
 │     ├─ dashboard/              Tablero general
@@ -430,7 +431,8 @@ La resolución declara uno de estos modos: `latest-compatible`, `previous-compat
 | SLA Policies | CRUD de draft, publish, preview y assessments conectado | Motor de calendarios y evaluación |
 | Automations | Diseñador visual principalmente demostrativo/local | CRUD, publicación, ejecución, delays, logs y retries |
 | Services (SRV) | PR1: dashboard, vista de dealership con problemas recurrentes, detalle de ticket con checklist de equipamiento — todo mock-only, standalone (no registrado en `TicketWidgetRegistry`), datos locales en `features/services/mockData.ts` | `entity_key SRV` en Catalog Builder (ADR pendiente), permiso propio `sigdesk.services.view` (hoy toma prestado `changes.view`); PR2 (cotización/invoice + embed de `WorkflowBuilder`) queda en `TODOS.md` |
-| Knowledge Base | Datos locales/demostrativos | Artículos, categorías, búsqueda, permisos y publicación |
+| Knowledge Base | Conectado a backend real (`GET /knowledge/health`, `GET /knowledge/articulos`, commit fcb6a9e, 2026-09-08) | Artículos, categorías, búsqueda, permisos y publicación |
+| Assistant (RAG chatbot) | Conectado a backend real (`POST /ia_advisor/chat`) | Chat de preguntas y respuestas sobre artículos permitidos; nunca ejecuta acciones, solo responde texto (ver `Docs/glossary.md` -> "Asistente de IA") |
 | Dashboard | Métricas demostrativas | Agregaciones reales |
 | Reports | Visualización demostrativa | Métricas, consultas y exportaciones |
 | End-user dashboard / My Tickets | Parcialmente demostrativo | Consultas acotadas al solicitante |
