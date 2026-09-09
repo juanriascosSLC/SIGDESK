@@ -27,6 +27,9 @@ graphify-out/
 .claude/
 .run/
 
+# Isolated worktrees for plan execution (superpowers)
+.worktrees/
+
 # OS and editors
 .DS_Store
 desktop.ini
