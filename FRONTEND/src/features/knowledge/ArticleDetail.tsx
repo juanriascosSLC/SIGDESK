@@ -3,18 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, BookOpen } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/states';
-import { apiRequest } from '@/lib/apiClient';
-
-/** `GET /knowledge/articulos/{id}` returns this and nothing more. */
-type PublishedArticle = {
-  articulo_id: number;
-  numero_visible: string;
-  version: number;
-  titulo: string;
-  contenido: string;
-  audiencia: string;
-  publicado_en: string;
-};
+import { getPublishedArticle } from './api';
 
 /**
  * See KnowledgeBase.tsx for the full merge note. Short version: both sides
@@ -39,7 +28,7 @@ export default function ArticleDetail() {
   const { id } = useParams();
   const article = useQuery({
     queryKey: ['knowledge-article', id],
-    queryFn: () => apiRequest<PublishedArticle>(`/knowledge/articulos/${encodeURIComponent(id ?? '')}`),
+    queryFn: () => getPublishedArticle(id ?? ''),
     enabled: Boolean(id),
   });
 

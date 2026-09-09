@@ -4,24 +4,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/states';
-import { apiRequest } from '@/lib/apiClient';
-
-/**
- * Shape returned by `GET /knowledge/articulos` — this is the published read
- * model exactly as `knowledge_service` emits it (`ArticuloPublicado` in
- * application/ports/repository_port.go). Nothing is added to it here: there
- * is deliberately no `categoria` and no `etiquetas`, because the service
- * does not return them.
- */
-type PublishedArticle = {
-  articulo_id: number;
-  numero_visible: string;
-  version: number;
-  titulo: string;
-  contenido: string;
-  audiencia: string;
-  publicado_en: string;
-};
+import { knowledgeHealth, listPublishedArticles } from './api';
 
 /**
  * MERGE NOTE (origin/Hector -> services/pr2-invoice-workflow-embed-stepper).
@@ -55,22 +38,24 @@ type PublishedArticle = {
  *    On the portal this offers a destination the requester cannot reach.
  *    Left as shipped rather than guessing whether the portal should expose
  *    authoring at all.
- *  - `./api.ts` (listKnowledge/getKnowledge/createDraft/updateDraft/
- *    publishDraft) and KnowledgeEditor.tsx still target `/knowledge/articles`
- *    and a PATCH update route that `knowledge_service` does not expose.
- *    Out of scope for a conflict resolution; flagged, not silently rewritten.
+ *
+ * RESOLVED since the merge: `./api.ts` and KnowledgeEditor.tsx were realigned
+ * to the same `articulos` contract, so this module and the authoring screen no
+ * longer disagree about what the Gateway serves. `./api.ts` is now the single
+ * place the contract is written down — read it before adding a field here.
+ * There is still no update route, so authoring is create-and-publish only.
  */
 export default function KnowledgeBase() {
   const navigate = useNavigate();
   const health = useQuery({
     queryKey: ['knowledge-service-health'],
-    queryFn: () => apiRequest<{ status: string; service: string }>('/knowledge/health'),
+    queryFn: knowledgeHealth,
     retry: 1,
   });
   const [search, setSearch] = useState('');
   const articles = useQuery({
     queryKey: ['knowledge-articles', search],
-    queryFn: () => apiRequest<{ items: PublishedArticle[] }>(`/knowledge/articulos${search.trim() ? `?q=${encodeURIComponent(search.trim())}` : ''}`),
+    queryFn: () => listPublishedArticles(search),
     enabled: health.isSuccess,
   });
 

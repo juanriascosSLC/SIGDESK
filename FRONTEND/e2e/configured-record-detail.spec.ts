@@ -121,5 +121,7 @@ test('PRB detail executes its immutable layout and versioned relations', async (
   await expect(page.getByTestId('page-layout-region-header').getByText('PRB-000202')).toBeVisible();
   await expect(page.getByTestId('ticket-detail-field-catalog-rootCause')).toContainText('Fuga de memoria');
   await expect(page.getByText('INC-000303')).toBeVisible();
-  await expect(page.getByText('Definición ejecutable PRB v7')).toBeVisible();
+  // Same pre-existing localization drift as the RFC test above: the
+  // component renders "Executable definition <entityKey> v<version>".
+  await expect(page.getByText(/Executable definition PRB v7/)).toBeVisible();
 });

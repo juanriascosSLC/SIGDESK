@@ -195,6 +195,53 @@ test('Knowledge Base serves the same real articles on the end-user portal', asyn
   await expect(page.getByText('KB-1024')).toHaveCount(0);
 });
 
+// Guards the authoring contract, which was wrong in both directions before:
+// the form collected Categoría and Etiquetas that the service has no fields
+// for (so they were silently dropped), and publishing passed a `draft.id`
+// that the create response never contained. Both are the "collects input
+// that goes nowhere" flavour of dishonest UI this suite exists to catch.
+test('Knowledge authoring posts exactly what knowledge_service accepts, and publishes by id and version', async ({ page }) => {
+  await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
+  await stubNotifications(page);
+
+  const created: Record<string, unknown>[] = [];
+  const publishedPaths: string[] = [];
+  await page.route('**/knowledge/articulos', (route) => {
+    if (route.request().method() !== 'POST') return route.fulfill(json({ items: [] }));
+    created.push(JSON.parse(route.request().postData() ?? '{}'));
+    return route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        articulo_id: 7, numero_visible: 'KB-2001', version: 1,
+        titulo: 'Restablecer la VPN corporativa', audiencia: 'interno_it', estado: 'borrador',
+      }),
+    });
+  });
+  await page.route('**/knowledge/articulos/*/versiones/*/publicar', (route) => {
+    publishedPaths.push(new URL(route.request().url()).pathname);
+    return route.fulfill({ status: 204, body: '' });
+  });
+
+  await page.goto('/app/knowledge/new');
+  await page.getByLabel('Título').fill('Restablecer la VPN corporativa');
+  await page.getByLabel('Audiencia').selectOption('interno_it');
+  await page.getByLabel('Contenido Markdown').fill('Paso 1: cerrar el cliente de VPN.');
+
+  // The form no longer offers fields the service cannot store.
+  await expect(page.getByLabel('Categoría')).toHaveCount(0);
+  await expect(page.getByPlaceholder(/etiquetas/i)).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Publicar' }).click();
+  await expect(page.getByText(/KB-2001 v1 publicado/)).toBeVisible();
+
+  // Exactly the three fields `crearBorradorRequest` declares — no more.
+  expect(created).toHaveLength(1);
+  expect(Object.keys(created[0]).sort()).toEqual(['audiencia', 'contenido', 'titulo']);
+  // Publishing addresses the immutable version, by numeric articulo_id.
+  expect(publishedPaths).toEqual(['/knowledge/articulos/7/versiones/1/publicar']);
+});
+
 // Was a placeholder "not available yet" screen when this audit suite was
 // first written — now backed by a real `GET /entities/INC?createdBy=me`
 // (see mis_tickets_postgres_test.go for the backend contract and
