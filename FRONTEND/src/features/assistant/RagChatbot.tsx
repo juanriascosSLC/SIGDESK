@@ -29,6 +29,47 @@ type ChatResponse = {
   confidence?: Confidence;
 };
 
+function renderInlineMarkdown(text: string) {
+  const token = /(\*\*[^*]+\*\*|`[^`]+`|\[FUENTE\s+\d+\]|\[[^\]]+\]\(https?:\/\/[^)\s]+\))/gi;
+  return text.split(token).filter(Boolean).map((part, index) => {
+    const link = part.match(/^\[([^\]]+)]\((https?:\/\/[^)\s]+)\)$/i);
+    if (link) {
+      return <a key={index} href={link[2]} target="_blank" rel="noreferrer" className="text-cyan-300 underline underline-offset-2 hover:text-cyan-200">{link[1]}</a>;
+    }
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={index} className="font-bold text-inherit">{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return <code key={index} className="rounded bg-on-surface/10 px-1 py-0.5 text-[0.85em]">{part.slice(1, -1)}</code>;
+    }
+    if (/^\[FUENTE\s+\d+\]$/i.test(part)) {
+      return <span key={index} className="ml-0.5 inline-block rounded border border-cyan-400/20 bg-cyan-400/10 px-1 py-px text-[0.7em] font-semibold text-cyan-200">{part}</span>;
+    }
+    return part;
+  });
+}
+
+function AssistantMarkdown({ text }: { text: string }) {
+  // The assistant returns Markdown, but never HTML. Rendering only this small,
+  // explicit subset keeps the message safe and predictable inside the chat.
+  const normalized = text.replace(/([.!?])\s+(\d+\.\s+\*\*)/g, "$1\n$2");
+  return (
+    <div className="space-y-2">
+      {normalized.split(/\r?\n/).map((line, index) => {
+        const value = line.trim();
+        if (!value) return <div key={index} className="h-1.5" />;
+        const heading = value.match(/^#{1,3}\s+(.+)$/);
+        if (heading) return <h3 key={index} className="pt-0.5 text-sm font-bold text-on-surface">{renderInlineMarkdown(heading[1])}</h3>;
+        const ordered = value.match(/^(\d+)\.\s+(.+)$/);
+        if (ordered) return <div key={index} className="flex gap-2"><span className="shrink-0 font-semibold text-cyan-300">{ordered[1]}.</span><span>{renderInlineMarkdown(ordered[2])}</span></div>;
+        const bullet = value.match(/^[-*]\s+(.+)$/);
+        if (bullet) return <div key={index} className="flex gap-2"><span className="text-cyan-300">•</span><span>{renderInlineMarkdown(bullet[1])}</span></div>;
+        return <p key={index}>{renderInlineMarkdown(value)}</p>;
+      })}
+    </div>
+  );
+}
+
 const starterMessages: ChatMessage[] = [
   {
     from: "assistant",
@@ -180,7 +221,7 @@ export default function RagChatbot() {
               <div
                 className={`rounded-2xl px-3.5 py-3 text-sm leading-relaxed ${message.from === "user" ? "rounded-br-md bg-cyan-400 text-slate-950" : "rounded-bl-md border border-border/50 bg-surface-container text-on-surface"}`}
               >
-                {message.text}
+                {message.from === "assistant" ? <AssistantMarkdown text={message.text} /> : message.text}
               </div>
               {message.sources && message.sources.length > 0 && (
                 <div className="flex flex-wrap gap-1 px-1">
