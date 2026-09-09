@@ -38,6 +38,8 @@ export const PERMISSIONS = {
   reportsView: 'sigdesk.reports.view',
   automationsView: 'sigdesk.automations.view',
   automationsManage: 'sigdesk.automations.manage',
+  assistantFeedbackView: 'ai_feedback:read:global',
+  assistantFeedbackManage: 'ai_feedback:update:global',
 } as const;
 
 /** The app prefix used to tell SIG-DESK's permissions apart from the other

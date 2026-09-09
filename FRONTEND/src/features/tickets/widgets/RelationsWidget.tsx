@@ -8,7 +8,7 @@ export function RelationsWidget({ context }: { context: TicketPageContext }) {
     <div className="rounded-3xl border border-border/40 bg-surface-container-low p-6">
       <h3 className="mb-4 flex items-center gap-2 border-b border-border/40 pb-3 text-sm font-bold uppercase tracking-wider text-on-surface-variant">
         <Link2 className="h-4 w-4 text-cyan-400" />
-        ITSM Relations
+        Related Cases
       </h3>
       <div className="grid gap-3 md:grid-cols-2">
         {relations.items.map((relation) => {

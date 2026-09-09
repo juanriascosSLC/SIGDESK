@@ -5,7 +5,15 @@ import { cn } from './cn';
 export interface StatusBadgeProps {
   /** Already-English display label (statuses must be mapped to English
    *  labels at the API/presentation boundary before reaching this
-   *  component — see e.g. `statusFromApi` in `features/tickets/api.ts`). */
+   *  component — see e.g. `statusFromApi` in `features/tickets/api.ts`).
+   *
+   *  This contract is NOT honored everywhere today: `TicketsKanban.tsx`'s
+   *  `KNOWN_TICKET_STATUSES`/`TicketsList.tsx`'s `getSlaChip` compare
+   *  against English literals while `domain.Ticket.Estado` is always
+   *  Spanish (`abierto`/`en_progreso`/...) — confirmed unresolved,
+   *  TODO-111 in SIG-Desk-Backend/Docs/TODOS.md, audit 2026-09-09. Any
+   *  new consumer of this component must verify its own mapping is
+   *  actually in place, not assume this doc comment describes reality. */
   label: string;
   tone: BadgeTone;
   className?: string;
