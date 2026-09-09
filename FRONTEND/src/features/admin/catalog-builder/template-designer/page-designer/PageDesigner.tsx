@@ -188,7 +188,7 @@ export function PageDesigner({
   const [activeDrag, setActiveDrag] = useState<ActiveDragInfo | null>(null);
   // Three columns need roughly 1000px of CONTAINER width, and this designer
   // lives at the bottom of a stack that eats most of it: the app nav (256px),
-  // then Catalog Builder's own entity/section rail (280px, which only appears
+  // then Entity Builder's own entity/section rail (280px, which only appears
   // at xl and above). On a 1600px screen that leaves the canvas about 360px —
   // narrower than the sidebar region it is supposed to be previewing. Rather
   // than fight the shell from inside it, the designer can hide either side
@@ -682,7 +682,7 @@ export function PageDesigner({
         onDragCancel={() => setActiveDrag(null)}
       >
         {/* @container, not the viewport breakpoints: how much room the three
-            columns actually have depends on Catalog Builder's own rail, which
+            columns actually have depends on Entity Builder's own rail, which
             appears at xl — so a WIDER viewport can leave this area NARROWER.
             Measuring the element itself is the only reading that holds. */}
         <div className="@container">

@@ -54,7 +54,7 @@ export const workflowCatalog: WorkflowCatalogItem[] = [
   { key: 'condition.site', group: 'Conditions', nodeType: 'condition', title: 'Site', description: 'Filters by affected site.', support: 'planned', color: 'amber' },
   { key: 'condition.device_type', group: 'Conditions', nodeType: 'condition', title: 'Device Type', description: 'Camera, NVR, switch, PDU…', support: 'planned', color: 'amber' },
   { key: 'condition.team', group: 'Conditions', nodeType: 'condition', title: 'Team or Area', description: 'Assignee or stakeholder.', support: 'planned', color: 'amber' },
-  { key: 'condition.custom_field', group: 'Conditions', nodeType: 'condition', title: 'Dynamic Field', description: 'Evaluates a Catalog Builder field.', support: 'planned', color: 'amber' },
+  { key: 'condition.custom_field', group: 'Conditions', nodeType: 'condition', title: 'Dynamic Field', description: 'Evaluates an Entity Builder field.', support: 'planned', color: 'amber' },
   { key: 'condition.sla_percent', group: 'Conditions', nodeType: 'condition', title: 'SLA Consumption', description: 'Compares percentage consumed.', support: 'planned', color: 'amber' },
 
   { key: 'control.delay', group: 'Control', nodeType: 'delay', title: 'Wait', description: 'Temporal durable timer.', support: 'operational', color: 'blue', defaults: { delayValue: '15', delayUnit: 'minutes' } },
@@ -231,7 +231,7 @@ export function compileVisualWorkflow(nodes: WorkflowNode[], edges: Edge[], vers
     }
 
     if (String(action.data.catalogKey) === 'action.change_status') {
-      // Una referencia a una transición que Catalog Builder ya no publica NO se
+      // Una referencia a una transición que Entity Builder ya no publica NO se
       // borra en silencio: el editor la marca al cargar las transiciones y aquí
       // bloquea la publicación. Limpiarla sola cambiaría lo que hace el flujo
       // sin que nadie lo decidiera.

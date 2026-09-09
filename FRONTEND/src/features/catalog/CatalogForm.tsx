@@ -404,7 +404,7 @@ export default function CatalogForm() {
     const hasNativePriorityField = activeKeys.includes('priority') && !bindingKeys.has('priority');
     if (definition.entityKey.toUpperCase() === 'INC' && incidentResourceFields.length === 0) {
       setSubmitError(
-        'This INC definition has no resource or CMDB field. Add "Site Device" in Catalog Builder → Form fields and publish it before creating the incident.',
+        'This INC definition has no resource or CMDB field. Add "Site Device" in Entity Builder → Form fields and publish it before creating the incident.',
       );
       return;
     }
@@ -714,7 +714,7 @@ export default function CatalogForm() {
           <div className="mb-5">
             {/* Compatibility fallback for definitions published before this
                 widget existed. A new definition can position the same widget
-                anywhere on its grid from Catalog Builder. */}
+                anywhere on its grid from Entity Builder. */}
             <FormStakeholdersWidget context={formContext} />
           </div>
         )}
