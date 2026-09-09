@@ -202,12 +202,31 @@ type AuthMockOptions = {
   forwardUnmatched?: boolean;
   /** Isolated tickets/catalog/entities/sla service base URL. When provided,
    *  routes to /catalog/**, /entities/**, /tickets/**, and /sla/** are forwarded
-   *  to this isolated URL instead of the shared Kong API. */
+   *  to this isolated URL instead of the shared Kong API. Entity-key-specific
+   *  routes owned by a DIFFERENT isolated service (see `problemApiUrl` for
+   *  `/entities/PRB/**`) are matched before this generic prefix. */
   catalogApiUrl?: string;
+  /** E2E contamination remediation, Workstream A, Correction 5 (2026-09-06):
+   *  isolated problem_service base URL, for the multi-service ITSM stack.
+   *  When provided, routes to /entities/PRB/** and /relationships/** (both
+   *  owned by problem_service — including INC/RFC relationship reads, which
+   *  problem_service centrally hosts) are forwarded here instead of Kong. */
+  problemApiUrl?: string;
+  /** Isolated change_service base URL. When provided, routes to /changes**
+   *  are forwarded here instead of Kong. */
+  changeApiUrl?: string;
   /** Cryptographically signed JWT token to return in POST /v1/session. */
   sessionToken?: string;
   /** Auditor to record and assert destination of mutating requests. */
   mutationAuditor?: MutationAuditor;
+  /** E2E contamination remediation, Workstream A, Correction 5 (2026-09-06):
+   *  this run's E2E_RUN_TOKEN, and a short label identifying which spec is
+   *  running — both purely for the mutating-network guard's error message
+   *  below. Required (in practice) whenever any of the *ApiUrl options
+   *  above are set: without it, the guard still fires, just with a less
+   *  specific message. */
+  runToken?: string;
+  specLabel?: string;
 };
 
 /**
@@ -221,7 +240,7 @@ async function mockAuthenticatedIdentity(
   identity: MockIdentity,
   options: AuthMockOptions = {},
 ) {
-  const { forwardUnmatched = true, catalogApiUrl, sessionToken } = options;
+  const { forwardUnmatched = true, catalogApiUrl, problemApiUrl, changeApiUrl, sessionToken } = options;
   // SIGTools always lives under /api/v1/web-auth on its own origin
   // (sigtoolsClient.ts hardcodes that regardless of VITE_API_URL) —
   // independent of the Gateway change above, so this pattern is unaffected.
@@ -302,46 +321,79 @@ async function mockAuthenticatedIdentity(
         );
       }
 
-      // Ruteo aislado para tests de Catalog Builder: si se configuró catalogApiUrl,
-      // todas las peticiones a Catalog, Entities, Tickets y SLA van al servicio aislado.
-      // Dependencias de solo lectura compartidas (como /assets/**) continúan por Kong.
-      if (catalogApiUrl) {
-        const p = requestURL.pathname;
-        if (
-          p.startsWith('/catalog/') ||
-          p === '/catalog' ||
-          p.startsWith('/entities/') ||
-          p === '/entities' ||
-          p.startsWith('/tickets/') ||
-          p === '/tickets' ||
-          p.startsWith('/sla/') ||
-          p === '/sla'
-        ) {
-          const destUrl = `${catalogApiUrl.replace(/\/$/, '')}${p}${requestURL.search}`;
-          try {
-            const response = await route.fetch({
-              url: destUrl,
-            });
-            // Recorded AFTER the fetch, not before: the response — and
-            // specifically its X-E2E-Run-Token header — is what the
-            // auditor needs, and doesn't exist until the isolated process
-            // has actually answered.
-            if (isMutating && options.mutationAuditor) {
-              options.mutationAuditor.record({
-                method,
-                sourceUrl: route.request().url(),
-                destinationUrl: destUrl,
-                destinationOrigin: new URL(destUrl).origin,
-                destinationPort: parseInt(new URL(destUrl).port || '80', 10),
-                responseRunToken: response.headers()['x-e2e-run-token'] ?? null,
-              });
-            }
-            await route.fulfill({ response });
-          } catch {
-            await route.abort().catch(() => {});
-          }
-          return;
+      // Ruteo aislado: cada servicio aislado configurado (Catalog/Tickets,
+      // Problem, Change) recibe SOLO las rutas que realmente posee.
+      // Dependencias de solo lectura compartidas (como /assets/**) continúan
+      // por Kong incluso con todos los *ApiUrl configurados.
+      const p = requestURL.pathname;
+      const isolatedTarget: { label: string; baseUrl: string } | null = (() => {
+        // problem_service posee /entities/PRB/** Y TODO /relationships/**
+        // (incluyendo lecturas para INC/RFC — el grafo de relaciones vive
+        // centralizado ahí, no en tickets_service ni en change_service).
+        if (problemApiUrl && (p === '/entities/PRB' || p.startsWith('/entities/PRB/') || p === '/relationships' || p.startsWith('/relationships/'))) {
+          return { label: 'problem', baseUrl: problemApiUrl };
         }
+        if (changeApiUrl && (p === '/changes' || p.startsWith('/changes/') || p === '/changes')) {
+          return { label: 'change', baseUrl: changeApiUrl };
+        }
+        if (
+          catalogApiUrl &&
+          (p.startsWith('/catalog/') ||
+            p === '/catalog' ||
+            p.startsWith('/entities/') ||
+            p === '/entities' ||
+            p.startsWith('/tickets/') ||
+            p === '/tickets' ||
+            p.startsWith('/sla/') ||
+            p === '/sla')
+        ) {
+          return { label: 'tickets', baseUrl: catalogApiUrl };
+        }
+        return null;
+      })();
+
+      if (isolatedTarget) {
+        const destUrl = `${isolatedTarget.baseUrl.replace(/\/$/, '')}${p}${requestURL.search}`;
+        try {
+          const response = await route.fetch({
+            url: destUrl,
+          });
+          // Recorded AFTER the fetch, not before: the response — and
+          // specifically its X-E2E-Run-Token header — is what the
+          // auditor needs, and doesn't exist until the isolated process
+          // has actually answered.
+          if (isMutating && options.mutationAuditor) {
+            options.mutationAuditor.record({
+              method,
+              sourceUrl: route.request().url(),
+              destinationUrl: destUrl,
+              destinationOrigin: new URL(destUrl).origin,
+              destinationPort: parseInt(new URL(destUrl).port || '80', 10),
+              responseRunToken: response.headers()['x-e2e-run-token'] ?? null,
+            });
+          }
+          await route.fulfill({ response });
+        } catch {
+          await route.abort().catch(() => {});
+        }
+        return;
+      }
+
+      // Mutating-network guard (E2E contamination remediation, Workstream A,
+      // Correction 5, 2026-09-06): once ANY isolated backend is configured
+      // for this identity, a mutating request that matches none of them is
+      // a real isolation leak about to reach the SHARED local API — never
+      // silently forwarded, never only recorded for a later assertion.
+      // Fails the test immediately with exactly what Correction 5 asked
+      // for: method, URL, spec name, run token.
+      if (isMutating && (catalogApiUrl || problemApiUrl || changeApiUrl)) {
+        const message =
+          `MUTATION FORBIDDEN: an isolated spec's mutating request would reach the SHARED local API.\n` +
+          `  Method: ${method}\n` +
+          `  URL: ${requestURL.toString()}\n` +
+          `  Spec: ${options.specLabel ?? '(specLabel not provided)'}\n` +
+          `  E2E run token: ${options.runToken ?? '(runToken not provided)'}`;
+        throw new Error(message);
       }
 
       // El try/catch NO oculta fallos del backend: un 4xx o 5xx llega como

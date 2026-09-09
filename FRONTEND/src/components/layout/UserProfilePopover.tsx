@@ -56,7 +56,7 @@ export default function UserProfilePopover() {
                 assigned at all, and whether it grants admin capability. */}
             <div className="mt-2 flex flex-wrap gap-1">
               <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                {roleId ? (canManageUsersAndRoles ? 'Administrador' : 'Rol asignado') : 'Sin rol asignado'}
+                {roleId ? (canManageUsersAndRoles ? 'Administrator' : 'Role assigned') : 'No role assigned'}
               </span>
             </div>
           </div>

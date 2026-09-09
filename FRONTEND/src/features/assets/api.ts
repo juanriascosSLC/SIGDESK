@@ -38,9 +38,21 @@ export interface AssetPage {
 const RESOURCE_PAGE_SIZE = 100;
 const MAX_RESOURCE_PAGES = 100;
 
-export function assetTypeMatches(assetType: string | undefined, filter: string | undefined): boolean {
+/**
+ * Matches against the Recurso taxonomy (`Docs/glossary.md`: "hardware,
+ * licencia de software, o infraestructura de red") — despite the old name
+ * ("assetTypeMatches"), this has never understood Asset's real taxonomy
+ * (`Kind`: site/system/device/component, glossary "Ítem de inventario
+ * (proyección externa)"). Renamed 2026-09-09 after an audit found it being
+ * applied to real Asset data in `CatalogForm.tsx` (fixed alongside this),
+ * which silently mismatched the two taxonomies. Only ever call this for
+ * `kind === 'recurso'` bindings — see `useSimulatedFormContext.tsx` for the
+ * pattern this now matches. An Asset-taxonomy equivalent (`Kind`-based) is
+ * a separate, not-yet-written function — do not extend this one to cover it.
+ */
+export function recursoTypeMatches(recursoType: string | undefined, filter: string | undefined): boolean {
   if (!filter) return true;
-  const normalizedType = (assetType ?? '').toLowerCase().replaceAll('_', '-');
+  const normalizedType = (recursoType ?? '').toLowerCase().replaceAll('_', '-');
   const normalizedFilter = filter.toLowerCase().replaceAll('_', '-');
   if (normalizedType === normalizedFilter) return true;
   if (normalizedFilter === 'hardware') return !['software', 'license', 'site'].includes(normalizedType);
@@ -121,23 +133,299 @@ export function setAssetOrganizationUnits(assetId: string, organizationUnitIds: 
   });
 }
 
-export interface AssetOperationalHistory {
-  incidents: Ticket[];
-  problems: EntityRecord[];
-  changes: EntityRecord[];
-  unavailableDomains: Array<'INC' | 'PRB' | 'RFC'>;
+/**
+ * A PRB/RFC surfaced for an asset's operational history, tagged with WHY it
+ * is here — never implying every result personally stores the asset
+ * snapshot:
+ *   - 'direct_asset': the record itself carries an immutable asset snapshot.
+ *   - 'via_incident': related (Problem/Change relations) to an INC that has
+ *     a direct snapshot. viaHumanId names that INC.
+ *   - 'via_problem' (RFC only): a PRB --resolvedBy--> RFC relation, already
+ *     authorized on the PRB side by problem_service; change_service still
+ *     applies its own changes:read + scope before this can ever appear.
+ *     viaHumanId names that PRB.
+ */
+export interface AssociatedEntityRecord extends EntityRecord {
+  associationPath: 'direct_asset' | 'via_incident' | 'via_problem';
+  viaEntityKey?: string;
+  viaHumanId?: string;
 }
 
+/**
+ * One PRB→RFC "resolvedBy" reference, as problem_service's own batch/context
+ * query returns it — already authorized there (problems:read + scope on the
+ * PRB side). This is the ONLY place a viaProblemHumanId ever appears on the
+ * wire: it travels FROM problem_service TO the frontend, never from the
+ * frontend to change_service (see the trust-boundary note on
+ * getAssetOperationalHistory below).
+ */
+interface ResolvedRfcReference {
+  rfcHumanId: string;
+  viaProblemHumanId: string;
+}
+
+/**
+ * Whether a domain's `items` can be trusted as the FULL answer:
+ *   - 'complete': every path this domain can be reached by was actually
+ *     queried and succeeded. A `complete` result with zero `items` means
+ *     genuinely zero associations — never "we didn't check".
+ *   - 'partial': `items` may be missing entries, either because this
+ *     domain's own request failed (its `items` is then always `[]` — a
+ *     failed batch is never partially merged, see mergeAssociatedRecords'
+ *     caller below) or because an UPSTREAM domain this one depends on
+ *     (INC for PRB/RFC's via_incident matches, PRB for RFC's via_problem
+ *     matches) could not be queried, so some of THIS domain's paths were
+ *     never attempted even though its own request succeeded. `issues`
+ *     names every contributing reason. These two states are deliberately
+ *     never collapsed into one another, nor into "unavailable" — a partial
+ *     PRB list from a successful direct-match query is still worth
+ *     showing, just never as if it were the complete picture.
+ */
+export type DomainCompleteness = 'complete' | 'partial';
+
+export interface DomainResult<T> {
+  items: T[];
+  completeness: DomainCompleteness;
+  /** Human-readable reasons this domain is not 'complete'. Always empty
+   *  when completeness === 'complete'. */
+  issues: string[];
+}
+
+export interface AssetOperationalHistory {
+  incidents: DomainResult<Ticket>;
+  problems: DomainResult<AssociatedEntityRecord>;
+  changes: DomainResult<AssociatedEntityRecord>;
+}
+
+// Mirrors problem_service/change_service's own MaxAssetContextBatchIDs — the
+// per-request array cap BOTH backends enforce. Reused here as the CHUNK
+// size: every reference (incident id/humanId, RFC candidate id) is sent in
+// SOME batch, never silently sliced away. The number of batch calls per
+// domain is ceil(referenceCount / ASSET_CONTEXT_BATCH_LIMIT), never one
+// call per record.
+const ASSET_CONTEXT_BATCH_LIMIT = 500;
+
+const PROVENANCE_PRIORITY: Record<AssociatedEntityRecord['associationPath'], number> = {
+  direct_asset: 3,
+  via_incident: 2,
+  via_problem: 1,
+};
+
+/**
+ * Splits `items` into chunks of at most `size`. Always returns AT LEAST one
+ * chunk — including a single empty chunk for an empty input — so a caller
+ * that always needs one request per domain (to still pick up direct-asset
+ * matches when there are zero incidents) never has to special-case "no
+ * chunks at all".
+ */
+function chunk<T>(items: T[], size: number): T[][] {
+  if (items.length === 0) return [[]];
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+/** Pairs up two chunk lists positionally, padding the shorter one with
+ *  empty arrays — so batching two independently-sized reference lists
+ *  (incidents, RFC candidates) never requires more calls than
+ *  `max(ceil(aCount/limit), ceil(bCount/limit))`, instead of the two
+ *  counts summed. */
+function zipChunks<A, B>(a: A[][], b: B[][]): Array<{ a: A[]; b: B[] }> {
+  const length = Math.max(a.length, b.length);
+  const paired: Array<{ a: A[]; b: B[] }> = [];
+  for (let index = 0; index < length; index += 1) {
+    paired.push({ a: a[index] ?? [], b: b[index] ?? [] });
+  }
+  return paired;
+}
+
+/**
+ * Merges association pages (one array per batch call) into a single
+ * deduplicated, deterministically-ordered list — first-seen order across
+ * pages, with AssociationPath priority (direct_asset > via_incident >
+ * via_problem) deciding which occurrence's provenance wins when the same
+ * record surfaces from more than one batch (e.g. it is both a direct match
+ * in one chunk's response and a via_incident match discovered from another
+ * chunk's incident references).
+ */
+function mergeAssociatedRecords(pages: AssociatedEntityRecord[][]): AssociatedEntityRecord[] {
+  const byId = new Map<string, AssociatedEntityRecord>();
+  const order: string[] = [];
+  for (const page of pages) {
+    for (const record of page) {
+      const existing = byId.get(record.id);
+      if (!existing) {
+        byId.set(record.id, record);
+        order.push(record.id);
+        continue;
+      }
+      if (PROVENANCE_PRIORITY[record.associationPath] > PROVENANCE_PRIORITY[existing.associationPath]) {
+        byId.set(record.id, record);
+      }
+    }
+  }
+  return order.map((id) => byId.get(id)!);
+}
+
+function dedupeStrings(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+/**
+ * Pages through EVERY INC linked to this asset — tickets_service's own
+ * cursor pagination, driven here the same way collectAssetPages drives
+ * Resources' — so an asset with more than one page of incident history is
+ * never silently truncated to the first RESOURCE_PAGE_SIZE.
+ */
+async function collectAllIncidentsForAsset(assetId: string): Promise<Ticket[]> {
+  const items = new Map<string, Ticket>();
+  const seenCursors = new Set<string>();
+  let cursor = '';
+
+  for (let pageNumber = 0; pageNumber < MAX_RESOURCE_PAGES; pageNumber += 1) {
+    const page = await listTickets({ assetId, limit: RESOURCE_PAGE_SIZE, cursor: cursor || undefined });
+    for (const item of page.items) items.set(item.id, item);
+    if (!page.hasMore || !page.nextCursor) return [...items.values()];
+    if (seenCursors.has(page.nextCursor)) {
+      throw new Error('Tickets returned a repeated cursor while collecting asset operational history.');
+    }
+    seenCursors.add(page.nextCursor);
+    cursor = page.nextCursor;
+  }
+  throw new Error('Asset operational history exceeded the safe pagination limit for incidents.');
+}
+
+/**
+ * Composes an asset's full operational history — INC directly linked, PLUS
+ * PRB/RFC reachable directly OR through a linked INC OR (RFC only) through
+ * a PRB's resolvedBy relation — in a BOUNDED number of requests: the INC
+ * pagination loop, ceil(incidentCount / ASSET_CONTEXT_BATCH_LIMIT) calls to
+ * problem_service, and max of that and ceil(rfcCandidateCount / LIMIT)
+ * calls to change_service. Never one request per incident or problem, and
+ * — the point of this hardening pass — never a slice(0, N) that silently
+ * drops references beyond the batch limit: every reference is sent in SOME
+ * batch.
+ *
+ * Trust boundary (Workstream A item 2): change_service receives ONLY plain
+ * RFC human ids as lookup candidates (problemResolvedRfcHumanIds) — never
+ * the {rfcHumanId, viaProblemHumanId} pairing itself, which change_service
+ * has no way to verify and must not be asked to assert. The "Via PRB-xxxxxx"
+ * label for a via_problem RFC is produced HERE, by joining change_service's
+ * own authorized result (it decided the RFC is visible on its own
+ * changes:read + scope terms) against problem_service's own authoritative
+ * resolvedByRfcRefs (it decided the PRB relation is real and visible on its
+ * own problems:read + scope terms) — a display-only join over two
+ * independently-authorized answers, never a persisted or server-asserted
+ * relationship on either side.
+ *
+ * Each domain fails independently and ATOMICALLY: if any batch call for a
+ * domain fails, the WHOLE domain is marked unavailable (never a partial
+ * list built from only the batches that happened to succeed) — a
+ * successful-but-incomplete history is exactly what this must never
+ * produce. The other domains still render, named in unavailableDomains.
+ */
 export async function getAssetOperationalHistory(assetId: string): Promise<AssetOperationalHistory> {
-  const results = await Promise.allSettled([
-    listTickets({ assetId, limit: 100 }),
-    apiRequest<{ items: EntityRecord[] }>(`/problems/by-asset/${encodeURIComponent(assetId)}`),
-    apiRequest<{ items: EntityRecord[] }>(`/changes?assetId=${encodeURIComponent(assetId)}`),
-  ]);
+  let incidents: Ticket[] = [];
+  let incidentsOk = true;
+  try {
+    incidents = await collectAllIncidentsForAsset(assetId);
+  } catch {
+    incidentsOk = false;
+  }
+  const incidentChunks = chunk(incidents, ASSET_CONTEXT_BATCH_LIMIT);
+
+  let problems: AssociatedEntityRecord[] = [];
+  let resolvedByRfcRefs: ResolvedRfcReference[] = [];
+  let problemsFetchOk = true;
+  try {
+    const problemPages: AssociatedEntityRecord[][] = [];
+    const allResolvedRefs: ResolvedRfcReference[] = [];
+    for (const incidentChunk of incidentChunks) {
+      const response = await apiRequest<{ items: AssociatedEntityRecord[]; resolvedByRfcRefs?: ResolvedRfcReference[] }>(
+        '/problems/by-asset-context',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            assetId,
+            incidentIds: dedupeStrings(incidentChunk.map((t) => t.entityId).filter((id): id is string => Boolean(id))),
+            incidentHumanIds: dedupeStrings(incidentChunk.map((t) => t.humanId).filter((id): id is string => Boolean(id))),
+          }),
+        },
+      );
+      problemPages.push(response.items);
+      allResolvedRefs.push(...(response.resolvedByRfcRefs ?? []));
+    }
+    // Merged and deduped only after EVERY chunk succeeded — a failure
+    // partway through must not leave a partial `problems` list standing in
+    // for the whole domain (this is about THIS domain's own request
+    // atomicity — see the completeness/issues composition below for the
+    // separate, cross-domain notion of "my own request succeeded, but an
+    // upstream domain didn't, so I might still be missing entries").
+    problems = mergeAssociatedRecords(problemPages);
+    resolvedByRfcRefs = allResolvedRefs;
+  } catch {
+    problemsFetchOk = false;
+  }
+
+  // First-seen viaProblemHumanId per RFC human id — the trusted join table
+  // used below to label via_problem results; never sent to change_service.
+  const viaProblemHumanIdByRfc = new Map<string, string>();
+  for (const ref of resolvedByRfcRefs) {
+    if (!viaProblemHumanIdByRfc.has(ref.rfcHumanId)) viaProblemHumanIdByRfc.set(ref.rfcHumanId, ref.viaProblemHumanId);
+  }
+  const rfcCandidateChunks = chunk(dedupeStrings([...viaProblemHumanIdByRfc.keys()]), ASSET_CONTEXT_BATCH_LIMIT);
+
+  let changes: AssociatedEntityRecord[] = [];
+  let changesFetchOk = true;
+  try {
+    const changePages: AssociatedEntityRecord[][] = [];
+    for (const { a: incidentChunk, b: rfcCandidateChunk } of zipChunks(incidentChunks, rfcCandidateChunks)) {
+      const response = await apiRequest<{ items: AssociatedEntityRecord[] }>('/changes/by-asset-context', {
+        method: 'POST',
+        body: JSON.stringify({
+          assetId,
+          incidentIds: dedupeStrings(incidentChunk.map((t) => t.entityId).filter((id): id is string => Boolean(id))),
+          incidentHumanIds: dedupeStrings(incidentChunk.map((t) => t.humanId).filter((id): id is string => Boolean(id))),
+          problemResolvedRfcHumanIds: rfcCandidateChunk,
+        }),
+      });
+      changePages.push(response.items);
+    }
+    changes = mergeAssociatedRecords(changePages).map((record) =>
+      record.associationPath === 'via_problem' && !record.viaHumanId && viaProblemHumanIdByRfc.has(record.humanId)
+        ? { ...record, viaHumanId: viaProblemHumanIdByRfc.get(record.humanId) }
+        : record,
+    );
+  } catch {
+    changesFetchOk = false;
+  }
+
+  // Completeness/issues are composed here, ONCE, as the single source of
+  // truth for "can this domain's `items` be trusted as the full answer" —
+  // deliberately NOT three independent try/catch flags surfaced separately,
+  // which is exactly what let an upstream failure hide behind a
+  // downstream domain's own successful (but necessarily incomplete)
+  // request. The dependency chain is INC -> PRB (via_incident) -> RFC
+  // (via_incident AND via_problem), so a failure anywhere upstream taints
+  // every domain downstream of it, even when that downstream domain's own
+  // request succeeded outright.
+  const incidentIssues: string[] = [];
+  if (!incidentsOk) incidentIssues.push('No se pudo consultar INC para este activo.');
+
+  const problemIssues: string[] = [];
+  if (!incidentsOk) problemIssues.push('INC no disponible: las coincidencias vía incidente pueden faltar.');
+  if (!problemsFetchOk) problemIssues.push('No se pudo consultar PRB directamente para este activo.');
+
+  const changeIssues: string[] = [];
+  if (!incidentsOk) changeIssues.push('INC no disponible: las coincidencias vía incidente pueden faltar.');
+  if (!problemsFetchOk) changeIssues.push('PRB no disponible: las referencias PRB→RFC pueden faltar.');
+  if (!changesFetchOk) changeIssues.push('No se pudo consultar RFC directamente para este activo.');
+
   return {
-    incidents: results[0].status === 'fulfilled' ? results[0].value.items : [],
-    problems: results[1].status === 'fulfilled' ? results[1].value.items : [],
-    changes: results[2].status === 'fulfilled' ? results[2].value.items : [],
-    unavailableDomains: (['INC', 'PRB', 'RFC'] as const).filter((_, index) => results[index].status === 'rejected'),
+    incidents: { items: incidents, completeness: incidentIssues.length === 0 ? 'complete' : 'partial', issues: incidentIssues },
+    problems: { items: problems, completeness: problemIssues.length === 0 ? 'complete' : 'partial', issues: problemIssues },
+    changes: { items: changes, completeness: changeIssues.length === 0 ? 'complete' : 'partial', issues: changeIssues },
   };
 }

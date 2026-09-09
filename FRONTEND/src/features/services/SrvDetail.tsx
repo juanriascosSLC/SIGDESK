@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Loader2, MapPin } from 'lucide-react';
@@ -37,6 +37,18 @@ export default function SrvDetail() {
     setSubcontractorId(undefined);
   }
 
+  // "Resolve blockers" had no handler at all (bug: neither real nor mocked
+  // — a click did literally nothing). Until the real resolution flow lands
+  // (PR2 stepper work, see `services/pr2-invoice-workflow-embed-stepper`),
+  // the honest interim behavior is to bring the equipment checklist named
+  // in the CTA's own copy ("Confirm the missing equipment below") into
+  // view and focus it — a real action, not a fake success state.
+  const equipmentChecklistRef = useRef<HTMLDivElement>(null);
+  const handleResolveBlockers = () => {
+    equipmentChecklistRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    equipmentChecklistRef.current?.focus();
+  };
+
   const ticketQuery = useQuery({
     queryKey: ['services', 'srv-ticket', id],
     queryFn: () => getSrvTicket(id!),
@@ -67,6 +79,7 @@ export default function SrvDetail() {
 
   const ticket = ticketQuery.data;
   const nextAction = nextActionFor(ticket);
+  const hasMissingEquipment = ticket.equipment.some((item) => item.status === 'missing');
 
   return (
     <DepartmentScope
@@ -111,7 +124,22 @@ export default function SrvDetail() {
               {nextAction.description}
             </p>
           </div>
-          <Button disabled={nextAction.disabled} data-testid="srv-next-action-button">
+          {/* Merge note (Hector → PR2): Hector wired handleResolveBlockers
+              onto a SECOND, separate "Resolve blockers" button. PR2 folded
+              that CTA into this single per-stage Next Action button —
+              nextActionFor() emits the identical label and copy for the
+              missing-equipment case — so keeping both would have put two
+              buttons named "Resolve blockers" on the screen (breaking the
+              one-primary-button rule, and making the role query in
+              services-next-action-blockers.spec.ts ambiguous). Hector's
+              interim scroll-and-focus behavior is preserved here, gated to
+              the stage where the copy actually points "below", so the
+              button is never a dead CTA. */}
+          <Button
+            disabled={nextAction.disabled}
+            onClick={hasMissingEquipment ? handleResolveBlockers : undefined}
+            data-testid="srv-next-action-button"
+          >
             {nextAction.label}
           </Button>
         </div>
@@ -128,7 +156,7 @@ export default function SrvDetail() {
       <div className="grid gap-4 lg:grid-cols-2">
         <POCCard dealershipId={ticket.dealershipId} />
 
-        <Card data-testid="srv-equipment-checklist">
+        <Card data-testid="srv-equipment-checklist" ref={equipmentChecklistRef} tabIndex={-1}>
           <CardHeader>
             <CardTitle>Affected Equipment</CardTitle>
           </CardHeader>

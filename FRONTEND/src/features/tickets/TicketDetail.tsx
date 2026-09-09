@@ -18,7 +18,7 @@ import {
   useActivity,
   ticketKeys,
 } from './hooks';
-import { AssignTicketDialog, ReopenTicketDialog, MergeIntoTicketDialog, WatchToggleDialog } from './dialogs/TicketDialogs';
+import { AssignTicketDialog, ReopenTicketDialog, ResolveWithSlaBreachDialog, MergeIntoTicketDialog, WatchToggleDialog } from './dialogs/TicketDialogs';
 import { useToast } from '@/components/ui';
 import type { AssignmentTarget } from '@/features/organization/AssignmentPicker';
 import { canonicalTicketState, listTickets, statusFromApi, statusToApi, ticketStatesMatch } from './api';
@@ -86,6 +86,13 @@ export default function TicketDetail() {
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [showWatchDialog, setShowWatchDialog] = useState(false);
   const [pendingResolveTransitionKey, setPendingResolveTransitionKey] = useState<string | undefined>(undefined);
+  // Bug found 2026-09-09: justificacionIncumplimientoSla was typed and
+  // threaded through api.ts/hooks.ts but no dialog ever collected it. Mirrors
+  // showReopenDialog/pendingResolveTransitionKey below, kept separate so the
+  // two confirmation flows (reopen vs. resolve-with-breached-SLA) never share
+  // state.
+  const [showSlaJustificationDialog, setShowSlaJustificationDialog] = useState(false);
+  const [pendingSlaTransition, setPendingSlaTransition] = useState<{ key: string; status: TicketStatus } | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const comments = useComments(ticket?.id);
@@ -309,6 +316,22 @@ export default function TicketDetail() {
       (candidate) => candidate.key === placement.fieldKey,
     );
     if (!field) return null;
+    // Fixed 2026-09-06: a `bindsTo` field (site/device/IT-agent) was being
+    // handed to `DynamicField`, which has no notion of `bindsTo` at all and
+    // falls through to a plain, empty, `required` text input — since its
+    // real value lives in `ticket.assetContext`, never in `editData`. That
+    // silently failed HTML5 constraint validation on every submit
+    // (`form.checkValidity()` false with zero visibly-`:invalid` elements
+    // inside the form, because none of this ever surfaced an error to the
+    // user), so "Edit fields" -> "Save changes" could never succeed for any
+    // ticket whose edit layout includes a binding field — this path had no
+    // existing test coverage. This inline editor has no UI for changing an
+    // asset binding at all (that happens through dedicated flows, e.g.
+    // reassignment), so a bindsTo field is simply not editable here, same
+    // as it was never functionally editable before this fix either — the
+    // only change is that its placement now renders nothing instead of an
+    // input that can never be filled in and always blocks the whole form.
+    if (field.bindsTo) return null;
     return (
       <DynamicField
         field={placement.label ? { ...field, label: placement.label } : field}
@@ -383,9 +406,40 @@ export default function TicketDetail() {
       setShowReopenDialog(true);
       return;
     }
+    // Bug found 2026-09-09: resolving with a breached SLA had no UI path to
+    // provide justificacionIncumplimientoSla at all. resolutionBreached is
+    // the same real, already-fetched signal the SLA chip uses elsewhere
+    // (features/sla's SlaAssessment) — not a guess, and not re-derived from
+    // dates here, so it can't drift from what the chip already shows.
+    if (target === 'resuelto' && slaAssessment.data?.resolutionBreached) {
+      setPendingSlaTransition({ key: transition.key, status });
+      setShowSlaJustificationDialog(true);
+      return;
+    }
     updateStatus.mutate(
       { id: ticket!.id, status, actorName: currentUserName, transitionKey: transition.key },
       { onError: (err) => toast.show({ tone: 'error', title: "Couldn't update status", description: err.message }) },
+    );
+  }
+
+  function confirmSlaJustification(justification: string) {
+    if (!pendingSlaTransition) return;
+    updateStatus.mutate(
+      {
+        id: ticket!.id,
+        status: pendingSlaTransition.status,
+        actorName: currentUserName,
+        transitionKey: pendingSlaTransition.key,
+        justificacionIncumplimientoSla: justification,
+      },
+      {
+        onSuccess: () => {
+          setShowSlaJustificationDialog(false);
+          setPendingSlaTransition(undefined);
+          toast.show({ tone: 'success', title: 'Ticket resolved' });
+        },
+        onError: (err) => toast.show({ tone: 'error', title: "Couldn't resolve ticket", description: err.message }),
+      },
     );
   }
 
@@ -494,7 +548,12 @@ export default function TicketDetail() {
       .map((placement) => placement.fieldKey);
     for (const key of visibleCatalogKeys) {
       const field = specification.fields.find((candidate) => candidate.key === key);
-      if (!field) continue;
+      // Same reason as `renderEditField`'s `bindsTo` guard: this inline
+      // editor never collects a real value for an asset binding, so it
+      // must never touch it in the submitted payload either — leaving
+      // whatever `record.data` already had untouched, not overwriting it
+      // with `undefined`.
+      if (!field || field.bindsTo) continue;
       const value = editData[key];
       const required = isFieldRequired(field, editData);
       if (!required && (value === undefined || value === null || value === '')) {
@@ -806,6 +865,16 @@ export default function TicketDetail() {
           setPendingResolveTransitionKey(undefined);
         }}
         onConfirm={confirmReopen}
+        loading={updateStatus.isPending}
+        error={updateStatus.error?.message}
+      />
+      <ResolveWithSlaBreachDialog
+        open={showSlaJustificationDialog}
+        onClose={() => {
+          setShowSlaJustificationDialog(false);
+          setPendingSlaTransition(undefined);
+        }}
+        onConfirm={confirmSlaJustification}
         loading={updateStatus.isPending}
         error={updateStatus.error?.message}
       />

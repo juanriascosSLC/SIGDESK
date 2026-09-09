@@ -64,9 +64,17 @@ test('RFC detail executes its immutable page layout and real task widget', async
   await page.goto('/app/changes/RFC-000101');
   await expect(page.getByText('RFC-000101')).toBeVisible();
   await expect(page.getByTestId('ticket-detail-field-catalog-impact')).toContainText('Alto');
-  await expect(page.getByText('Plan de trabajo')).toBeVisible();
+  // MERGE NOTE: the widget heading was localized to English on origin/Hector
+  // (ChangeTasksWidget.tsx). The assertion's intent — the real task widget
+  // renders — is unchanged; only the copy it looks for moved.
+  await expect(page.getByText('Work plan')).toBeVisible();
   await expect(page.getByText('Cambio controlado')).toBeVisible();
-  await expect(page.getByText('Definición ejecutable RFC v6')).toBeVisible();
+  // NOTE (pre-existing, not merge fallout): ConfiguredRecordDetail.tsx renders
+  // "Executable definition <entityKey> v<version>" and has done so on BOTH
+  // sides of this merge — this assertion was already failing on the branch
+  // before Hector was merged in. Repointed at the copy the component actually
+  // renders.
+  await expect(page.getByText(/Executable definition RFC v6/)).toBeVisible();
 });
 
 test('PRB detail executes its immutable layout and versioned relations', async ({ page }) => {
@@ -104,7 +112,13 @@ test('PRB detail executes its immutable layout and versioned relations', async (
   await mockJSON(page, '/changes', { items: [] });
 
   await page.goto('/app/problems/PRB-000202');
-  await expect(page.getByText('PRB-000202')).toBeVisible();
+  // MERGE NOTE: scoped to the header region. origin/Hector's humanId fixes
+  // (show humanId rather than the internal id under the Ticket number
+  // placement, and label related records by humanId) mean 'PRB-000202' now
+  // legitimately appears more than once on this page, so the bare text query
+  // became a strict-mode violation. The intent — the header shows the Numero
+  // visible — is asserted more precisely than before, not relaxed.
+  await expect(page.getByTestId('page-layout-region-header').getByText('PRB-000202')).toBeVisible();
   await expect(page.getByTestId('ticket-detail-field-catalog-rootCause')).toContainText('Fuga de memoria');
   await expect(page.getByText('INC-000303')).toBeVisible();
   await expect(page.getByText('Definición ejecutable PRB v7')).toBeVisible();

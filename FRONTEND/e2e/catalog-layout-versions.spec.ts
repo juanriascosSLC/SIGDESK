@@ -1,35 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type APIResponse } from '@playwright/test';
-import { mockAuthenticatedAdmin, SIG_DESK_API_BASE } from './support';
+import { mockAuthenticatedAdmin } from './support';
+import { startIsolatedCatalogStack } from './isolated-catalog-stack';
 import { definitionData, type Definition } from './catalog-support';
 
-const apiBaseURL = SIG_DESK_API_BASE;
-
-// This entity key is scratch space owned entirely by this spec. Deliberately
-// NOT "INC": once a layout is published for an entity key it can never be
-// unpublished or deleted (catalog_layout_versions rows are immutable by
-// trigger, and there is no unpublish/delete endpoint), so publishing a real
-// layout against the shared "INC" entity key here would permanently change
-// how every INC ticket renders for the rest of this suite (and any dev
-// database this test run happens to share) — including incident-flow.spec.ts,
-// which asserts on widgets that only exist today via the legacy-synthesized
-// fallback. A dedicated entity key that nothing else in the suite touches
-// keeps this spec's writes irreversible only to itself.
-const entityKey = 'ZLAYE2E';
-
-interface ResolvedDefinition {
-  layoutVersionId: string | null;
-  layoutVersion: number | null;
-  layoutResolution: 'latest-compatible' | 'previous-compatible' | 'legacy-synthesized';
-}
-
-interface CatalogLayoutVersion {
-  id: string;
-  entityKey: string;
-  version: number;
-  status: string;
-  isActive: boolean;
-}
+// E2E contamination remediation, Workstream A (2026-09-06): this file no
+// longer targets the shared local stack. Every test below stands up its own
+// disposable `sigdesk_tickets_e2e_*` database + isolated e2e_tickets_service
+// process via `startIsolatedCatalogStack` and tears it down in `finally`,
+// exactly like isolated-ticket-collaboration.spec.ts / catalog-builder-runtime.spec.ts.
 
 interface Entity {
   id: string;
@@ -37,149 +16,216 @@ interface Entity {
   definitionVersion: number;
 }
 
+interface EntityManifest {
+  definitionVersionId: string;
+  entityKey: string;
+  version: number;
+  specification: { fields: Array<{ key: string; label: string }> } & Record<string, unknown>;
+}
+
+/** Only the field `GET /entities/{entityKey}/{id}/resolved-definition` is
+ *  actually asserted on below (`layoutResolution`) — kept minimal on purpose
+ *  rather than reusing `EntityManifest`, whose shape this endpoint doesn't share. */
+interface ResolvedDefinition {
+  layoutResolution: string;
+}
+
 async function json<T>(response: APIResponse, operation: string): Promise<T> {
   expect(response.ok(), `${operation} failed (${response.status()}): ${await response.text()}`).toBeTruthy();
   return response.json() as Promise<T>;
 }
 
-async function publishDefinitionVersion(
-  request: APIRequestContext,
-  fields: Array<{ key: string; label: string; type: string; options?: Array<{ value: string; label: string }> }>,
-): Promise<number> {
-  const draft = await json<Definition & { version: number }>(
-    await request.post(`${apiBaseURL}/catalog/definitions`, {
-      data: {
-        entityKey,
-        name: 'Playwright Layout Versioning Scratch Entity',
-        specification: {
-          identity: { prefix: entityKey },
-          fields,
-          lifecycle: {
-            states: [{ key: 'open', label: 'Open', initial: true }],
-          },
-        },
-      },
-    }),
-    'create definition draft',
+/** Sites are a shared, read-only dependency (resource_service via the Kong
+ *  gateway) — never isolated per run, same as isolated-ticket-collaboration.spec.ts
+ *  and catalog-builder-runtime.spec.ts. Only a `recursoId` is fetched here;
+ *  nothing is created or mutated against the shared stack. */
+async function sharedSiteRecursoId(request: APIRequestContext): Promise<string> {
+  const response = await request.get(
+    `${process.env.PLAYWRIGHT_API_URL ?? 'http://127.0.0.1:8000'}/assets/sites?limit=1`,
   );
-  await json(
-    await request.post(
-      `${apiBaseURL}/catalog/definitions/${entityKey}/versions/${draft.version}/publish`,
-    ),
-    `publish definition v${draft.version}`,
-  );
-  return draft.version;
+  const body = await json<{ items?: Array<{ id: string }> }>(response, 'load one shared CMDB site');
+  const recursoId = body.items?.[0]?.id;
+  expect(recursoId, 'At least one synchronized CMDB site is required').toBeTruthy();
+  return recursoId!;
 }
 
-function fieldPlacementDocument(fieldKey: string) {
-  return {
-    detail: {
-      regions: {
-        main: {
-          placements: [
-            { id: 'p1', kind: 'field', source: 'catalog', fieldId: fieldKey, fieldKey },
-          ],
-        },
-      },
+async function createIncPinnedToCurrentDefinition(
+  isolatedRequest: APIRequestContext,
+  definition: Definition,
+  recursoId: string,
+  title: string,
+): Promise<Entity> {
+  const response = await isolatedRequest.post('/entities/INC', {
+    headers: { 'Idempotency-Key': `playwright-layout-lifecycle-${randomUUID()}` },
+    data: {
+      data: definitionData(definition, {
+        title,
+        description: 'Definition-version lifecycle acceptance incident.',
+        priority: 'low',
+      }),
+      recursoId,
+      assetContext: { siteAssetId: recursoId, links: [] },
     },
-  };
+  });
+  return json<Entity>(response, `create INC pinned to v${(definition as { version?: number }).version ?? '?'}`);
 }
 
-async function publishLayoutVersion(
-  request: APIRequestContext,
-  fieldKey: string,
-): Promise<CatalogLayoutVersion> {
-  await json(
-    await request.post(`${apiBaseURL}/catalog/layouts/${entityKey}/draft`, {
-      data: fieldPlacementDocument(fieldKey),
-    }),
-    'create layout draft',
-  );
-  return json<CatalogLayoutVersion>(
-    await request.post(`${apiBaseURL}/catalog/layouts/${entityKey}/publish`),
-    'publish layout draft',
+async function manifestOf(isolatedRequest: APIRequestContext, id: string): Promise<EntityManifest> {
+  return json<EntityManifest>(
+    await isolatedRequest.get(`/entities/INC/${id}/manifest`),
+    `get manifest for entity ${id}`,
   );
 }
 
-test.describe('Catalog layout versioning API', () => {
-  test('draft, publish, previous-compatible fallback and rollback all resolve correctly against real Postgres', async ({
+function hasField(manifest: Pick<EntityManifest, 'specification'>, key: string): boolean {
+  return manifest.specification.fields.some((field) => field.key === key);
+}
+
+// Rewritten 2026-09-06 (Product Owner correction): the previous version of
+// this describe block exercised a standalone `/catalog/layouts/{entityKey}/*`
+// draft-publish-activate API that does not exist anywhere in the current
+// backend (confirmed live — every one of those routes 404s — and by reading
+// every registered route in `catalogo_controller.go`, which only exposes
+// `/catalog/definitions*` and `/catalog/resources`). That is NOT
+// re-implemented here. Instead this proves the ACTUAL, CURRENT architecture:
+// a layout is not a separate versioned resource at all — it is the
+// `createPage`/`editPage`/`detailPage` placements embedded directly inside
+// `catalog_definitions.especificacion`, so a definition version and "its"
+// layout are the same immutable unit (`layoutsHistoricos`,
+// entidades_controller.go). A ticket's own `/entities/INC/{id}/manifest`
+// always returns the exact specification (fields + embedded layout) pinned
+// to whatever definition version it was created under
+// (`definicionHistoricaDe`) — regardless of how many newer versions get
+// published afterward. "Rollback" in this model is not reactivating an old
+// layout row; it is cloning a historical definition version's specification
+// into a brand new draft and publishing it as the next version number.
+//
+// Entity key is INC, not a scratch key: `entityKeySoportado` gates
+// `/entities/{entityKey}/*` (including `/manifest` and
+// `/resolved-definition`) to `entityKey === "INC"` only
+// (entidades_controller.go:26) — a scratch entity key 501s on exactly the
+// endpoints this test needs, which is a second, independent reason the old
+// scratch-entity design could never have worked against today's backend.
+test.describe('Catalog definition-version lifecycle (layouts embedded in immutable versions)', () => {
+  test('a ticket keeps rendering the layout embedded in its own pinned definition version; rollback clones a historical version into a new draft', async ({
     request,
   }) => {
-    // v1: only "title". The scratch entity created below is pinned to this
-    // version forever, regardless of how the definition or layout evolve.
-    await publishDefinitionVersion(request, [
-      { key: 'title', label: 'Title', type: 'text' },
-    ]);
+    const stack = await startIsolatedCatalogStack();
+    try {
+      const recursoId = await sharedSiteRecursoId(request);
 
-    const entity = await json<Entity>(
-      await request.post(`${apiBaseURL}/entities/${entityKey}`, {
-        headers: { 'Idempotency-Key': 'playwright-catalog-layout-versions-entity-v1' },
-        data: { data: { title: 'Playwright layout versioning fixture' } },
-      }),
-      'create scratch entity',
-    );
-    expect(entity.definitionVersion).toBe(1);
+      // --- v1 ("layout A"): the isolated stack's own auto-seeded, published
+      // INC definition (BACKEND/scripts/fixtures/catalog-inc-v1.json) — no
+      // extra publish needed, it is already the active version 1.
+      const v1 = await json<Definition & { version: number }>(
+        await stack.isolatedRequest.get('/catalog/definitions/INC'),
+        'get baseline (v1) INC definition',
+      );
+      expect(v1.version).toBe(1);
+      expect(hasField({ specification: v1.specification }, 'layoutMarkerV2')).toBe(false);
 
-    // Layout v_title: references "title", compatible with the entity's
-    // historical (and, for now, still current) schema. Becomes active.
-    const titleCompatibleLayout = await publishLayoutVersion(request, 'title');
+      const ticketV1 = await createIncPinnedToCurrentDefinition(
+        stack.isolatedRequest,
+        v1,
+        recursoId,
+        'Pinned to v1 (layout A)',
+      );
 
-    const afterFirstLayout = await json<ResolvedDefinition>(
-      await request.get(`${apiBaseURL}/entities/${entityKey}/${entity.id}/resolved-definition`),
-      'resolve after first layout publish',
-    );
-    expect(afterFirstLayout.layoutResolution).toBe('latest-compatible');
-    expect(afterFirstLayout.layoutVersion).toBe(titleCompatibleLayout.version);
+      // --- v2 ("layout B"): a real draft cloned from v1's specification,
+      // with one additive field + a real placement for it in the detail
+      // page — the embedded-layout change this whole test is about.
+      const v1Spec = JSON.parse(JSON.stringify(v1.specification)) as typeof v1.specification & {
+        detailPage: { default: { footer: { columns: number; placements: unknown[] } } };
+      };
+      v1Spec.fields.push({ key: 'layoutMarkerV2', label: 'Layout marker v2', type: 'text', required: false });
+      v1Spec.detailPage.default.footer.placements.push({
+        id: 'layout-marker-v2-placement',
+        kind: 'field',
+        source: 'catalog',
+        fieldKey: 'layoutMarkerV2',
+        column: 0,
+        columnSpan: 12,
+        row: 0,
+      });
 
-    // Evolve the definition: a NEW version adds "priority". The scratch
-    // entity above never sees this — GetDefinition always fetches it by the
-    // exact historical version number, regardless of what is currently
-    // published.
-    await publishDefinitionVersion(request, [
-      { key: 'title', label: 'Title', type: 'text' },
-      {
-        key: 'priority',
-        label: 'Priority',
-        type: 'select',
-        options: [{ value: 'low', label: 'Low' }],
-      },
-    ]);
+      const v2Draft = await json<Definition & { version: number }>(
+        await stack.isolatedRequest.post('/catalog/definitions', {
+          data: { entityKey: 'INC', name: v1.name, specification: v1Spec },
+        }),
+        'create v2 draft (layout B) from cloned v1 specification',
+      );
+      expect(v2Draft.version).toBe(2);
+      await json(
+        await stack.isolatedRequest.post(`/catalog/definitions/INC/versions/${v2Draft.version}/validate`),
+        'validate v2 draft',
+      );
+      const v2 = await json<Definition & { version: number }>(
+        await stack.isolatedRequest.post(`/catalog/definitions/INC/versions/${v2Draft.version}/publish`),
+        'publish v2 (layout B)',
+      );
+      expect(v2.version).toBe(2);
 
-    // A new layout references the NEW field. It publishes fine (validated
-    // against the CURRENT definition, which now has "priority") and becomes
-    // active — but it is incompatible with the scratch entity's v1 schema.
-    const priorityOnlyLayout = await publishLayoutVersion(request, 'priority');
-    expect(priorityOnlyLayout.isActive).toBe(true);
-    expect(priorityOnlyLayout.version).toBeGreaterThan(titleCompatibleLayout.version);
+      const ticketV2 = await createIncPinnedToCurrentDefinition(
+        stack.isolatedRequest,
+        v2,
+        recursoId,
+        'Pinned to v2 (layout B)',
+      );
 
-    const afterIncompatibleActive = await json<ResolvedDefinition>(
-      await request.get(`${apiBaseURL}/entities/${entityKey}/${entity.id}/resolved-definition`),
-      'resolve while active layout is incompatible',
-    );
-    expect(afterIncompatibleActive.layoutResolution).toBe('previous-compatible');
-    expect(afterIncompatibleActive.layoutVersion).toBe(titleCompatibleLayout.version);
+      // --- Prove each ticket renders exactly the layout embedded in the
+      // version it was created under — independent of whatever is
+      // currently published.
+      const manifestV1AfterV2 = await manifestOf(stack.isolatedRequest, ticketV1.id);
+      expect(manifestV1AfterV2.version).toBe(1);
+      expect(hasField(manifestV1AfterV2, 'layoutMarkerV2'), 'the v1 ticket must still render layout A, without the v2 marker field').toBe(false);
 
-    // Rollback: reactivate the title-compatible layout explicitly.
-    await json(
-      await request.post(
-        `${apiBaseURL}/catalog/layouts/${entityKey}/versions/${titleCompatibleLayout.version}/activate`,
-      ),
-      'activate (rollback to) the title-compatible layout',
-    );
+      const manifestV2 = await manifestOf(stack.isolatedRequest, ticketV2.id);
+      expect(manifestV2.version).toBe(2);
+      expect(hasField(manifestV2, 'layoutMarkerV2'), 'the v2 ticket must render layout B, with the v2 marker field').toBe(true);
 
-    const active = await json<CatalogLayoutVersion>(
-      await request.get(`${apiBaseURL}/catalog/layouts/${entityKey}/active`),
-      'get active layout after rollback',
-    );
-    expect(active.version).toBe(titleCompatibleLayout.version);
-    expect(active.isActive).toBe(true);
+      // --- "Rollback": there is no reactivate-an-old-layout endpoint —
+      // the supported model is cloning the DESIRED historical definition's
+      // specification (v1's, unmodified) into a new draft and publishing
+      // it as the next version.
+      const v3Draft = await json<Definition & { version: number }>(
+        await stack.isolatedRequest.post('/catalog/definitions', {
+          data: { entityKey: 'INC', name: v1.name, specification: v1.specification },
+        }),
+        'create v3 draft by cloning historical v1 specification (rollback model)',
+      );
+      expect(v3Draft.version).toBe(3);
+      await json(
+        await stack.isolatedRequest.post(`/catalog/definitions/INC/versions/${v3Draft.version}/validate`),
+        'validate v3 draft',
+      );
+      const v3 = await json<Definition & { version: number }>(
+        await stack.isolatedRequest.post(`/catalog/definitions/INC/versions/${v3Draft.version}/publish`),
+        'publish v3 (rollback clone of v1)',
+      );
+      expect(v3.version).toBe(3);
 
-    const afterRollback = await json<ResolvedDefinition>(
-      await request.get(`${apiBaseURL}/entities/${entityKey}/${entity.id}/resolved-definition`),
-      'resolve after rollback',
-    );
-    expect(afterRollback.layoutResolution).toBe('latest-compatible');
-    expect(afterRollback.layoutVersion).toBe(titleCompatibleLayout.version);
+      const ticketV3 = await createIncPinnedToCurrentDefinition(
+        stack.isolatedRequest,
+        v3,
+        recursoId,
+        'Pinned to v3 (rollback clone of v1)',
+      );
+
+      // --- Publishing v3 must not disturb v1 or v2's historical records.
+      const manifestV1Final = await manifestOf(stack.isolatedRequest, ticketV1.id);
+      expect(manifestV1Final.version, 'the v1 ticket must remain pinned to v1 after v3 is published').toBe(1);
+      expect(hasField(manifestV1Final, 'layoutMarkerV2')).toBe(false);
+
+      const manifestV2Final = await manifestOf(stack.isolatedRequest, ticketV2.id);
+      expect(manifestV2Final.version, 'the v2 ticket must remain pinned to v2 after v3 is published').toBe(2);
+      expect(hasField(manifestV2Final, 'layoutMarkerV2')).toBe(true);
+
+      const manifestV3 = await manifestOf(stack.isolatedRequest, ticketV3.id);
+      expect(manifestV3.version, 'the new record must use v3').toBe(3);
+      expect(hasField(manifestV3, 'layoutMarkerV2'), 'v3 is a clone of v1 (layout A), so the v2 marker field must be absent').toBe(false);
+    } finally {
+      await stack.cleanup();
+    }
   });
 });
 
@@ -188,45 +234,74 @@ test.describe('Ticket detail provenance badge', () => {
     page,
     request,
   }) => {
-    // INC has never had a catalog_layout_versions row published in this
-    // environment, so its tickets always resolve via the safe,
-    // zero-database-write legacy-synthesized fallback — this is the one
-    // provenance value that is always true for INC without this spec ever
-    // needing to publish a (permanent, irreversible) layout for it.
-    const definitionResponse = await request.get(`${apiBaseURL}/catalog/definitions/INC`);
-    const definition = await json<Definition>(definitionResponse, 'get published INC definition');
+    // Isolated per-run stack (E2E contamination remediation, Workstream A,
+    // 2026-09-06): this used to create one permanent INC entity in
+    // sigdesk_tickets_local on every run, with no cleanup. `startIsolatedCatalogStack`
+    // already seeds and publishes a real INC definition (from the same
+    // canonical fixture used elsewhere) before returning, so no extra setup
+    // is needed here beyond pointing every request at the disposable stack.
+    const recursoId = await sharedSiteRecursoId(request);
+    const stack = await startIsolatedCatalogStack();
+    try {
+      const definitionResponse = await stack.isolatedRequest.get('/catalog/definitions/INC');
+      const definition = await json<Definition>(definitionResponse, 'get published INC definition');
 
-    const createResponse = await request.post(`${apiBaseURL}/entities/INC`, {
-      headers: { 'Idempotency-Key': `playwright-provenance-badge-inc-${randomUUID()}` },
-      data: {
-        data: definitionData(definition, {
-          title: 'Playwright provenance badge fixture',
-          description: 'Used to verify the definition-provenance badge renders end-to-end.',
-          priority: 'low',
-        }),
-      },
-    });
-    const entity = await json<Entity & { humanId: string }>(createResponse, 'seed INC entity');
+      const createResponse = await stack.isolatedRequest.post('/entities/INC', {
+        headers: { 'Idempotency-Key': `playwright-provenance-badge-inc-${randomUUID()}` },
+        data: {
+          data: definitionData(definition, {
+            title: 'Playwright provenance badge fixture',
+            description: 'Used to verify the definition-provenance badge renders end-to-end.',
+            priority: 'low',
+          }),
+          recursoId,
+          assetContext: { siteAssetId: recursoId, links: [] },
+        },
+      });
+      const entity = await json<Entity & { humanId: string }>(createResponse, 'seed INC entity');
 
-    const resolved = await json<ResolvedDefinition>(
-      await request.get(`${apiBaseURL}/entities/INC/${entity.humanId}/resolved-definition`),
-      'resolve INC ticket definition',
-    );
-    expect(['legacy-synthesized', 'latest-compatible']).toContain(resolved.layoutResolution);
+      // Stale test assumption found while migrating this test (2026-09-06,
+      // not a production bug — see api.ts:292-296's documented contract):
+      // `GET /entities/{entityKey}/{id}/resolved-definition` parses `{id}`
+      // as the canonical raw integer ticket id (`parseTicketID`,
+      // entidades_controller.go), by design — `humanId` is display-only.
+      // This test was passing `humanId` here, which the CURRENT contract
+      // never accepted. Fixed here to use `entity.id`.
+      //
+      // INC has never had a layout published inside this fresh isolated
+      // stack, so its tickets always resolve via the safe,
+      // zero-database-write legacy-synthesized fallback — this is the one
+      // provenance value that is always true here without ever needing to
+      // publish a (permanent, irreversible) layout for it.
+      const resolved = await json<ResolvedDefinition>(
+        await stack.isolatedRequest.get(`/entities/INC/${entity.id}/resolved-definition`),
+        'resolve INC ticket definition',
+      );
+      expect(['legacy-synthesized', 'latest-compatible']).toContain(resolved.layoutResolution);
 
-    await expect
-      .poll(
-        async () => (await request.get(`${apiBaseURL}/tickets/${entity.humanId}`)).status(),
-        { timeout: 15_000, message: 'Tickets did not project the seeded INC entity.' },
-      )
-      .toBe(200);
+      // Same contract as above: `GET /tickets/{id}` (http_controller.go)
+      // also canonically takes the raw integer id via `parseTicketID`.
+      await expect
+        .poll(
+          async () => (await stack.isolatedRequest.get(`/tickets/${entity.id}`)).status(),
+          { timeout: 15_000, message: 'Tickets did not project the seeded INC entity.' },
+        )
+        .toBe(200);
 
-    await mockAuthenticatedAdmin(page);
-    await page.goto(`/app/tickets/${entity.humanId}`);
-    await expect(page.getByTestId('ticket-detail')).toBeVisible();
+      // Same documented contract a third time, now in the frontend route:
+      // api.ts:292-296 states plainly that /app/tickets/:id feeds the raw
+      // integer id straight back into getTicket — humanId is display-only.
+      // This test's `page.goto` call was passing humanId here — a stale
+      // test assumption, not a production defect.
+      await mockAuthenticatedAdmin(page, { catalogApiUrl: stack.baseUrl, sessionToken: stack.jwtToken });
+      await page.goto(`/app/tickets/${entity.id}`);
+      await expect(page.getByTestId('ticket-detail')).toBeVisible();
 
-    const badge = page.getByTestId('definition-provenance');
-    await expect(badge).toBeVisible();
-    await expect(badge).toHaveAttribute('title', new RegExp(resolved.layoutResolution));
+      const badge = page.getByTestId('definition-provenance');
+      await expect(badge).toBeVisible();
+      await expect(badge).toHaveAttribute('title', new RegExp(resolved.layoutResolution));
+    } finally {
+      await stack.cleanup();
+    }
   });
 });

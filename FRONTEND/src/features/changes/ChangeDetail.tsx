@@ -235,7 +235,7 @@ export default function ChangeDetail() {
   if (changeQuery.isLoading || manifestQuery.isLoading) {
     return (
       <div className="min-h-screen bg-surface-container-lowest p-8 text-on-surface-variant">
-        Cargando solicitud de cambio…
+        Loading change request…
       </div>
     );
   }
@@ -243,12 +243,12 @@ export default function ChangeDetail() {
     const message =
       changeQuery.error?.message ??
       manifestQuery.error?.message ??
-      'La RFC solicitada no existe.';
+      'The requested RFC does not exist.';
     return (
       <div className="min-h-screen bg-surface-container-lowest p-8">
         <button onClick={() => navigate('/app/changes')} className="secondary-button mb-6">
           <ArrowLeft className="h-4 w-4" />
-          Volver
+          Back
         </button>
         <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-red-300">
           {message}
@@ -456,7 +456,7 @@ export default function ChangeDetail() {
             ))}
             {availableTransitions.length === 0 && (
               <span className="text-xs text-on-surface-variant">
-                No hay acciones disponibles para tu permiso y el estado actual.
+                No actions available for your permissions and the current state.
               </span>
             )}
           </div>
@@ -525,7 +525,7 @@ export default function ChangeDetail() {
                 onClick={() => setIsEditing(false)}
                 className="secondary-button"
               >
-                Cancelar
+                Cancel
               </button>
               <button
                 type="submit"
@@ -626,7 +626,12 @@ export default function ChangeDetail() {
               {(relationsQuery.data?.length ?? 0) > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {relationsQuery.data?.map((relation) => {
-                    const outbound = relation.sourceEntityId === change.id;
+                    // Fixed 2026-09-06 (same class of bug as
+                    // RelationsWidget.tsx/tickets — see its comment): a raw
+                    // id match alone isn't enough, since ids are only
+                    // unique within one entity type. This page is always
+                    // an RFC, so entityKey is compared alongside the id.
+                    const outbound = relation.sourceEntityId === change.id && relation.sourceEntityKey === 'RFC';
                     const entityKey = outbound ? relation.targetEntityKey : relation.sourceEntityKey;
                     const humanId = outbound ? relation.targetHumanId : relation.sourceHumanId;
                     const label = outbound ? relation.relationLabel : relation.inverseLabel;

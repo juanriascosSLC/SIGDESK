@@ -98,33 +98,40 @@ test.describe('static: no functional native dialogs or dead links in production 
 });
 
 // Both Knowledge tests below were "is honest about having no backend" when
-// this audit suite was written, and that premise died in the merge of
-// origin/main: `knowledge_service` exists and main shipped a real
-// KnowledgeBase/ArticleDetail against `GET /knowledge/articles` (see
-// src/features/knowledge/api.ts). Asserting "no backend yet" now asserts a
-// lie, so — exactly like the Portal My Tickets test below — the honesty
-// claim is re-pointed at what is true today rather than deleted: real
-// service data is what renders, the old fabricated fixtures never come
-// back, the counter is derived instead of invented, and a failing or
-// missing article says so instead of falling back to something plausible.
+// this audit suite was written, and that premise is dead: `knowledge_service`
+// exists. Asserting "no backend yet" now asserts a lie, so — exactly like the
+// Portal My Tickets test below — the honesty claim is re-pointed at what is
+// true today rather than deleted: real service data is what renders, the old
+// fabricated fixtures never come back, the counter is derived instead of
+// invented, and a failing or missing article says so instead of falling back
+// to something plausible.
+//
+// MERGE NOTE: this fixture and these globs used to describe
+// `GET /knowledge/articles?q=` returning `categoria`/`etiquetas` and keyed by
+// `numero_visible`. No such route or fields exist —
+// knowledge_service/adapters/in/http_controller.go serves
+// `GET /knowledge/articulos[/{id}]` with a NUMERIC articulo_id, and the
+// published read model (`ArticuloPublicado`) has no categoria and no
+// etiquetas. The mocks were asserting a contract the Gateway never had, which
+// is exactly the class of bug this suite exists to catch, so they now mirror
+// the service.
 const KB_ARTICLE = {
-  id: 7,
-  article_id: 7,
+  articulo_id: 7,
   numero_visible: 'KB-2001',
   version: 3,
   titulo: 'Restablecer la VPN corporativa',
-  categoria: 'Redes',
-  etiquetas: ['vpn', 'acceso'],
   audiencia: 'interna',
   contenido: '---\nowner: redes\n---\nPaso 1: cerrar el cliente de VPN.',
-  estado: 'publicado',
-  actualizado_en: '2026-09-01T10:00:00Z',
+  autor_id: 'e2e-author',
+  publicado_en: '2026-09-01T10:00:00Z',
 };
 
-/** `?q=*` rather than `?*`: the list call is `/knowledge/articles?q=<term>`
- *  and the detail call is `/knowledge/articles/<numero>`, and a bare `?*`
- *  can swallow the detail path too depending on how the glob treats `?`. */
-const KB_LIST_GLOB = '**/knowledge/articles?q=*';
+/** The list call sends no query string at all until something is typed, so
+ *  this glob has no `?…` suffix — and without a trailing wildcard it does not
+ *  swallow the `/knowledge/articulos/7` detail path. */
+const KB_LIST_GLOB = '**/knowledge/articulos';
+/** KnowledgeBase gates the list query on this health probe. */
+const KB_HEALTH_GLOB = '**/knowledge/health';
 
 function json(body: unknown) {
   return { status: 200, contentType: 'application/json', body: JSON.stringify(body) };
@@ -133,13 +140,14 @@ function json(body: unknown) {
 test('Knowledge Base renders real knowledge_service data, not the old fabricated articles', async ({ page }) => {
   await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
   await stubNotifications(page);
+  await page.route(KB_HEALTH_GLOB, (route) => route.fulfill(json({ status: 'ok', service: 'knowledge_service' })));
   await page.route(KB_LIST_GLOB, (route) => route.fulfill(json({ items: [KB_ARTICLE] })));
-  await page.route('**/knowledge/articles/KB-2001', (route) => route.fulfill(json(KB_ARTICLE)));
+  await page.route('**/knowledge/articulos/7', (route) => route.fulfill(json(KB_ARTICLE)));
 
   await page.goto('/app/knowledge');
   // What the service returned is what the screen shows.
   await expect(page.getByText('Restablecer la VPN corporativa')).toBeVisible();
-  await expect(page.getByText('KB-2001 · v3')).toBeVisible();
+  await expect(page.getByText(/KB-2001 · v3/)).toBeVisible();
   // The counter badge is computed from the response, not a made-up total:
   // one article in, "1" on screen.
   await expect(page.getByText(/^1 manuals available$/)).toBeVisible();
@@ -148,16 +156,18 @@ test('Knowledge Base renders real knowledge_service data, not the old fabricated
   await expect(page.getByText(/66 articles/i)).toHaveCount(0);
 
   // Detail reaches the same service and renders its content — including
-  // stripping the YAML front matter instead of showing it as prose.
-  await page.getByRole('button', { name: /Restablecer la VPN corporativa/ }).click();
-  await expect(page).toHaveURL(/\/app\/knowledge\/KB-2001$/);
+  // stripping the YAML front matter instead of showing it as prose. The link
+  // carries the numeric articulo_id, which is what the route accepts.
+  await page.getByRole('link', { name: /Restablecer la VPN corporativa/ }).click();
+  await expect(page).toHaveURL(/\/app\/knowledge\/7$/);
   await expect(page.getByText(/Paso 1: cerrar el cliente de VPN/)).toBeVisible();
   await expect(page.getByText('owner: redes')).toHaveCount(0);
   await expect(page.getByText(/power-cycle/i)).toHaveCount(0);
 
   // An article that isn't there says so. `forwardUnmatched: false` answers
-  // this one 404, which is the real "wrong id / not authorized" path.
-  await page.goto('/app/knowledge/KB-9999');
+  // this one 404, which is the real "wrong id / not authorized" path — the
+  // service answers both through the same door, so one message covers both.
+  await page.goto('/app/knowledge/9999');
   await expect(page.getByText(/does not exist, or you do not have permission/i)).toBeVisible();
   await expect(page.getByText('Restablecer la VPN corporativa')).toHaveCount(0);
 
@@ -174,13 +184,14 @@ test('Knowledge Base renders real knowledge_service data, not the old fabricated
 
 test('Knowledge Base serves the same real articles on the end-user portal', async ({ page }) => {
   await mockAuthenticatedRequester(page, { forwardUnmatched: false });
+  await page.route(KB_HEALTH_GLOB, (route) => route.fulfill(json({ status: 'ok', service: 'knowledge_service' })));
   await page.route(KB_LIST_GLOB, (route) => route.fulfill(json({ items: [KB_ARTICLE] })));
 
   await page.goto('/portal/knowledge');
   // A requester with `knowledge:read:global` sees the real article, not a
   // placeholder and not the old hardcoded one.
   await expect(page.getByText('Restablecer la VPN corporativa')).toBeVisible();
-  await expect(page.getByText('KB-2001 · v3')).toBeVisible();
+  await expect(page.getByText(/KB-2001 · v3/)).toBeVisible();
   await expect(page.getByText('KB-1024')).toHaveCount(0);
 });
 
@@ -238,7 +249,11 @@ test('Assistant feedback collects its comment in-app, with no native dialog, and
 
   await page.goto('/app');
   await page.getByRole('button', { name: 'Open SIG Assistant' }).click();
-  await page.getByPlaceholder(/type your question/i).fill('How do I resolve a ticket?');
+  // Locator only — this test is about the absence of native dialogs and the
+  // feedback POST, not about the copy. The composer placeholder is now
+  // "Ask a question…" (assistant copy pass on origin/Hector; see
+  // assistant-ux.spec.ts, which locates the same field by that text).
+  await page.getByPlaceholder(/ask a question/i).fill('How do I resolve a ticket?');
   await page.getByRole('button', { name: 'Send question' }).click();
   await expect(page.getByText('Open the ticket and press Resolve.')).toBeVisible();
 

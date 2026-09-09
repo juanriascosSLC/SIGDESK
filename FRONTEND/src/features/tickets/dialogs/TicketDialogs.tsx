@@ -70,6 +70,42 @@ export interface ReopenTicketDialogProps {
   error?: string;
 }
 
+export interface ResolveWithSlaBreachDialogProps {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: (justification: string) => void | Promise<void>;
+  loading?: boolean;
+  error?: string;
+}
+
+/**
+ * Added 2026-09-09 (bug fix): the glossary invariant "un ticket no puede
+ * cerrarse sin que su SLA esté cumplido o justificado explícitamente" had
+ * a typed `justificacionIncumplimientoSla` field wired all the way through
+ * api.ts/hooks.ts, but no dialog ever asked the user for it — resolving a
+ * breached ticket either silently sent no justification or surfaced only a
+ * generic "Couldn't update status" toast with no way to proceed. Mirrors
+ * `ReopenTicketDialog`'s mandatory-reason pattern.
+ */
+export function ResolveWithSlaBreachDialog({ open, onClose, onConfirm, loading, error }: ResolveWithSlaBreachDialogProps) {
+  return (
+    <ConfirmDialog
+      open={open}
+      onClose={onClose}
+      onConfirm={(justification) => {
+        if (justification) onConfirm(justification);
+      }}
+      title="Resolve ticket with SLA breached"
+      description="This ticket's resolution SLA has been breached. Explain why before resolving — the reason is recorded with the ticket."
+      confirmLabel="Resolve"
+      reasonLabel="Justification for the SLA breach"
+      reasonPlaceholder="Why was this ticket resolved after its SLA deadline?"
+      loading={loading}
+      error={error}
+    />
+  );
+}
+
 /** Reopen with a mandatory reason — replaces `window.prompt('Motivo de la
  *  reapertura:')` and the follow-up `window.alert` when it was left blank. */
 export function ReopenTicketDialog({ open, onClose, onConfirm, loading, error }: ReopenTicketDialogProps) {

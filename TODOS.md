@@ -1,5 +1,19 @@
 # TODOS
 
+## Tickets
+
+### Justificación de incumplimiento de SLA en el Kanban (drag-and-drop)
+
+**What:** `TicketsKanban.tsx` tiene su propio `updateStatus.mutate()` para cambios de estado por drag-and-drop, separado del que usa `TicketDetail.tsx`. El fix de 2026-09-09 que agregó `ResolveWithSlaBreachDialog` (justificación obligatoria al resolver con SLA incumplido) solo se conectó al flujo de `TicketDetail.tsx` — arrastrar una card a "Resolved" en el Kanban sigue sin pedir esa justificación.
+
+**Why:** mismo invariante del glosario ("un ticket no puede cerrarse sin que su SLA esté cumplido o justificado explícitamente") — hoy solo se cumple desde el detalle del ticket, no desde el Kanban.
+
+**Context:** no es un copy-paste del diálogo existente — un modal de confirmación a mitad de un drag-and-drop es una interacción distinta (¿se cancela el drop y se abre el modal? ¿se completa el drop optimista y se revierte si se cancela la justificación?) y merece su propio diseño, no una decisión apurada sin poder correr la app (bloqueante de disco, 2026-09-09).
+
+**Effort:** S-M (diseño de interacción primero, después el código)
+**Priority:** P2
+**Depends on:** Ninguno técnico — es una decisión de UX de drag-and-drop.
+
 ## Services Department
 
 ### PR2: cotización/invoice + embed de WorkflowBuilder + stepper

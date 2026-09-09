@@ -1,4 +1,4 @@
-import type { HTMLAttributes } from 'react';
+import type { HTMLAttributes, Ref } from 'react';
 import { cn } from './cn';
 
 export interface CardProps extends HTMLAttributes<HTMLDivElement> {
@@ -6,6 +6,11 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
   noPadding?: boolean;
   /** Adds a hover affordance for cards that act as click targets. */
   interactive?: boolean;
+  /** Forwarded to the underlying div, for call sites that need to scroll a
+   *  card into view or focus it (SrvDetail's equipment checklist). React 19
+   *  passes `ref` through as a normal prop, so no forwardRef wrapper is
+   *  needed — only the type has to admit it. */
+  ref?: Ref<HTMLDivElement>;
 }
 
 /** Replaces the `.panel-card` utility class with a real component so variants

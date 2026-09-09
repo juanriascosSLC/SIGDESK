@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { Node, NodeProps } from '@xyflow/react';
 import { BellRing, Braces, Clock3, GitBranch, ListRestart, ShieldCheck, Sparkles, Zap } from 'lucide-react';
+import { priorityLabels } from './visual-model';
 
 export type WorkflowNodeData = {
   catalogKey?: string;
@@ -108,8 +109,9 @@ export function TriggerNode({ data }: WorkflowNodeProps) {
 }
 
 export function ConditionNode({ data }: WorkflowNodeProps) {
+  const priorityValue = String(data.priority || 'critica');
   const summary = data.catalogKey === 'condition.priority'
-    ? (data.conditionMode === 'always' ? 'Always' : `Priority = ${String(data.priority || 'critica')}`)
+    ? (data.conditionMode === 'always' ? 'Always' : `Priority = ${priorityLabels[priorityValue] ?? priorityValue}`)
     : String(data.description || 'Configure condition');
   return (
     <div className="relative">

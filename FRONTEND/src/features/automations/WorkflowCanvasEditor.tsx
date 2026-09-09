@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useMemo, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import {
   addEdge,
   Background,
@@ -61,6 +61,7 @@ import {
   graphFromDefinition,
   esAccionDeAsignacion,
   nodeFromCatalog,
+  priorityLabels,
   workflowCatalog,
   type CatalogGroup,
   type WorkflowCatalogItem,
@@ -84,13 +85,6 @@ const groupIcons = {
   Conditions: GitBranch,
   Control: Clock3,
   Actions: Sparkles,
-};
-
-const priorityLabels = {
-  baja: 'Low',
-  media: 'Medium',
-  alta: 'High',
-  critica: 'Critical',
 };
 
 function initialGraph(definition?: WorkflowDefinition) {
@@ -180,6 +174,24 @@ function CanvasEditor({
   const [pasado, setPasado] = useState<Array<{ nodes: WorkflowNode[]; edges: Edge[] }>>([]);
   const [futuro, setFuturo] = useState<Array<{ nodes: WorkflowNode[]; edges: Edge[] }>>([]);
   const [sinGuardar, setSinGuardar] = useState(false);
+  // Bug corregido 2026-09-09: "Saved" se mostraba de forma optimista en el
+  // mismo onClick que disparaba la mutación async, antes de que resolviera.
+  // Si la petición fallaba (red, 409, 422), el badge ya decía "Saved" en
+  // verde con nada persistido realmente. Ahora solo se limpia `sinGuardar`
+  // cuando `saving`/`publishing` (controlados por el padre, ver
+  // WorkflowBuilder.tsx) pasan de true a false SIN que haya quedado un
+  // `saveError`/`publishError` — es decir, cuando la mutación resolvió con
+  // éxito, no cuando el usuario apretó el botón.
+  const eraGuardando = useRef(false);
+  useEffect(() => {
+    if (eraGuardando.current && !saving && !saveError) setSinGuardar(false);
+    eraGuardando.current = saving;
+  }, [saving, saveError]);
+  const eraPublicando = useRef(false);
+  useEffect(() => {
+    if (eraPublicando.current && !publishing && !publishError) setSinGuardar(false);
+    eraPublicando.current = publishing;
+  }, [publishing, publishError]);
 
   const recordar = useCallback(() => {
     setPasado((current) => [...current.slice(-49), { nodes, edges }]);
@@ -438,7 +450,7 @@ function CanvasEditor({
               type="button"
               data-testid="canvas-save-draft"
               disabled={saving}
-              onClick={() => { onSaveDraft(borradorActual()); setSinGuardar(false); }}
+              onClick={() => onSaveDraft(borradorActual())}
               className="secondary-button"
             >
               <Save className="h-4 w-4" /> {saving ? 'Saving…' : 'Save draft'}
@@ -469,7 +481,6 @@ function CanvasEditor({
                 // conservando su id y su versión; el historial de ejecuciones
                 // los referencia. Si no, se usa el camino directo de siempre.
                 if (onPublishDraft) onPublishDraft(); else onPublish?.(compilation.payload);
-                setSinGuardar(false);
               }}
               className="primary-button"
             >

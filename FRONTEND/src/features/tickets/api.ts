@@ -316,8 +316,16 @@ function dataString(
  *   `primerResponsableNombre`) only when there is no organizational
  *   assignment at all. A team-only organizational assignment (no
  *   `assigneeUserId`) surfaces as `assigneeTeamName`, never as unassigned.
- * - `assetId` <- `recursoId`: the Recurso IS the asset (camera/device) in
- *   ADR-0001 terms, so this column shows real data.
+ * - `assetId` <- `recursoId`: despite the field name, this is the ticket's
+ *   mandatory Recurso reference (ADR-0001), NOT an Asset/"Ítem de
+ *   inventario" — those are two distinct aggregates with different owners
+ *   and lifecycles (see `Docs/glossary.md`: Recurso = SIG-Desk's own
+ *   record, adquisición→en uso→mantenimiento→baja; Asset = a read
+ *   projection of a SIGInventory-owned config item, active/inactive/
+ *   unavailable/retired). `assetId` is the wire/type name inherited from
+ *   before that distinction was written down — it still resolves against
+ *   `resource_service`'s Recurso data, never the Asset projection. Do not
+ *   point this field at `/assets/*` or asset-typed data.
  * - `title`/`description` <- the dynamic `data` bag, with a fallback: they are
  *   catalog fields, so a Definition without them is legitimate. `title` never
  *   becomes undefined, since search and the table title both index it.
