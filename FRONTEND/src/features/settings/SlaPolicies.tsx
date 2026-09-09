@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { formatDate } from '@/i18n/format';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CalendarClock,
@@ -512,9 +513,3 @@ function Status({ value }: { value?: string }) {
   return <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${classes}`}>{label}</span>;
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
-}
