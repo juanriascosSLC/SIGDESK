@@ -620,7 +620,7 @@ export default function ChangeDetail() {
           <section className="rounded-3xl border border-border/40 bg-surface-container-low p-6">
             <div className="mb-4 flex items-center gap-2">
               <CalendarClock className="h-5 w-5 text-primary" />
-              <h2 className="font-black text-on-surface">ITSM Relations</h2>
+              <h2 className="font-black text-on-surface">Related Cases</h2>
             </div>
             <div className="space-y-4">
               {(relationsQuery.data?.length ?? 0) > 0 && (
