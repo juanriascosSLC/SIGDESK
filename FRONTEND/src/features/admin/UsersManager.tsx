@@ -1031,7 +1031,7 @@ function UserRow({
           {isEditing ? (
             <div className="min-w-56">
               <select
-                aria-label="Company, department or team"
+                aria-label="Organizational unit, department or team"
                 value={draftCompanyId}
                 onChange={(event) => setDraftCompanyId(event.target.value)}
                 className="bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-1.5 text-on-surface outline-none focus:border-cyan-500/50"
