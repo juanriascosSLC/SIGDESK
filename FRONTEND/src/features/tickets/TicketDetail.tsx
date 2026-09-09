@@ -18,7 +18,7 @@ import {
   useActivity,
   ticketKeys,
 } from './hooks';
-import { AssignTicketDialog, ReopenTicketDialog, MergeIntoTicketDialog, WatchToggleDialog } from './dialogs/TicketDialogs';
+import { AssignTicketDialog, ReopenTicketDialog, ResolveWithSlaBreachDialog, MergeIntoTicketDialog, WatchToggleDialog } from './dialogs/TicketDialogs';
 import { useToast } from '@/components/ui';
 import type { AssignmentTarget } from '@/features/organization/AssignmentPicker';
 import { canonicalTicketState, listTickets, statusFromApi, statusToApi, ticketStatesMatch } from './api';
@@ -86,6 +86,13 @@ export default function TicketDetail() {
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [showWatchDialog, setShowWatchDialog] = useState(false);
   const [pendingResolveTransitionKey, setPendingResolveTransitionKey] = useState<string | undefined>(undefined);
+  // Bug found 2026-09-09: justificacionIncumplimientoSla was typed and
+  // threaded through api.ts/hooks.ts but no dialog ever collected it. Mirrors
+  // showReopenDialog/pendingResolveTransitionKey below, kept separate so the
+  // two confirmation flows (reopen vs. resolve-with-breached-SLA) never share
+  // state.
+  const [showSlaJustificationDialog, setShowSlaJustificationDialog] = useState(false);
+  const [pendingSlaTransition, setPendingSlaTransition] = useState<{ key: string; status: TicketStatus } | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const comments = useComments(ticket?.id);
@@ -399,9 +406,40 @@ export default function TicketDetail() {
       setShowReopenDialog(true);
       return;
     }
+    // Bug found 2026-09-09: resolving with a breached SLA had no UI path to
+    // provide justificacionIncumplimientoSla at all. resolutionBreached is
+    // the same real, already-fetched signal the SLA chip uses elsewhere
+    // (features/sla's SlaAssessment) — not a guess, and not re-derived from
+    // dates here, so it can't drift from what the chip already shows.
+    if (target === 'resuelto' && slaAssessment.data?.resolutionBreached) {
+      setPendingSlaTransition({ key: transition.key, status });
+      setShowSlaJustificationDialog(true);
+      return;
+    }
     updateStatus.mutate(
       { id: ticket!.id, status, actorName: currentUserName, transitionKey: transition.key },
       { onError: (err) => toast.show({ tone: 'error', title: "Couldn't update status", description: err.message }) },
+    );
+  }
+
+  function confirmSlaJustification(justification: string) {
+    if (!pendingSlaTransition) return;
+    updateStatus.mutate(
+      {
+        id: ticket!.id,
+        status: pendingSlaTransition.status,
+        actorName: currentUserName,
+        transitionKey: pendingSlaTransition.key,
+        justificacionIncumplimientoSla: justification,
+      },
+      {
+        onSuccess: () => {
+          setShowSlaJustificationDialog(false);
+          setPendingSlaTransition(undefined);
+          toast.show({ tone: 'success', title: 'Ticket resolved' });
+        },
+        onError: (err) => toast.show({ tone: 'error', title: "Couldn't resolve ticket", description: err.message }),
+      },
     );
   }
 
@@ -827,6 +865,16 @@ export default function TicketDetail() {
           setPendingResolveTransitionKey(undefined);
         }}
         onConfirm={confirmReopen}
+        loading={updateStatus.isPending}
+        error={updateStatus.error?.message}
+      />
+      <ResolveWithSlaBreachDialog
+        open={showSlaJustificationDialog}
+        onClose={() => {
+          setShowSlaJustificationDialog(false);
+          setPendingSlaTransition(undefined);
+        }}
+        onConfirm={confirmSlaJustification}
         loading={updateStatus.isPending}
         error={updateStatus.error?.message}
       />
