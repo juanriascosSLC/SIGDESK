@@ -123,9 +123,22 @@ function secondsFromNode(node?: WorkflowNode): number {
   return Math.round(value * (unit === 'hours' ? 3600 : unit === 'days' ? 86400 : unit === 'seconds' ? 1 : 60));
 }
 
+/** Devuelve los ancestros de un nodo, MÁS la rama ('yes'/'no', "Una conexión
+ * sin handle explícito es la rama verdadera" — mismo default que `salidas()`
+ * más abajo, ver línea ~474) por la que se llegó a cada nodo `condition`
+ * encontrado en el camino hacia `nodeID`.
+ *
+ * Bug corregido 2026-09-09: antes esta función ignoraba `edge.sourceHandle`
+ * por completo, así que una acción colgada de la salida "No" de una
+ * condición terminaba con la MISMA `condicion` (la rama verdadera) que una
+ * colgada de "Yes" — lógica invertida en silencio. Como el DSL de `reglas[]`
+ * (`condicion: string`) no tiene hoy una forma de expresar "no se cumple X",
+ * `compileVisualWorkflow` usa `conditionBranch` para bloquear la publicación
+ * de esa rama en vez de inventar una sintaxis de negación no verificada. */
 function ancestorsOf(nodeID: string, nodes: WorkflowNode[], edges: Edge[]) {
   const byID = new Map(nodes.map((node) => [node.id, node]));
   const result: WorkflowNode[] = [];
+  const conditionBranch = new Map<string, 'yes' | 'no'>();
   const queue = [nodeID];
   const visited = new Set<string>([nodeID]);
   while (queue.length > 0) {
@@ -134,11 +147,16 @@ function ancestorsOf(nodeID: string, nodes: WorkflowNode[], edges: Edge[]) {
       if (visited.has(edge.source)) continue;
       visited.add(edge.source);
       const source = byID.get(edge.source);
-      if (source) result.push(source);
+      if (source) {
+        result.push(source);
+        if (source.type === 'condition') {
+          conditionBranch.set(source.id, (edge.sourceHandle as 'yes' | 'no' | undefined) ?? 'yes');
+        }
+      }
       queue.push(edge.source);
     }
   }
-  return result;
+  return { ancestors: result, conditionBranch };
 }
 
 /** Un problema del diagrama, atado al nodo que lo causa cuando se puede.
@@ -184,7 +202,7 @@ export function compileVisualWorkflow(nodes: WorkflowNode[], edges: Edge[], vers
 
   const rules: PublishWorkflowInput['reglas'] = [];
   for (const action of actions) {
-    const ancestors = ancestorsOf(action.id, nodes, edges);
+    const { ancestors, conditionBranch } = ancestorsOf(action.id, nodes, edges);
     if (!ancestors.some((node) => triggers.some((trigger) => trigger.id === node.id))) {
       fallar(`Action “${String(action.data.label)}” is not connected to the trigger.`, action.id);
       continue;
@@ -194,6 +212,14 @@ export function compileVisualWorkflow(nodes: WorkflowNode[], edges: Edge[], vers
     if (conditions.length > 1) fallar('Each publishable branch supports only one operational condition in this version.', action.id);
     if (delays.length > 1) fallar('Each publishable branch supports only one durable wait in this version.', action.id);
     const condition = conditions[0];
+    if (condition && condition.data.conditionMode !== 'always' && conditionBranch.get(condition.id) === 'no') {
+      // Bug found 2026-09-09: this branch used to silently compile to the
+      // SAME condition as "Yes" (inverted logic, no error). `reglas[].condicion`
+      // has no way to express "condition NOT met" today — block instead of
+      // guessing a negation syntax that was never verified against the backend.
+      fallar(`“${String(action.data.label)}” is connected to the “No” output of “${String(condition.data.label)}” — publishing actions on the “No” branch isn’t supported yet. Connect it to “Yes”, or remove the condition.`, action.id);
+      continue;
+    }
     const conditionText = condition
       ? (condition.data.conditionMode === 'always' ? 'siempre' : `prioridad == ${String(condition.data.priority ?? 'critica')}`)
       : 'siempre';
