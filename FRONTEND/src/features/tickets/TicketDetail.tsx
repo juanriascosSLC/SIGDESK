@@ -578,7 +578,7 @@ export default function TicketDetail() {
   }
 
   // The edit form is the same surface as the create form — same context type,
-  // same renderer, same widgets — so a redesign in the Catalog Builder shows
+  // same renderer, same widgets — so a redesign in the Entity Builder shows
   // up identically in both places.
   const editContext: FormPageContext | null = specification
     ? {
@@ -784,7 +784,7 @@ export default function TicketDetail() {
           and then swapped in a moment later. */}
       {entityRecord.isLoading || definitionManifest.isLoading || resolvedDefinition.isLoading ? (
         <div className="rounded-2xl border border-border/40 bg-surface-container-low p-5 text-sm text-on-surface-variant">
-          Loading view defined in Catalog Builder…
+          Loading view defined in Entity Builder…
         </div>
       ) : entityRecord.isError || definitionManifest.isError ? (
         <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-5">

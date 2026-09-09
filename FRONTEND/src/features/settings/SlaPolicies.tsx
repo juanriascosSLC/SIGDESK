@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { formatDate } from '@/i18n/format';
+import { formatDateTime } from '@/i18n/format';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CalendarClock,
@@ -109,7 +109,7 @@ export default function SlaPolicies() {
       await queryClient.invalidateQueries({ queryKey: ['catalog-definitions'] });
       await queryClient.invalidateQueries({ queryKey: ['catalog-resources'] });
       setSelected(structuredClone(policy));
-      setNotice(`${policy.name} v${policy.version} is active and available in Catalog Builder.`);
+      setNotice(`${policy.name} v${policy.version} is active and available in Entity Builder.`);
     },
   });
   const previewMutation = useMutation({
@@ -451,8 +451,8 @@ export default function SlaPolicies() {
           {previewMutation.data && (
             <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-4 text-sm text-cyan-200 shadow-sm">
               <strong>Live calculation ({previewMutation.data.priority}):</strong> response before{' '}
-              <span className="underline decoration-cyan-400 font-bold">{formatDate(previewMutation.data.responseDueAt)}</span> and resolution before{' '}
-              <span className="underline decoration-cyan-400 font-bold">{formatDate(previewMutation.data.resolutionDueAt)}</span>.
+              <span className="underline decoration-cyan-400 font-bold">{formatDateTime(previewMutation.data.responseDueAt)}</span> and resolution before{' '}
+              <span className="underline decoration-cyan-400 font-bold">{formatDateTime(previewMutation.data.resolutionDueAt)}</span>.
             </div>
           )}
           {mutationError && (

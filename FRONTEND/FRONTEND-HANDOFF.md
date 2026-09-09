@@ -16,9 +16,9 @@ Un INC puede relacionarse con un PRB y un PRB puede requerir uno o varios RFC. E
 
 El principio arquitectónico central es:
 
-> Propiedad distribuida por módulos, composición centralizada en Catalog Builder y ejecución dirigida por metadatos.
+> Propiedad distribuida por módulos, composición centralizada en Entity Builder y ejecución dirigida por metadatos.
 
-IAM, SLA, Automatizaciones, Integraciones, Notificaciones, Reportes y Assets/CMDB deben ser propietarios de sus recursos. Catalog Builder solo guarda referencias estables y versionadas para ensamblar una definición ejecutable. No debe almacenar credenciales, calcular SLA ni ejecutar workflows.
+IAM, SLA, Automatizaciones, Integraciones, Notificaciones, Reportes y Assets/CMDB deben ser propietarios de sus recursos. Entity Builder solo guarda referencias estables y versionadas para ensamblar una definición ejecutable. No debe almacenar credenciales, calcular SLA ni ejecutar workflows.
 
 ## 2. Stack y comandos
 
@@ -77,10 +77,10 @@ FRONTEND/
 │  ├─ store/                     Persistencia del tema
 │  └─ features/
 │     ├─ auth/                   Sesión SIGTools y autorización SIG-DESK
-│     ├─ admin/                  Users & Roles y Catalog Builder
+│     ├─ admin/                  Users & Roles y Entity Builder
 │     ├─ catalog/                Metamodelo, formularios y renderers dinámicos
 │     ├─ tickets/                INC: listas, kanban, detalle y widgets
-│     ├─ problems/               PRB y relaciones ITSM
+│     ├─ problems/               PRB y Related Cases
 │     ├─ changes/                RFC y transiciones
 │     ├─ sla/                    Tipos y cliente de SLA
 │     ├─ automations/            Diseñador visual de workflows
@@ -223,7 +223,7 @@ Las cuentas siguen perteneciendo a SIGTools/Active Directory. SIG-DESK solo
 registra identidad conocida y asignaciones locales. El envelope de error es
 `{ error_code, message }` (no `{ error }`) en todos los endpoints propios.
 
-### Catalog Builder, definiciones y runtime genérico
+### Entity Builder, definiciones y runtime genérico
 
 | Método | Ruta | Uso |
 |---|---|---|
@@ -310,7 +310,7 @@ Crear envía `{ data }`; actualizar envía `{ data, expectedUpdatedAt }`. `POST 
 | GET | `/sla/assessments` | Todas las evaluaciones |
 | GET | `/sla/assessments/:entityId` | Evaluación de un registro |
 
-Una política incluye calendario/timezone, ventanas, objetivos por prioridad, estados de pausa/respuesta/resolución y escalaciones. Catalog Builder únicamente referencia `resourceId`, versión y versión de contrato.
+Una política incluye calendario/timezone, ventanas, objetivos por prioridad, estados de pausa/respuesta/resolución y escalaciones. Entity Builder únicamente referencia `resourceId`, versión y versión de contrato.
 
 ## 9. Metamodelo y versionado
 
@@ -413,7 +413,7 @@ Widgets registrados:
 - `requesterDetails`, `statusHistory`
 - `changeTasks` (solo RFC)
 
-Catalog Builder guarda posición y configuración, pero no implementa la lógica de negocio del widget. La vista previa usa datos simulados; la página real usa `PageLayoutRenderer` y `TicketWidgetRegistry`. El backend debe devolver el layout histórico resuelto, no HTML ni coordenadas absolutas.
+Entity Builder guarda posición y configuración, pero no implementa la lógica de negocio del widget. La vista previa usa datos simulados; la página real usa `PageLayoutRenderer` y `TicketWidgetRegistry`. El backend debe devolver el layout histórico resuelto, no HTML ni coordenadas absolutas.
 
 La resolución declara uno de estos modos: `latest-compatible`, `previous-compatible` o `legacy-synthesized`. Esto permite mostrar registros anteriores aunque la versión activa introduzca widgets incompatibles.
 
@@ -423,14 +423,14 @@ La resolución declara uno de estos modos: `latest-compatible`, `previous-compat
 |---|---|---|
 | Auth | SIGTools + intercambio `POST /v1/session` | Validar el bearer SIGTools; no aceptar intercambio basado solo en email |
 | Users & Roles | Cliente real, guards de lectura y mutación | Persistencia RBAC, aprovisionamiento y enforcement |
-| Catalog Builder | Editor, validación/publicación, formularios y Page Designer WYSIWYG reales | Operativo sobre definiciones/manifiestos; valida layouts, widgets por dominio y relaciones versionadas |
+| Entity Builder | Editor, validación/publicación, formularios y Page Designer WYSIWYG reales | Operativo sobre definiciones/manifiestos; valida layouts, widgets por dominio y relaciones versionadas |
 | Service Catalog | Render dinámico real | Definiciones publicadas y runtime de entidades |
 | Tickets / INC | Intake, lista, detalle histórico, campos, lifecycle, merge, comentarios, adjuntos, observadores, actividad, SLA y relaciones conectados | Operativo; almacenamiento de adjuntos es BYTEA en esta etapa y debe migrar a object storage antes de alto volumen |
 | Problems / PRB | Runtime propio, layout histórico, causa raíz y relaciones tipadas | Operativo en `problem_service` |
 | Changes / RFC | Runtime propio, layout histórico, aprobación/implementación, Tasks y relaciones | Operativo en `change_service`; INC→RFC es transaccional |
 | SLA Policies | CRUD de draft, publish, preview y assessments conectado | Motor de calendarios y evaluación |
 | Automations | Diseñador visual principalmente demostrativo/local | CRUD, publicación, ejecución, delays, logs y retries |
-| Services (SRV) | PR1: dashboard, vista de dealership con problemas recurrentes, detalle de ticket con checklist de equipamiento — todo mock-only, standalone (no registrado en `TicketWidgetRegistry`), datos locales en `features/services/mockData.ts` | `entity_key SRV` en Catalog Builder (ADR pendiente), permiso propio `sigdesk.services.view` (hoy toma prestado `changes.view`); PR2 (cotización/invoice + embed de `WorkflowBuilder`) queda en `TODOS.md` |
+| Services (SRV) | PR1: dashboard, vista de dealership con problemas recurrentes, detalle de ticket con checklist de equipamiento — todo mock-only, standalone (no registrado en `TicketWidgetRegistry`), datos locales en `features/services/mockData.ts` | `entity_key SRV` en Entity Builder (ADR pendiente), permiso propio `sigdesk.services.view` (hoy toma prestado `changes.view`); PR2 (cotización/invoice + embed de `WorkflowBuilder`) queda en `TODOS.md` |
 | Knowledge Base | Conectado a backend real (`GET /knowledge/health`, `GET /knowledge/articulos`, commit fcb6a9e, 2026-09-08) | Artículos, categorías, búsqueda, permisos y publicación |
 | Assistant (RAG chatbot) | Conectado a backend real (`POST /ia_advisor/chat`) | Chat de preguntas y respuestas sobre artículos permitidos; nunca ejecuta acciones, solo responde texto (ver `Docs/glossary.md` -> "Asistente de IA") |
 | Dashboard | Métricas demostrativas | Agregaciones reales |
@@ -449,7 +449,7 @@ No confundir una pantalla visualmente completa con una integración terminada. L
 - TanStack Query administra datos remotos e invalidaciones por módulo.
 - Zustand persiste únicamente el tema; el dominio no debe trasladarse a stores globales.
 - `AppErrorBoundary` evita que un fallo de render destruya toda la aplicación.
-- `React.lazy` carga Catalog Builder de forma diferida.
+- `React.lazy` carga Entity Builder de forma diferida.
 - Estados, prioridades y opciones vienen de metadatos; TypeScript no los trata como enums cerrados.
 
 El backend debe ser la autoridad. El caché del navegador y los guards son optimizaciones de experiencia, no fuentes de verdad.
@@ -497,7 +497,7 @@ El backend debe ser la autoridad. El caché del navegador y los guards son optim
 - Outbox transaccional, idempotencia, retry con backoff y dead-letter para consumidores.
 - Paginación por cursor, filtros e índices acordes a los listados del frontend.
 - Object storage para adjuntos, validación de tipo/tamaño y escaneo antimalware.
-- Secretos cifrados; Catalog Builder nunca recibe credenciales.
+- Secretos cifrados; Entity Builder nunca recibe credenciales.
 - Observabilidad con request/correlation ID, logs estructurados, métricas y health checks.
 - Autorización por recurso: el portal solo puede consultar registros permitidos.
 - Compatibilidad de contratos y migraciones explícitas; nunca editar versiones publicadas.

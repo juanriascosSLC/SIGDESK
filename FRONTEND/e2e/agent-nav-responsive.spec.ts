@@ -58,7 +58,7 @@ test.describe('Permission matrix — same shared config, different visible items
     await expect(page).toHaveURL(/\/app\/changes\/my-tasks$/);
   });
 
-  test('Supervisor sees Workspace + ITSM sections but no Users & Roles', async ({ page }) => {
+  test('Supervisor sees Workspace + Tipos de Caso sections but no Users & Roles', async ({ page }) => {
     await mockAuthenticatedSupervisor(page);
     await stubNotifications(page);
     await page.setViewportSize(DESKTOP_1440);
