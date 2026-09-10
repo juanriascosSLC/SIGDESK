@@ -47,7 +47,7 @@ function Brand({ collapsed, compact }: { collapsed?: boolean; compact?: boolean 
       {!collapsed && !compact && (
         <div className="whitespace-nowrap">
           <div className="text-sm font-black tracking-[0.2em] text-on-surface uppercase drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]">SIG-DESK</div>
-          <div className="text-[9px] font-mono font-bold tracking-[0.3em] text-cyan-500/80 uppercase mt-0.5">Agent Workspace</div>
+          <div className="text-[9px] font-mono font-bold tracking-[0.3em] text-primary uppercase mt-0.5">Agent Workspace</div>
         </div>
       )}
     </Link>
@@ -99,10 +99,10 @@ function Sidebar({ collapsed }: { collapsed: boolean }) {
         >
           <div className="flex items-center gap-3 relative z-10">
             <div className="w-8 h-8 rounded-lg bg-surface-container-low border border-border flex items-center justify-center group-hover:border-red-500/30 group-hover:bg-red-500/20 transition-colors">
-              <LogOut size={14} className="text-on-surface-variant group-hover:text-red-400 transition-colors" />
+              <LogOut size={14} className="text-on-surface-variant group-hover:text-status-danger-fg transition-colors" />
             </div>
             {!collapsed && (
-              <span className="whitespace-nowrap text-xs font-bold text-on-surface-variant group-hover:text-red-400 transition-colors">
+              <span className="whitespace-nowrap text-xs font-bold text-on-surface-variant group-hover:text-status-danger-fg transition-colors">
                 Sign out
               </span>
             )}

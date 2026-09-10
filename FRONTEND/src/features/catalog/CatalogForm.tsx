@@ -542,7 +542,7 @@ export default function CatalogForm() {
     return (
       <div className="p-8 max-w-2xl mx-auto">
         <button onClick={() => navigate(-1)} className="text-primary mb-6">← Back</button>
-        <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-6 text-red-300">
+        <div className="bg-status-danger-bg border border-status-danger-border rounded-2xl p-6 text-status-danger-fg">
           There is no published definition for <strong>{categoryId.toUpperCase()}</strong>.
         </div>
       </div>
@@ -562,9 +562,9 @@ export default function CatalogForm() {
           : null;
     return (
       <div className="p-8 max-w-2xl mx-auto">
-        <div className="bg-surface-container-low border border-emerald-500/30 rounded-3xl p-10 text-center">
-          <CheckCircle2 className="w-14 h-14 text-emerald-400 mx-auto mb-5" />
-          <div className="text-xs font-black uppercase tracking-[0.2em] text-emerald-300 mb-2">
+        <div className="bg-surface-container-low border border-status-success-border rounded-3xl p-10 text-center">
+          <CheckCircle2 className="w-14 h-14 text-status-success-icon mx-auto mb-5" />
+          <div className="text-xs font-black uppercase tracking-[0.2em] text-status-success-fg mb-2">
             Record created
           </div>
           <h1 className="text-3xl font-black text-on-surface">{createdEntity.humanId}</h1>
@@ -576,7 +576,7 @@ export default function CatalogForm() {
             definition {createdEntity.definitionVersionId} · schema {createdEntity.schemaVersion}
           </p>
           {(createMutation.data?.attachmentErrors.length ?? 0) > 0 && (
-            <div role="alert" className="mt-5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-left text-sm text-amber-200">
+            <div role="alert" className="mt-5 rounded-xl border border-status-warning-border bg-status-warning-bg p-4 text-left text-sm text-status-warning-fg">
               The record was created, but some attachments could not be uploaded. You can add them again from the detail view.
               <ul className="mt-2 list-disc pl-5">
                 {createMutation.data?.attachmentErrors.map((message) => <li key={message}>{message}</li>)}
@@ -586,11 +586,11 @@ export default function CatalogForm() {
           {definition.entityKey === 'INC' && (
             <div className="mt-5 rounded-xl border border-border/40 bg-surface-container p-4">
               {ticketProjectionQuery.data ? (
-                <p className="text-sm text-emerald-300">
+                <p className="text-sm text-status-success-fg">
                   The record is already available in Tickets.
                 </p>
               ) : ticketProjectionQuery.isError ? (
-                <p className="text-sm text-amber-300">
+                <p className="text-sm text-status-warning-fg">
                   The record was created. Its projection into Tickets is still catching up in the background.
                 </p>
               ) : (
@@ -612,7 +612,7 @@ export default function CatalogForm() {
                     })
                   }
                   disabled={transitionMutation.isPending}
-                  className="px-4 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold disabled:opacity-50"
+                  className="px-4 py-2 rounded-xl bg-status-success-bg border border-status-success-border text-status-success-fg font-bold disabled:opacity-50"
                 >
                   {transition.label}
                 </button>
@@ -620,7 +620,7 @@ export default function CatalogForm() {
             </div>
           )}
           {transitionMutation.isError && (
-            <p className="text-sm text-red-400 mt-4">{transitionMutation.error.message}</p>
+            <p className="text-sm text-status-danger-fg mt-4">{transitionMutation.error.message}</p>
           )}
           <div className="flex justify-center gap-3 mt-8">
             {detailPath && definition.entityKey !== 'INC' && (

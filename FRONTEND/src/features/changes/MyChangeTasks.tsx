@@ -122,10 +122,10 @@ export default function MyChangeTasks() {
         ))}
       </div>
 
-      {notice && <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300">{notice}</div>}
+      {notice && <div className="mt-4 rounded-xl border border-status-success-border bg-status-success-bg p-3 text-sm text-status-success-fg">{notice}</div>}
       {transition.error && (
-        <div className="mt-4 flex gap-2 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <div className="mt-4 flex gap-2 rounded-xl border border-status-danger-border bg-status-danger-bg p-3 text-sm text-status-danger-fg">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-status-danger-icon" />
           {transition.error instanceof ApiError ? transition.error.message : transition.error.message}
         </div>
       )}
@@ -133,7 +133,7 @@ export default function MyChangeTasks() {
       {query.isLoading ? (
         <p className="mt-8 text-sm text-on-surface-variant">Loading your assigned work…</p>
       ) : query.isError ? (
-        <p className="mt-8 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+        <p className="mt-8 rounded-xl border border-status-danger-border bg-status-danger-bg p-4 text-sm text-status-danger-fg">
           We couldn't load your assigned work: {query.error.message}
         </p>
       ) : items.length === 0 ? (
@@ -235,8 +235,8 @@ function AssignedTaskCard({
         </div>
       )}
       {task.blockedReason && (
-        <p className="mt-3 flex items-start gap-1.5 rounded-lg bg-amber-500/10 p-2 text-[11px] text-amber-300">
-          <LockKeyhole className="mt-0.5 h-3.5 w-3.5 shrink-0" />{task.blockedReason}
+        <p className="mt-3 flex items-start gap-1.5 rounded-lg border border-status-warning-border bg-status-warning-bg p-2 text-[11px] text-status-warning-fg">
+          <LockKeyhole className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-warning-icon" />{task.blockedReason}
         </p>
       )}
       {task.evidence.length > 0 && (

@@ -15,11 +15,11 @@ export interface StatusBadgeProps {
  *  a glance in a dense list (kanban cards, table rows) — not just readable. */
 export function StatusBadge({ label, tone, className }: StatusBadgeProps) {
   const dotClass: Record<BadgeTone, string> = {
-    neutral: 'text-on-surface-variant',
-    info: 'text-cyan-500',
-    success: 'text-emerald-500',
-    warning: 'text-amber-500',
-    danger: 'text-red-500',
+    neutral: 'text-status-neutral-icon',
+    info: 'text-status-info-icon',
+    success: 'text-status-success-icon',
+    warning: 'text-status-warning-icon',
+    danger: 'text-status-danger-icon',
     primary: 'text-primary',
   };
   return (

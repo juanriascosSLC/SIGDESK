@@ -171,13 +171,13 @@ export function ReviewEditor({
         {(addedFields.length > 0 || removedFields.length > 0) && (
           <div className="mt-4 grid gap-3 text-xs md:grid-cols-2">
             <div>
-              <span className="font-black uppercase text-emerald-300">Added fields</span>
+              <span className="font-black uppercase text-status-success-fg">Added fields</span>
               <p className="mt-1 text-on-surface-variant">
                 {addedFields.map((field) => field.label).join(', ') || 'None'}
               </p>
             </div>
             <div>
-              <span className="font-black uppercase text-red-300">Removed fields</span>
+              <span className="font-black uppercase text-status-danger-fg">Removed fields</span>
               <p className="mt-1 text-on-surface-variant">
                 {removedFields.map((field) => field.label).join(', ') || 'None'}
               </p>
@@ -185,8 +185,8 @@ export function ReviewEditor({
           </div>
         )}
       </div>
-      <div className="mt-6 rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-5 flex gap-4">
-        <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />
+      <div className="mt-6 rounded-2xl border border-status-success-border bg-status-success-bg p-5 flex gap-4">
+        <CheckCircle2 className="w-6 h-6 text-status-success-icon shrink-0" />
         <div>
           <h3 className="font-bold text-on-surface">
             {selected.status === 'draft'
@@ -238,7 +238,7 @@ export function AdvancedEditor({
         title="Advanced mode"
         description="Optional access to the full technical definition."
       />
-      <div className="mt-6 rounded-2xl border border-amber-500/20 bg-amber-500/8 p-4 text-sm text-amber-100/80">
+      <div className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-200">
         This section is intended for technical administrators. Invalid changes will be rejected
         by the backend before saving.
       </div>
@@ -247,7 +247,7 @@ export function AdvancedEditor({
         spellCheck={false}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full min-h-[520px] mt-5 bg-slate-950/80 border border-border/50 rounded-2xl p-5 font-mono text-sm leading-6 text-cyan-50 focus:outline-none focus:border-primary/50"
+        className="w-full min-h-[520px] mt-5 bg-surface-container-lowest dark:bg-slate-950/80 border border-border/60 rounded-2xl p-5 font-mono text-sm leading-6 text-on-surface dark:text-cyan-50 focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20"
       />
       <div className="flex justify-end mt-4">
         <button onClick={onApply} className="secondary-button">

@@ -71,9 +71,9 @@ function DomainIncompleteWarning({ issues }: { issues: string[] }) {
     <span
       data-testid="domain-incomplete-warning"
       title={translatedTitle}
-      className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-amber-300"
+      className="inline-flex items-center gap-1 rounded-full border border-status-warning-border bg-status-warning-bg px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-status-warning-fg"
     >
-      <AlertTriangle className="h-3 w-3" />Partial
+      <AlertTriangle className="h-3 w-3 text-status-warning-icon" />Partial
     </span>
   );
 }
@@ -90,7 +90,7 @@ function AssetCard({ asset, selected, onSelect }: { asset: AssetProjection; sele
             <p className="mt-1 font-mono text-[10px] text-on-surface-variant">{asset.externalKey}</p>
           </div>
         </div>
-        <span className={`rounded-full border px-2 py-1 text-[9px] font-black uppercase ${asset.lifecycle === 'active' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-amber-500/30 bg-amber-500/10 text-amber-300'}`}>
+        <span className={`rounded-full border px-2 py-1 text-[9px] font-black uppercase ${asset.lifecycle === 'active' ? 'border-status-success-border bg-status-success-bg text-status-success-fg' : 'border-status-warning-border bg-status-warning-bg text-status-warning-fg'}`}>
           {asset.status || asset.lifecycle}
         </span>
       </div>
@@ -160,7 +160,7 @@ export default function AssetsCMDB() {
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />Showing the latest available projection because SIGInventory did not respond or has no configured credential.
         </div>
       )}
-      {sitesQuery.isError && <div className="mt-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300" role="alert"><p>{sitesQuery.error.message}</p><button type="button" onClick={() => void sitesQuery.refetch()} className="secondary-button mt-3" data-testid="assets-sites-retry"><RefreshCw className="h-4 w-4" />Retry</button></div>}
+      {sitesQuery.isError && <div className="mt-6 rounded-2xl border border-status-danger-border bg-status-danger-bg p-4 text-sm text-status-danger-fg" role="alert"><p>{sitesQuery.error.message}</p><button type="button" onClick={() => void sitesQuery.refetch()} className="secondary-button mt-3" data-testid="assets-sites-retry"><RefreshCw className="h-4 w-4" />Retry</button></div>}
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
         <aside className="rounded-3xl border border-border/40 bg-surface-container-low p-4">
@@ -266,7 +266,7 @@ export default function AssetsCMDB() {
               }}
             />
           )}
-          {assetsQuery.isLoading ? <p className="mt-8 text-sm text-on-surface-variant">Loading assets…</p> : assetsQuery.isError ? <div className="mt-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300"><p>{assetsQuery.error.message}</p><button type="button" onClick={() => void assetsQuery.refetch()} className="secondary-button mt-3"><RefreshCw className="h-4 w-4" />Retry</button></div> : (assetsQuery.data?.items.length ?? 0) === 0 ? <div className="mt-8 rounded-2xl border border-dashed border-border/50 p-10 text-center text-sm text-on-surface-variant">This site has no assets available for the current filter.</div> : <div className="mt-5 grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{assetsQuery.data!.items.map((asset) => <AssetCard key={asset.id} asset={asset} selected={asset.id === selectedAssetId} onSelect={() => setSelectedAssetId(asset.id)} />)}</div>}
+          {assetsQuery.isLoading ? <p className="mt-8 text-sm text-on-surface-variant">Loading assets…</p> : assetsQuery.isError ? <div className="mt-6 rounded-2xl border border-status-danger-border bg-status-danger-bg p-4 text-sm text-status-danger-fg"><p>{assetsQuery.error.message}</p><button type="button" onClick={() => void assetsQuery.refetch()} className="secondary-button mt-3"><RefreshCw className="h-4 w-4" />Retry</button></div> : (assetsQuery.data?.items.length ?? 0) === 0 ? <div className="mt-8 rounded-2xl border border-dashed border-border/50 p-10 text-center text-sm text-on-surface-variant">This site has no assets available for the current filter.</div> : <div className="mt-5 grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{assetsQuery.data!.items.map((asset) => <AssetCard key={asset.id} asset={asset} selected={asset.id === selectedAssetId} onSelect={() => setSelectedAssetId(asset.id)} />)}</div>}
 
           {selectedAsset && (
             <section className="mt-6 rounded-2xl border border-border/40 bg-surface-container p-5">
@@ -278,7 +278,7 @@ export default function AssetsCMDB() {
                     <div className="mt-3 space-y-2">
                       {historyQuery.data.incidents.items.slice(0, 8).map((record) => <Link key={record.id} to={`/app/tickets/${record.id}`} className="block rounded-lg bg-on-surface/5 p-2 text-xs font-bold text-on-surface hover:bg-primary/10">{record.humanId ?? record.id} · {record.title}</Link>)}
                       {historyQuery.data.incidents.items.length === 0 && historyQuery.data.incidents.completeness === 'complete' && <p className="text-xs text-on-surface-variant">No related incidents.</p>}
-                      {historyQuery.data.incidents.items.length === 0 && historyQuery.data.incidents.completeness === 'partial' && <p className="text-xs text-amber-300">Could not determine whether there are related incidents.</p>}
+                      {historyQuery.data.incidents.items.length === 0 && historyQuery.data.incidents.completeness === 'partial' && <p className="text-xs text-status-warning-fg">Could not determine whether there are related incidents.</p>}
                     </div>
                   </div>
                   <div className="rounded-xl border border-border/30 p-4" data-testid="domain-prb">
@@ -286,7 +286,7 @@ export default function AssetsCMDB() {
                     <div className="mt-3 space-y-2">
                       {historyQuery.data.problems.items.slice(0, 8).map((record) => <Link key={record.id} to={`/app/problems/${record.humanId}`} className="block rounded-lg bg-on-surface/5 p-2 text-xs font-bold text-on-surface hover:bg-primary/10"><span className="block truncate">{record.humanId} · {String(record.data.title ?? 'Problem')}</span><ProvenanceBadge record={record} /></Link>)}
                       {historyQuery.data.problems.items.length === 0 && historyQuery.data.problems.completeness === 'complete' && <p className="text-xs text-on-surface-variant">No related problems.</p>}
-                      {historyQuery.data.problems.items.length === 0 && historyQuery.data.problems.completeness === 'partial' && <p className="text-xs text-amber-300">Could not determine whether there are related problems.</p>}
+                      {historyQuery.data.problems.items.length === 0 && historyQuery.data.problems.completeness === 'partial' && <p className="text-xs text-status-warning-fg">Could not determine whether there are related problems.</p>}
                     </div>
                   </div>
                   <div className="rounded-xl border border-border/30 p-4" data-testid="domain-rfc">
@@ -294,13 +294,13 @@ export default function AssetsCMDB() {
                     <div className="mt-3 space-y-2">
                       {historyQuery.data.changes.items.slice(0, 8).map((record) => <Link key={record.id} to={`/app/changes/${record.humanId}`} className="block rounded-lg bg-on-surface/5 p-2 text-xs font-bold text-on-surface hover:bg-primary/10"><span className="block truncate">{record.humanId} · {String(record.data.title ?? 'Change')}</span><ProvenanceBadge record={record} /></Link>)}
                       {historyQuery.data.changes.items.length === 0 && historyQuery.data.changes.completeness === 'complete' && <p className="text-xs text-on-surface-variant">No related changes.</p>}
-                      {historyQuery.data.changes.items.length === 0 && historyQuery.data.changes.completeness === 'partial' && <p className="text-xs text-amber-300">Could not determine whether there are related changes.</p>}
+                      {historyQuery.data.changes.items.length === 0 && historyQuery.data.changes.completeness === 'partial' && <p className="text-xs text-status-warning-fg">Could not determine whether there are related changes.</p>}
                     </div>
                   </div>
                   {(() => {
                     const allIssues = [...new Set([...historyQuery.data.incidents.issues, ...historyQuery.data.problems.issues, ...historyQuery.data.changes.issues])];
                     return allIssues.length > 0 && (
-                      <p data-testid="operational-history-partial-summary" className="text-xs text-amber-300 lg:col-span-3">Partial history: {allIssues.map(formatOperationalIssue).join(' ')}</p>
+                      <p data-testid="operational-history-partial-summary" className="text-xs text-status-warning-fg lg:col-span-3">Partial history: {allIssues.map(formatOperationalIssue).join(' ')}</p>
                     );
                   })()}
                 </div>
@@ -346,7 +346,7 @@ function AssetAccessEditor({ site, onClose, onSaved }: { site: AssetProjection; 
       {companiesQuery.isLoading ? (
         <p className="mt-4 text-sm text-on-surface-variant">Loading Organization structure…</p>
       ) : companiesQuery.isError ? (
-        <p className="mt-4 text-sm text-red-300">{companiesQuery.error.message}</p>
+        <p className="mt-4 text-sm text-status-danger-fg">{companiesQuery.error.message}</p>
       ) : assignableUnits.length === 0 ? (
         <p className="mt-4 text-sm text-amber-200">First create a department or team in Users & Roles → Organization.</p>
       ) : (
@@ -360,7 +360,7 @@ function AssetAccessEditor({ site, onClose, onSaved }: { site: AssetProjection; 
         </div>
       )}
 
-      {saveMutation.isError && <p className="mt-3 text-xs text-red-300">{saveMutation.error.message}</p>}
+      {saveMutation.isError && <p className="mt-3 text-xs text-status-danger-fg">{saveMutation.error.message}</p>}
       <div className="mt-4 flex items-center justify-end gap-2">
         <button type="button" onClick={onClose} className="secondary-button">Cancel</button>
         <button type="button" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || companiesQuery.isLoading} className="primary-button">
@@ -442,7 +442,7 @@ function BulkAccessEditor({
       {companiesQuery.isLoading ? (
         <p className="mt-4 text-sm text-on-surface-variant">Loading Organization structure…</p>
       ) : companiesQuery.isError ? (
-        <p className="mt-4 text-sm text-red-300">{companiesQuery.error.message}</p>
+        <p className="mt-4 text-sm text-status-danger-fg">{companiesQuery.error.message}</p>
       ) : assignableUnits.length === 0 ? (
         <p className="mt-4 text-sm text-amber-200">First create a department or team in Users &amp; Roles → Organization.</p>
       ) : (
@@ -467,7 +467,7 @@ function BulkAccessEditor({
         </div>
       )}
 
-      {saveMutation.isError && <p className="mt-3 text-xs text-red-300">{saveMutation.error.message}</p>}
+      {saveMutation.isError && <p className="mt-3 text-xs text-status-danger-fg">{saveMutation.error.message}</p>}
       <div className="mt-4 flex items-center justify-end gap-2">
         <button type="button" onClick={onClose} className="secondary-button">Cancel</button>
         <button

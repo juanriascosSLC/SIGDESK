@@ -434,7 +434,7 @@ export default function CatalogBuilder() {
           data-testid="catalog-builder-load-error"
           className="panel-card w-full max-w-xl p-8 text-center"
         >
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-red-500/10 text-red-400">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-status-danger-border bg-status-danger-bg text-status-danger-icon">
             <AlertTriangle className="h-6 w-6" />
           </div>
           <h1 className="mt-5 text-2xl font-black text-on-surface">
@@ -790,7 +790,7 @@ export default function CatalogBuilder() {
             <div
               data-testid="catalog-editor-error"
               role="alert"
-              className="whitespace-pre-line rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+              className="whitespace-pre-line rounded-xl border border-status-danger-border bg-status-danger-bg px-4 py-3 text-sm text-status-danger-fg"
             >
               {editorError || (
                 mutationError instanceof ApiError && mutationError.issues?.length
@@ -802,7 +802,7 @@ export default function CatalogBuilder() {
           {notice && (
             <div
               data-testid="catalog-notice"
-              className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300 flex items-center gap-2"
+              className="rounded-xl border border-status-success-border bg-status-success-bg px-4 py-3 text-sm text-status-success-fg flex items-center gap-2"
             >
               <CheckCircle2 className="w-4 h-4" /> {notice}
             </div>

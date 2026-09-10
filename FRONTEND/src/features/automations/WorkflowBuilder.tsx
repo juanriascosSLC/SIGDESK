@@ -18,10 +18,10 @@ import {
 } from './api';
 
 function statusStyle(status: WorkflowExecution['estado']) {
-  if (status === 'completada') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
-  if (status === 'fallida') return 'border-red-500/30 bg-red-500/10 text-red-300';
-  if (status === 'omitida') return 'border-amber-500/30 bg-amber-500/10 text-amber-300';
-  return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300';
+  if (status === 'completada') return 'border-status-success-border bg-status-success-bg text-status-success-fg';
+  if (status === 'fallida') return 'border-status-danger-border bg-status-danger-bg text-status-danger-fg';
+  if (status === 'omitida') return 'border-status-warning-border bg-status-warning-bg text-status-warning-fg';
+  return 'border-status-info-border bg-status-info-bg text-status-info-fg';
 }
 
 const actionLabels: Record<string, string> = {
@@ -78,8 +78,8 @@ function ExecutionHistory({ workflowID, definition, onClose }: { workflowID: str
             <h2 className="flex items-center gap-2 text-lg font-black text-on-surface">
               <Clock3 className="h-5 w-5 text-primary" /> Live execution history
               {hayEnCurso && (
-                <span data-testid="historial-en-vivo" className="flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[9px] font-black uppercase text-cyan-300">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-300" /> Live
+                <span data-testid="historial-en-vivo" className="flex items-center gap-1.5 rounded-full border border-status-info-border bg-status-info-bg px-2 py-0.5 text-[9px] font-black uppercase text-status-info-fg">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-status-info-icon" /> Live
                 </span>
               )}
             </h2>
@@ -91,7 +91,7 @@ function ExecutionHistory({ workflowID, definition, onClose }: { workflowID: str
           </div>
         </div>
         {executions.isLoading && <p className="mt-6 text-sm text-on-surface-variant">Querying executions…</p>}
-        {executions.isError && <p className="mt-6 text-sm text-red-300">{executions.error.message}</p>}
+        {executions.isError && <p className="mt-6 text-sm text-status-danger-fg">{executions.error.message}</p>}
         {!executions.isLoading && !executions.isError && (executions.data ?? []).length === 0 && (
           <div className="mt-6 rounded-2xl border border-dashed border-border/50 p-10 text-center text-sm text-on-surface-variant">No tickets have executed this version yet.</div>
         )}
@@ -113,7 +113,7 @@ function ExecutionHistory({ workflowID, definition, onClose }: { workflowID: str
                       tocar el ticket. Se muestra su motivo en tono neutro, y solo
                       un fallo se pinta en rojo. */}
                   <td
-                    className={`max-w-xs truncate py-4 ${execution.estado === 'fallida' ? 'text-red-300' : 'text-on-surface-variant'}`}
+                    className={`max-w-xs truncate py-4 ${execution.estado === 'fallida' ? 'text-status-danger-fg' : 'text-on-surface-variant'}`}
                     title={execution.estado === 'omitida' ? execution.motivo : execution.ultimo_error || execution.motivo}
                   >
                     {execution.estado === 'omitida'

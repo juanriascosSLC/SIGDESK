@@ -189,8 +189,8 @@ export function ConfiguredRecordDetail({
         <button onClick={onBack} className="secondary-button">
           <ArrowLeft className="h-4 w-4" /> Back
         </button>
-        {notice && <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-300">{notice}</div>}
-        {error && <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{error}</div>}
+        {notice && <div className="rounded-2xl border border-status-success-border bg-status-success-bg p-4 text-sm text-status-success-fg">{notice}</div>}
+        {error && <div className="rounded-2xl border border-status-danger-border bg-status-danger-bg p-4 text-sm text-status-danger-fg">{error}</div>}
         {beforeLayout}
         <TicketPageLayout
           page={resolvePageLayout(specification, 'agent', record.entityKey)}

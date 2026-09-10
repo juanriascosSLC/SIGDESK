@@ -35,14 +35,18 @@ export default function UserProfilePopover() {
   return (
     <div className="relative" ref={popoverRef}>
       <button 
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-10 h-10 rounded-full bg-surface-container-high border border-border/50 flex items-center justify-center text-on-surface font-bold hover:border-cyan-500/50 hover:shadow-[0_0_10px_rgba(34,211,238,0.2)] transition-all"
+        aria-label="User profile and theme settings"
+        aria-expanded={isOpen}
+        aria-haspopup="true"
+        className="w-10 h-10 rounded-full bg-surface-container-high border border-border/50 flex items-center justify-center text-on-surface font-bold hover:border-primary/50 transition-all"
       >
         {initialsOf(displayName)}
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-12 w-64 bg-surface-container-lowest/95 backdrop-blur-2xl border border-border/50 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden z-50 animate-in slide-in-from-top-2">
+        <div className="absolute right-0 top-12 w-64 bg-surface-container-lowest/95 backdrop-blur-2xl border border-border/50 rounded-2xl shadow-xl shadow-black/10 dark:shadow-black/50 overflow-hidden z-50 animate-in slide-in-from-top-2">
           {/* Header */}
           <div className="px-5 py-4 border-b border-border/40 bg-surface-container-low/50">
             <p className="text-sm font-bold text-on-surface truncate">{displayName}</p>
@@ -53,41 +57,53 @@ export default function UserProfilePopover() {
                 shows the real, known fact instead: whether a role is
                 assigned at all, and whether it grants admin capability. */}
             <div className="mt-2 flex flex-wrap gap-1">
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
                 {roleId ? (canManageUsersAndRoles ? 'Administrator' : 'Role assigned') : 'No role assigned'}
               </span>
             </div>
           </div>
 
           <div className="p-2 space-y-1">
-            <button className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-on-surface/5 text-sm text-on-surface-variant transition-colors">
+            <button type="button" className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-on-surface/5 text-sm text-on-surface-variant transition-colors">
               <User className="w-4 h-4 text-on-surface-variant" />
               My Profile
             </button>
-            <button className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-on-surface/5 text-sm text-on-surface-variant transition-colors">
+            <button type="button" className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-on-surface/5 text-sm text-on-surface-variant transition-colors">
               <Settings className="w-4 h-4 text-on-surface-variant" />
               Preferences
             </button>
           </div>
 
           <div className="px-5 py-3 border-t border-border/40">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-500/80 mb-3">Theme</p>
-            <div className="flex bg-surface-container rounded-lg p-1 border border-border/50">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-3">Theme</p>
+            <div className="flex bg-surface-container rounded-lg p-1 border border-border/50" role="group" aria-label="Theme preference">
               <button 
+                type="button"
                 onClick={() => setTheme('light')}
-                className={`flex-1 flex items-center justify-center py-1.5 rounded-md transition-all ${theme === 'light' ? 'bg-surface shadow text-cyan-500' : 'text-on-surface-variant hover:text-on-surface'}`}
+                aria-label="Switch to Light theme"
+                title="Light theme"
+                aria-pressed={theme === 'light'}
+                className={`flex-1 flex items-center justify-center py-1.5 rounded-md transition-all ${theme === 'light' ? 'bg-surface shadow text-primary font-bold' : 'text-on-surface-variant hover:text-on-surface'}`}
               >
                 <Sun className="w-4 h-4" />
               </button>
               <button 
+                type="button"
                 onClick={() => setTheme('dark')}
-                className={`flex-1 flex items-center justify-center py-1.5 rounded-md transition-all ${theme === 'dark' ? 'bg-surface shadow text-cyan-500' : 'text-on-surface-variant hover:text-on-surface'}`}
+                aria-label="Switch to Dark theme"
+                title="Dark theme"
+                aria-pressed={theme === 'dark'}
+                className={`flex-1 flex items-center justify-center py-1.5 rounded-md transition-all ${theme === 'dark' ? 'bg-surface shadow text-primary font-bold' : 'text-on-surface-variant hover:text-on-surface'}`}
               >
                 <Moon className="w-4 h-4" />
               </button>
               <button 
+                type="button"
                 onClick={() => setTheme('system')}
-                className={`flex-1 flex items-center justify-center py-1.5 rounded-md transition-all ${theme === 'system' ? 'bg-surface shadow text-cyan-500' : 'text-on-surface-variant hover:text-on-surface'}`}
+                aria-label="Switch to System theme"
+                title="System theme"
+                aria-pressed={theme === 'system'}
+                className={`flex-1 flex items-center justify-center py-1.5 rounded-md transition-all ${theme === 'system' ? 'bg-surface shadow text-primary font-bold' : 'text-on-surface-variant hover:text-on-surface'}`}
               >
                 <Monitor className="w-4 h-4" />
               </button>

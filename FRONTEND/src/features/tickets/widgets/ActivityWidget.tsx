@@ -7,19 +7,19 @@ function activityIcon(kind: ActivityKind) {
     case 'created':
       return { Icon: Zap, className: 'border-primary/30 bg-primary/10 text-primary shadow-[0_0_15px_rgba(34,211,238,0.2)]' };
     case 'status_changed':
-      return { Icon: Clock, className: 'border-amber-500/30 bg-amber-500/10 text-amber-400' };
+      return { Icon: Clock, className: 'border-status-warning-border bg-status-warning-bg text-status-warning-fg' };
     case 'assigned':
-      return { Icon: UserCheck, className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' };
+      return { Icon: UserCheck, className: 'border-status-success-border bg-status-success-bg text-status-success-fg' };
     case 'attached':
       return { Icon: Paperclip, className: 'border-border/50 bg-surface-container text-on-surface-variant' };
     case 'merged':
     case 'unmerged':
-      return { Icon: Merge, className: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400' };
+      return { Icon: Merge, className: 'border-status-info-border bg-status-info-bg text-status-info-fg' };
     case 'watcher_added':
     case 'watcher_removed':
       return { Icon: Eye, className: 'border-border/50 bg-surface-container text-on-surface-variant' };
     case 'fields_updated':
-      return { Icon: Pencil, className: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400' };
+      return { Icon: Pencil, className: 'border-status-info-border bg-status-info-bg text-status-info-fg' };
     default:
       return { Icon: MessageSquare, className: 'border-border/50 bg-surface-container text-on-surface-variant' };
   }
@@ -122,7 +122,7 @@ function TimelineEntry({ item }: { item: TimelineItem }) {
           <div className="font-bold text-on-surface text-sm flex items-center gap-2">
             {comment.authorName}
             {comment.isInternal && (
-              <span className="px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-400 text-[9px] font-black uppercase tracking-wider">
+              <span className="px-1.5 py-0.5 rounded-md bg-status-warning-bg text-status-warning-fg border border-status-warning-border text-[9px] font-black uppercase tracking-wider">
                 Internal Note
               </span>
             )}
@@ -213,7 +213,7 @@ export function ActivityWidget({ context }: { context: TicketPageContext }) {
               placeholder="Add a comment…"
               className="w-full bg-surface-container border border-border/50 text-on-surface text-sm rounded-2xl px-4 py-3 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all resize-none"
             />
-            {activity.commentError && <p className="mt-2 text-sm text-red-400">{activity.commentError}</p>}
+            {activity.commentError && <p className="mt-2 text-sm text-status-danger-fg">{activity.commentError}</p>}
             <div className="flex items-center justify-between mt-2">
               {attachments.canUpload ? <button
                 onClick={attachments.onTriggerPicker}
@@ -226,7 +226,7 @@ export function ActivityWidget({ context }: { context: TicketPageContext }) {
                 {activity.canAddInternalNote && <button
                   onClick={() => activity.onSubmitComment(true)}
                   disabled={activity.commentPending || !activity.commentBody.trim()}
-                  className="px-4 py-2 rounded-xl bg-surface-container border border-amber-500/20 text-amber-400 text-xs font-bold hover:bg-amber-500/10 transition-colors disabled:opacity-50"
+                  className="px-4 py-2 rounded-xl bg-surface-container border border-status-warning-border text-status-warning-fg text-xs font-bold hover:bg-status-warning-bg transition-colors disabled:opacity-50"
                 >
                   Internal Note
                 </button>}

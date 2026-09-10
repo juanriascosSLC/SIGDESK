@@ -16,17 +16,17 @@ export const changeStateLabels: Record<string, string> = {
 };
 
 export const changeStateStyles: Record<string, string> = {
-  draft: 'border-slate-500/30 bg-slate-500/10 text-slate-300',
-  assessment: 'border-blue-500/30 bg-blue-500/10 text-blue-300',
-  pending_approval: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
-  approved: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
-  rejected: 'border-red-500/30 bg-red-500/10 text-red-300',
-  scheduled: 'border-violet-500/30 bg-violet-500/10 text-violet-300',
-  implementing: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300',
-  completed: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
-  failed: 'border-red-500/30 bg-red-500/10 text-red-300',
-  rolled_back: 'border-orange-500/30 bg-orange-500/10 text-orange-300',
-  closed: 'border-slate-500/30 bg-slate-500/10 text-slate-300',
+  draft: 'border-status-neutral-border bg-status-neutral-bg text-status-neutral-fg',
+  assessment: 'border-status-info-border bg-status-info-bg text-status-info-fg',
+  pending_approval: 'border-status-warning-border bg-status-warning-bg text-status-warning-fg',
+  approved: 'border-status-success-border bg-status-success-bg text-status-success-fg',
+  rejected: 'border-status-danger-border bg-status-danger-bg text-status-danger-fg',
+  scheduled: 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300',
+  implementing: 'border-primary/30 bg-primary/10 text-primary',
+  completed: 'border-status-success-border bg-status-success-bg text-status-success-fg',
+  failed: 'border-status-danger-border bg-status-danger-bg text-status-danger-fg',
+  rolled_back: 'border-orange-500/30 bg-orange-500/10 text-orange-800 dark:text-orange-300',
+  closed: 'border-status-neutral-border bg-status-neutral-bg text-status-neutral-fg',
 };
 
 /**
@@ -36,19 +36,19 @@ export const changeStateStyles: Record<string, string> = {
  * copia por vista, la misma tarea acabaría llamándose distinto en cada una.
  */
 export const taskStatusMeta: Record<ChangeTaskStatus, { label: string; style: string }> = {
-  pending: { label: 'Awaiting dependencies', style: 'border-slate-500/30 bg-slate-500/10 text-slate-300' },
-  ready: { label: 'Ready', style: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300' },
-  in_progress: { label: 'In progress', style: 'border-blue-500/30 bg-blue-500/10 text-blue-300' },
-  blocked: { label: 'Blocked', style: 'border-amber-500/30 bg-amber-500/10 text-amber-300' },
-  completed: { label: 'Completed', style: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' },
-  canceled: { label: 'Canceled', style: 'border-red-500/30 bg-red-500/10 text-red-300' },
+  pending: { label: 'Awaiting dependencies', style: 'border-status-neutral-border bg-status-neutral-bg text-status-neutral-fg' },
+  ready: { label: 'Ready', style: 'border-primary/30 bg-primary/10 text-primary' },
+  in_progress: { label: 'In progress', style: 'border-status-info-border bg-status-info-bg text-status-info-fg' },
+  blocked: { label: 'Blocked', style: 'border-status-warning-border bg-status-warning-bg text-status-warning-fg' },
+  completed: { label: 'Completed', style: 'border-status-success-border bg-status-success-bg text-status-success-fg' },
+  canceled: { label: 'Canceled', style: 'border-status-danger-border bg-status-danger-bg text-status-danger-fg' },
 };
 
 export const riskStyles: Record<string, string> = {
-  low: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
-  medium: 'border-yellow-500/30 bg-yellow-500/10 text-yellow-300',
-  high: 'border-orange-500/30 bg-orange-500/10 text-orange-300',
-  critical: 'border-red-500/30 bg-red-500/10 text-red-300',
+  low: 'border-status-success-border bg-status-success-bg text-status-success-fg',
+  medium: 'border-yellow-500/30 bg-yellow-500/10 text-yellow-800 dark:text-yellow-300',
+  high: 'border-orange-500/30 bg-orange-500/10 text-orange-800 dark:text-orange-300',
+  critical: 'border-status-danger-border bg-status-danger-bg text-status-danger-fg',
 };
 
 export function textData(change: EntityRecord, key: string): string {

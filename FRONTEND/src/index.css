@@ -47,6 +47,43 @@
   --color-outline: var(--outline);
   --color-outline-variant: var(--outline-variant);
 
+  /* Complete semantic status token family */
+  --color-status-success: var(--status-success);
+  --color-status-success-fg: var(--status-success-fg);
+  --color-status-success-bg: var(--status-success-bg);
+  --color-status-success-border: var(--status-success-border);
+  --color-status-success-icon: var(--status-success-icon);
+
+  --color-status-warning: var(--status-warning);
+  --color-status-warning-fg: var(--status-warning-fg);
+  --color-status-warning-bg: var(--status-warning-bg);
+  --color-status-warning-border: var(--status-warning-border);
+  --color-status-warning-icon: var(--status-warning-icon);
+
+  --color-status-danger: var(--status-danger);
+  --color-status-danger-fg: var(--status-danger-fg);
+  --color-status-danger-bg: var(--status-danger-bg);
+  --color-status-danger-border: var(--status-danger-border);
+  --color-status-danger-icon: var(--status-danger-icon);
+
+  --color-status-info: var(--status-info);
+  --color-status-info-fg: var(--status-info-fg);
+  --color-status-info-bg: var(--status-info-bg);
+  --color-status-info-border: var(--status-info-border);
+  --color-status-info-icon: var(--status-info-icon);
+
+  --color-status-paused: var(--status-paused);
+  --color-status-paused-fg: var(--status-paused-fg);
+  --color-status-paused-bg: var(--status-paused-bg);
+  --color-status-paused-border: var(--status-paused-border);
+  --color-status-paused-icon: var(--status-paused-icon);
+
+  --color-status-neutral: var(--status-neutral);
+  --color-status-neutral-fg: var(--status-neutral-fg);
+  --color-status-neutral-bg: var(--status-neutral-bg);
+  --color-status-neutral-border: var(--status-neutral-border);
+  --color-status-neutral-icon: var(--status-neutral-icon);
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -69,13 +106,13 @@
 
 /* ─── Light palette (default) ──────────────────────────────────────────── */
 :root {
-  --background: #eef2f7;
+  --background: #f1f5f9;
   --foreground: #0f172a;
   --card: #ffffff;
   --card-foreground: #0f172a;
   --popover: #ffffff;
   --popover-foreground: #0f172a;
-  --primary: #0e7490;            /* cyan-700 — readable on white */
+  --primary: #0e7490;            /* cyan-700 — 5.35:1 readable on white */
   --primary-foreground: #ffffff;
   --secondary: #e2e8f0;
   --secondary-foreground: #0f172a;
@@ -84,8 +121,8 @@
   --accent: #e2e8f0;
   --accent-foreground: #0f172a;
   --destructive: #dc2626;
-  --border: rgba(15, 23, 42, 0.10);
-  --input: rgba(15, 23, 42, 0.10);
+  --border: rgba(15, 23, 42, 0.12);
+  --input: rgba(15, 23, 42, 0.12);
   --ring: #0e7490;
   --radius: 1rem;
 
@@ -96,12 +133,49 @@
   --surface-container-lowest: #ffffff;
   --surface-container-low: #ffffff;
   --surface-container: #f1f5f9;
-  --surface-container-high: #e9eef5;
-  --surface-container-highest: #e2e8f0;
+  --surface-container-high: #e2e8f0;
+  --surface-container-highest: #cbd5e1;
   --on-surface: #0f172a;
   --on-surface-variant: #475569;
   --outline: #94a3b8;
   --outline-variant: #cbd5e1;
+
+  /* Complete semantic status token family (Light mode) */
+  --status-success: #065f46;
+  --status-success-fg: #065f46;
+  --status-success-bg: rgba(5, 150, 105, 0.08);
+  --status-success-border: rgba(5, 150, 105, 0.25);
+  --status-success-icon: #047857;
+
+  --status-warning: #92400e;
+  --status-warning-fg: #92400e;
+  --status-warning-bg: rgba(217, 119, 6, 0.08);
+  --status-warning-border: rgba(217, 119, 6, 0.25);
+  --status-warning-icon: #b45309;
+
+  --status-danger: #991b1b;
+  --status-danger-fg: #991b1b;
+  --status-danger-bg: rgba(220, 38, 38, 0.08);
+  --status-danger-border: rgba(220, 38, 38, 0.25);
+  --status-danger-icon: #b91c1c;
+
+  --status-info: #155e75;
+  --status-info-fg: #155e75;
+  --status-info-bg: rgba(8, 145, 178, 0.08);
+  --status-info-border: rgba(8, 145, 178, 0.25);
+  --status-info-icon: #0e7490;
+
+  --status-paused: #581c87;
+  --status-paused-fg: #581c87;
+  --status-paused-bg: rgba(126, 34, 206, 0.08);
+  --status-paused-border: rgba(126, 34, 206, 0.25);
+  --status-paused-icon: #7e22ce;
+
+  --status-neutral: #334155;
+  --status-neutral-fg: #334155;
+  --status-neutral-bg: rgba(100, 116, 139, 0.08);
+  --status-neutral-border: rgba(100, 116, 139, 0.2);
+  --status-neutral-icon: #475569;
 }
 
 /* ─── Dark palette (Material You – Dark, the original look) ─────────────── */
@@ -139,6 +213,43 @@
   --on-surface-variant: #bbc9cf;
   --outline: #859398;
   --outline-variant: #3c494e;
+
+  /* Complete semantic status token family (Dark mode) */
+  --status-success: #6ee7b7;
+  --status-success-fg: #6ee7b7;
+  --status-success-bg: rgba(16, 185, 129, 0.12);
+  --status-success-border: rgba(52, 211, 153, 0.28);
+  --status-success-icon: #34d399;
+
+  --status-warning: #fcd34d;
+  --status-warning-fg: #fcd34d;
+  --status-warning-bg: rgba(245, 158, 11, 0.12);
+  --status-warning-border: rgba(251, 191, 36, 0.28);
+  --status-warning-icon: #fbbf24;
+
+  --status-danger: #fca5a5;
+  --status-danger-fg: #fca5a5;
+  --status-danger-bg: rgba(239, 68, 68, 0.12);
+  --status-danger-border: rgba(248, 113, 113, 0.28);
+  --status-danger-icon: #f87171;
+
+  --status-info: #67e8f9;
+  --status-info-fg: #67e8f9;
+  --status-info-bg: rgba(6, 182, 212, 0.12);
+  --status-info-border: rgba(34, 211, 238, 0.28);
+  --status-info-icon: #22d3ee;
+
+  --status-paused: #d8b4fe;
+  --status-paused-fg: #d8b4fe;
+  --status-paused-bg: rgba(192, 132, 252, 0.12);
+  --status-paused-border: rgba(192, 132, 252, 0.28);
+  --status-paused-icon: #c084fc;
+
+  --status-neutral: #cbd5e1;
+  --status-neutral-fg: #cbd5e1;
+  --status-neutral-bg: rgba(148, 163, 184, 0.1);
+  --status-neutral-border: rgba(148, 163, 184, 0.25);
+  --status-neutral-icon: #94a3b8;
 }
 
 /* ─── Services department skin (data-department="services") ─────────────
@@ -188,7 +299,6 @@
   color-scheme: light;
 }
 
-select option,
 .dark select option,
 html.dark select option,
 body.dark select option {
@@ -196,7 +306,8 @@ body.dark select option {
   color: #e1e2eb !important;
 }
 
-:root:not(.dark) select option {
+:root:not(.dark) select option,
+html:not(.dark) select option {
   background-color: #ffffff !important;
   color: #0f172a !important;
 }
@@ -217,26 +328,6 @@ body.dark select option {
     @apply font-sans;
   }
 }
-
-/* ─── Light-mode accent text ────────────────────────────────────────────────
-   The palette leans on bright, dark-optimized accent text (cyan/amber/emerald/
-   red-300…500) that is illegible on light surfaces. When NOT in dark mode,
-   darken accent *text* (any shade + opacity variant) so it stays readable.
-   Backgrounds/borders keep their bright hue, so accent buttons are untouched. */
-:root:not(.dark) [class*="text-cyan-3"],
-:root:not(.dark) [class*="text-cyan-4"],
-:root:not(.dark) [class*="text-cyan-5"]     { color: #0e7490; }
-:root:not(.dark) [class*="text-amber-3"],
-:root:not(.dark) [class*="text-amber-4"],
-:root:not(.dark) [class*="text-amber-5"]    { color: #b45309; }
-:root:not(.dark) [class*="text-emerald-3"],
-:root:not(.dark) [class*="text-emerald-4"],
-:root:not(.dark) [class*="text-emerald-5"]  { color: #047857; }
-:root:not(.dark) [class*="text-red-3"],
-:root:not(.dark) [class*="text-red-4"],
-:root:not(.dark) [class*="text-red-5"]      { color: #dc2626; }
-:root:not(.dark) [class*="text-purple-4"]   { color: #7e22ce; }
-:root:not(.dark) [class*="text-blue-4"]     { color: #1d4ed8; }
 
 /* ─── Scrollbar ─────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar          { width: 3px; height: 3px; }

@@ -112,11 +112,11 @@ export default function RagChatbot() {
         aria-label="Open SIG Assistant"
         className="fixed bottom-[calc(56px+env(safe-area-inset-bottom)+1rem)] right-4 md:bottom-6 md:right-6 z-40 flex items-center gap-3 rounded-2xl border border-cyan-400/30 bg-surface-container-lowest/95 px-4 py-3 text-left shadow-[0_14px_40px_rgba(0,0,0,0.45),0_0_25px_rgba(34,211,238,0.12)] backdrop-blur-xl transition-all hover:-translate-y-1 hover:border-cyan-300/60"
       >
-        <span className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-400/30 bg-cyan-400/10 text-cyan-300">
+        <span className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-400/30 bg-cyan-400/10 text-cyan-700 dark:text-cyan-300">
           <Bot size={20} />
         </span>
         <span>
-          <span className="block text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">
+          <span className="block text-[10px] font-black uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-300">
             SIG Assistant
           </span>
           <span className="mt-0.5 block text-xs text-on-surface-variant">
@@ -131,15 +131,15 @@ export default function RagChatbot() {
       <header className="border-b border-border/40 bg-gradient-to-br from-cyan-500/10 via-transparent to-violet-500/10 px-5 py-4">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/30 bg-cyan-400/10 text-cyan-300">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/30 bg-cyan-400/10 text-cyan-700 dark:text-cyan-300">
               <Bot size={22} />
             </div>
             <div>
               <h2 className="text-sm font-black text-on-surface">
                 SIG Assistant
               </h2>
-              <p className="mt-0.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-emerald-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Knowledge
+              <p className="mt-0.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400" /> Knowledge
                 assistant
               </p>
             </div>
@@ -164,7 +164,7 @@ export default function RagChatbot() {
           </div>
         </div>
         <div className="mt-4 flex items-center gap-2 rounded-xl border border-cyan-400/15 bg-cyan-400/5 px-3 py-2 text-[10px] text-on-surface-variant">
-          <Sparkles size={13} className="text-cyan-300" /> Uses only the
+          <Sparkles size={13} className="text-cyan-700 dark:text-cyan-300" /> Uses only the
           tickets and knowledge you are permitted to view.
         </div>
       </header>
@@ -178,7 +178,7 @@ export default function RagChatbot() {
               className={`${message.from === "user" ? "items-end" : "items-start"} flex max-w-[88%] flex-col gap-1`}
             >
               <div
-                className={`rounded-2xl px-3.5 py-3 text-sm leading-relaxed ${message.from === "user" ? "rounded-br-md bg-cyan-400 text-slate-950" : "rounded-bl-md border border-border/50 bg-surface-container text-on-surface"}`}
+                className={`rounded-2xl px-3.5 py-3 text-sm leading-relaxed ${message.from === "user" ? "rounded-br-md bg-cyan-600 text-white dark:bg-cyan-400 dark:text-slate-950" : "rounded-bl-md border border-border/50 bg-surface-container text-on-surface"}`}
               >
                 {message.text}
               </div>
@@ -190,7 +190,7 @@ export default function RagChatbot() {
                   {message.sources.map((source) => (
                     <span
                       key={`${source.type}-${source.id}`}
-                      className="rounded-md border border-cyan-400/20 px-1.5 py-0.5 text-[9px] text-cyan-300"
+                      className="rounded-md border border-cyan-400/20 px-1.5 py-0.5 text-[9px] text-cyan-700 dark:text-cyan-300"
                     >
                       {source.type}/{source.id}
                     </span>

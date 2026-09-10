@@ -230,7 +230,7 @@ export function ChangeTasksBoard({
                   ))}
                 </div>
               )}
-              {task.blockedReason && <p className="mt-3 rounded-lg bg-amber-500/10 p-2 text-[11px] text-amber-300">{task.blockedReason}</p>}
+              {task.blockedReason && <p className="mt-3 rounded-lg border border-status-warning-border bg-status-warning-bg p-2 text-[11px] text-status-warning-fg">{task.blockedReason}</p>}
               {task.dueAt && <div className="mt-3 flex items-center gap-1.5 text-[11px] text-on-surface-variant"><Clock3 className="h-3.5 w-3.5" />Due {new Date(task.dueAt).toLocaleString()}</div>}
               {canManage && (
                 <div className="mt-4 flex flex-wrap gap-2 border-t border-border/30 pt-3">
@@ -265,9 +265,9 @@ export function ChangeTasksBoard({
                 Organization), asi que su estado de carga, vacio y error se
                 dicen explicitamente en vez de dejar tres selectores mudos. */}
             {directoryQuery.isLoading && <p className="mt-4 rounded-xl border border-border/40 bg-surface-container p-3 text-xs text-on-surface-variant">Loading areas, teams and assignees from Organization…</p>}
-            {directoryQuery.isError && <p className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">We couldn't load the area/team/assignee structure: {directoryQuery.error.message}. The task can't be created without it.</p>}
-            {directory && directory.departments.length === 0 && <p className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300">Organization has no departments set up yet. An administrator must create them before tasks can be directed.</p>}
-            {directory && form.departmentId !== '' && availableTeams.length === 0 && <p className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300">This department has no assignable teams.</p>}
+            {directoryQuery.isError && <p className="mt-4 rounded-xl border border-status-danger-border bg-status-danger-bg p-3 text-xs text-status-danger-fg">We couldn't load the area/team/assignee structure: {directoryQuery.error.message}. The task can't be created without it.</p>}
+            {directory && directory.departments.length === 0 && <p className="mt-4 rounded-xl border border-status-warning-border bg-status-warning-bg p-3 text-xs text-status-warning-fg">Organization has no departments set up yet. An administrator must create them before tasks can be directed.</p>}
+            {directory && form.departmentId !== '' && availableTeams.length === 0 && <p className="mt-4 rounded-xl border border-status-warning-border bg-status-warning-bg p-3 text-xs text-status-warning-fg">This department has no assignable teams.</p>}
             {directory && form.teamId !== '' && availableAssignees.length === 0 && <p className="mt-4 rounded-xl border border-border/40 bg-surface-container p-3 text-xs text-on-surface-variant">This team has no active users who can execute tasks. The task will be directed to the team, with no individual assignee.</p>}
             {/* Sin responsable individual la tarea se notifica a TODO el
                 equipo. Es deliberado —una tarea puede dirigirse a un equipo
@@ -275,7 +275,7 @@ export function ChangeTasksBoard({
                 quien elige "sin responsable" por comodidad esta eligiendo
                 avisar a varias personas. */}
             {form.teamId !== '' && form.assigneeUserId === '' && availableAssignees.length > 0 && (
-              <p className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300">
+              <p className="mt-4 rounded-xl border border-status-warning-border bg-status-warning-bg p-3 text-xs text-status-warning-fg">
                 Without an individual assignee, the task will notify everyone on the team. Choose a person if you want to direct it to someone specific.
               </p>
             )}

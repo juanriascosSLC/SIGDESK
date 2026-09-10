@@ -20,7 +20,7 @@ export function PortalTopNav({ pathname }: { pathname: string }) {
             className={cn(
               'flex min-h-[44px] items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 font-bold text-sm',
               isActive
-                ? 'bg-cyan-500/20 text-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.2)] border border-cyan-500/30'
+                ? 'bg-primary/15 text-primary border border-primary/30 dark:bg-cyan-500/20 dark:text-cyan-400 dark:shadow-[0_0_15px_rgba(34,211,238,0.2)] dark:border-cyan-500/30'
                 : 'text-on-surface-variant hover:text-on-surface hover:bg-on-surface/5 border border-transparent',
             )}
           >

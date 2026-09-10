@@ -19,7 +19,7 @@ export function SuggestedSolutionsWidget({ context }: { context: TicketPageConte
   return (
     <div className="rounded-3xl border border-border/40 bg-surface-container-low p-6">
       <h3 className="mb-4 flex items-center gap-2 border-b border-border/40 pb-3 text-sm font-bold uppercase tracking-wider text-on-surface-variant">
-        <Lightbulb className="h-4 w-4 text-amber-400" />
+        <Lightbulb className="h-4 w-4 text-status-warning-icon" />
         Suggested solutions
       </h3>
       {problemRelations.length === 0 ? (
@@ -33,9 +33,9 @@ export function SuggestedSolutionsWidget({ context }: { context: TicketPageConte
             <button
               key={relation.id}
               onClick={() => onNavigate(`/app/problems/${encodeURIComponent(humanId)}`)}
-              className="w-full rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 text-left hover:border-amber-500/40"
+              className="w-full rounded-2xl border border-status-warning-border bg-status-warning-bg p-4 text-left hover:border-status-warning-icon transition-colors"
             >
-              <div className="text-[10px] font-black uppercase text-amber-300">Related problem</div>
+              <div className="text-[10px] font-black uppercase text-status-warning-fg">Related problem</div>
               <div className="mt-1 font-mono text-sm font-bold text-on-surface">{humanId}</div>
               <p className="mt-1 text-xs text-on-surface-variant">
                 Review its known solution before investigating from scratch.

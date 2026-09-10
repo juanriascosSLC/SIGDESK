@@ -734,8 +734,8 @@ export default function TicketDetail() {
       )}
 
       {editNotice && !isEditingFields && (
-        <div className="mb-8 flex items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-          <CheckCircle2 className="w-4 h-4" />
+        <div className="mb-8 flex items-center gap-2 rounded-xl border border-status-success-border bg-status-success-bg px-4 py-3 text-sm text-status-success-fg">
+          <CheckCircle2 className="w-4 h-4 text-status-success-icon" />
           {editNotice}
         </div>
       )}
@@ -749,8 +749,8 @@ export default function TicketDetail() {
           Loading view defined in Catalog Builder…
         </div>
       ) : entityRecord.isError || definitionManifest.isError ? (
-        <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-5">
-          <p className="text-sm font-bold text-amber-300">We couldn't load the ticket's definition</p>
+        <div className="rounded-2xl border border-status-warning-border bg-status-warning-bg p-5">
+          <p className="text-sm font-bold text-status-warning-fg">We couldn't load the ticket's definition</p>
           <p className="mt-1 text-xs text-on-surface-variant">
             The ticket is still available, but its dynamic fields can't be shown right now.
           </p>
@@ -766,7 +766,7 @@ export default function TicketDetail() {
             {layoutResolution && (
               <div
                 data-testid="definition-provenance"
-                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium mb-3 bg-gray-100 text-gray-600"
+                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium mb-3 bg-surface-container-high text-on-surface-variant border border-border/40"
                 title={`Layout resolution: ${layoutResolution}`}
               >
                 {

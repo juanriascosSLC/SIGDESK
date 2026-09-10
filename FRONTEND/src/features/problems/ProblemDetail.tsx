@@ -179,7 +179,7 @@ export default function ProblemDetail() {
         <button onClick={() => navigate('/app/problems')} className="secondary-button mb-5">
           <ArrowLeft className="h-4 w-4" /> Back
         </button>
-        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-5 text-red-300">
+        <div className="rounded-2xl border border-status-danger-border bg-status-danger-bg p-5 text-status-danger-fg">
           Could not load problem: {error?.message}
         </div>
       </div>
@@ -383,13 +383,13 @@ export default function ProblemDetail() {
         </section>
 
         {notice && (
-          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-300">
+          <div className="rounded-2xl border border-status-success-border bg-status-success-bg p-4 text-sm text-status-success-fg">
             {notice}
           </div>
         )}
         {actionError && (
-          <div className="flex gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
+          <div className="flex gap-3 rounded-2xl border border-status-danger-border bg-status-danger-bg p-4 text-sm text-status-danger-fg">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-status-danger-icon" />
             {actionError.message}
           </div>
         )}
@@ -498,7 +498,7 @@ export default function ProblemDetail() {
                   {can(PERMISSIONS.problemsEdit) && (
                     <button
                       onClick={() => deleteRelationMutation.mutate(relation.id)}
-                      className="rounded-xl p-2 text-on-surface-variant hover:bg-red-500/10 hover:text-red-300"
+                      className="rounded-xl p-2 text-on-surface-variant hover:bg-status-danger-bg hover:text-status-danger-fg"
                       aria-label="Remove relation"
                     >
                       <Trash2 className="h-4 w-4" />

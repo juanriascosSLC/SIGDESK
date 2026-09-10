@@ -30,7 +30,7 @@ export class CatalogBuilderErrorBoundary extends Component<Props, State> {
           data-testid="catalog-builder-render-error"
           className="panel-card w-full max-w-xl p-8 text-center"
         >
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-red-500/10 text-red-400">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-status-danger-border bg-status-danger-bg text-status-danger-icon">
             <AlertTriangle className="h-6 w-6" />
           </div>
           <h1 className="mt-5 text-2xl font-black text-on-surface">

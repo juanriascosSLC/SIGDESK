@@ -350,7 +350,7 @@ export function PagePropertiesPanel({
           <button
             type="button"
             onClick={() => onRemove(selectedId)}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-red-500/30 px-2 py-2 text-[11px] font-bold text-red-300 hover:bg-red-500/10"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-status-danger-border px-2 py-2 text-[11px] font-bold text-status-danger-fg hover:bg-status-danger-bg"
           >
             <Trash2 className="h-3.5 w-3.5" /> Remove
           </button>

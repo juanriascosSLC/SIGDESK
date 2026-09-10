@@ -48,12 +48,12 @@ function text(problem: EntityRecord, key: string): string {
 
 function stateStyle(state: string) {
   if (state === 'known_error') {
-    return 'border-red-500/30 bg-red-500/15 text-red-300';
+    return 'border-status-danger-border bg-status-danger-bg text-status-danger-fg';
   }
   if (state === 'resolved') {
-    return 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300';
+    return 'border-status-success-border bg-status-success-bg text-status-success-fg';
   }
-  return 'border-amber-500/30 bg-amber-500/15 text-amber-300';
+  return 'border-status-warning-border bg-status-warning-bg text-status-warning-fg';
 }
 
 export default function ProblemsList() {
@@ -166,14 +166,14 @@ export default function ProblemsList() {
 
         <div className="grid gap-4 sm:grid-cols-3">
           {[
-            { label: 'Under investigation', value: investigating, Icon: FlaskConical, color: 'text-amber-400' },
-            { label: 'Known errors', value: knownErrors, Icon: AlertOctagon, color: 'text-red-400' },
-            { label: 'Resolved', value: resolved, Icon: CheckCircle2, color: 'text-emerald-400' },
-          ].map(({ label, value, Icon, color }) => (
+            { label: 'Under investigation', value: investigating, Icon: FlaskConical, color: 'text-status-warning-fg', iconColor: 'text-status-warning-icon' },
+            { label: 'Known errors', value: knownErrors, Icon: AlertOctagon, color: 'text-status-danger-fg', iconColor: 'text-status-danger-icon' },
+            { label: 'Resolved', value: resolved, Icon: CheckCircle2, color: 'text-status-success-fg', iconColor: 'text-status-success-icon' },
+          ].map(({ label, value, Icon, color, iconColor }) => (
             <div key={label} className="rounded-2xl border border-border/40 bg-surface-container-low p-5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">{label}</span>
-                <Icon className={`h-5 w-5 ${color}`} />
+                <Icon className={`h-5 w-5 ${iconColor}`} />
               </div>
               <div className={`mt-3 text-3xl font-black ${color}`}>{value}</div>
             </div>
@@ -191,7 +191,7 @@ export default function ProblemsList() {
         </label>
 
         {(problemsQuery.isError || definitionQuery.isError) && (
-          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-5 text-red-300">
+          <div className="rounded-2xl border border-status-danger-border bg-status-danger-bg p-5 text-status-danger-fg">
             Couldn't load Problem Management: {(problemsQuery.error ?? definitionQuery.error)?.message}
           </div>
         )}
@@ -245,7 +245,7 @@ export default function ProblemsList() {
                       </td>
                       <td className="px-6 py-4 text-xs text-on-surface-variant">
                         {text(problem, 'workaround') ? (
-                          <span className="inline-flex items-center gap-1 text-emerald-400"><Wrench className="h-3 w-3" /> Available</span>
+                          <span className="inline-flex items-center gap-1 text-status-success-fg"><Wrench className="h-3 w-3 text-status-success-icon" /> Available</span>
                         ) : 'Not recorded'}
                       </td>
                       <td className="px-6 py-4 uppercase text-on-surface-variant">{text(problem, 'impact') || '—'}</td>
@@ -293,8 +293,8 @@ export default function ProblemsList() {
               ))}
             </div>
             {createMutation.isError && (
-              <div className="mx-6 mb-4 flex gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
+              <div className="mx-6 mb-4 flex gap-3 rounded-2xl border border-status-danger-border bg-status-danger-bg p-4 text-sm text-status-danger-fg">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-status-danger-icon" />
                 {createMutation.error instanceof ApiError ? createMutation.error.message : 'Could not create problem.'}
               </div>
             )}

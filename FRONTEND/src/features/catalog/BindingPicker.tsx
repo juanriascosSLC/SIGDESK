@@ -129,7 +129,7 @@ export function BindingPicker(props: BindingPickerProps) {
   return (
     <div data-testid={`binding-picker-${kind}`} className="rounded-2xl border border-border/40 bg-surface-container p-4">
       <label className="text-xs font-black uppercase tracking-wider text-on-surface">
-        {label} {required && <span className="text-red-400">*</span>}
+        {label} {required && <span className="text-status-danger-fg">*</span>}
       </label>
 
       {restrictedMessage ? (
@@ -225,7 +225,7 @@ export function BindingPicker(props: BindingPickerProps) {
               {props.multiple && (
                 <p
                   data-testid={`binding-picker-count-${kind}`}
-                  className={`mt-2 text-xs ${countMessage ? 'text-amber-300' : 'text-on-surface-variant'}`}
+                  className={`mt-2 text-xs ${countMessage ? 'text-status-warning-fg' : 'text-on-surface-variant'}`}
                 >
                   {countMessage ||
                     (maxItems !== undefined
@@ -241,7 +241,7 @@ export function BindingPicker(props: BindingPickerProps) {
                   </p>
                 )}
                 {!loading && isError && (
-                  <div className="rounded-xl border border-dashed border-red-500/30 p-4 text-center text-xs text-red-300">
+                  <div className="rounded-xl border border-dashed border-status-danger-border bg-status-danger-bg p-4 text-center text-xs text-status-danger-fg">
                     Could not load items.
                     <button
                       type="button"

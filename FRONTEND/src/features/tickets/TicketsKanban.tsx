@@ -15,11 +15,11 @@ import { assigneeText, USER_UNAVAILABLE_LABEL } from './identity-labels';
 type StatusStyle = { icon: LucideIcon; color: string; bgColor: string };
 
 const knownStatusConfig: Record<string, StatusStyle> = {
-  'Open': { icon: AlertCircle, color: 'text-red-400', bgColor: 'bg-red-400/10' },
-  'In Progress': { icon: CircleDashed, color: 'text-cyan-400', bgColor: 'bg-cyan-400/10' },
-  'Pending Review': { icon: Clock, color: 'text-amber-400', bgColor: 'bg-amber-400/10' },
-  'Resolved': { icon: CheckCircle2, color: 'text-emerald-400', bgColor: 'bg-emerald-400/10' },
-  'Closed': { icon: Archive, color: 'text-slate-400', bgColor: 'bg-slate-400/10' },
+  'Open': { icon: AlertCircle, color: 'text-red-600 dark:text-red-400', bgColor: 'bg-red-500/10' },
+  'In Progress': { icon: CircleDashed, color: 'text-cyan-700 dark:text-cyan-400', bgColor: 'bg-cyan-500/10' },
+  'Pending Review': { icon: Clock, color: 'text-amber-700 dark:text-amber-400', bgColor: 'bg-amber-500/10' },
+  'Resolved': { icon: CheckCircle2, color: 'text-emerald-700 dark:text-emerald-400', bgColor: 'bg-emerald-500/10' },
+  'Closed': { icon: Archive, color: 'text-slate-600 dark:text-slate-400', bgColor: 'bg-slate-500/10' },
 };
 
 // A state defined in the catalog Definition that we have no explicit design
@@ -112,7 +112,7 @@ function KanbanColumn({
                 )}
               </span>
               {ticket.priority === 'Critical' && (
-                <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 text-[10px] font-black uppercase tracking-wider border border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.15)]">
+                <span className="px-2 py-0.5 rounded-full bg-status-danger-bg text-status-danger-fg text-[10px] font-black uppercase tracking-wider border border-status-danger-border">
                   Critical
                 </span>
               )}

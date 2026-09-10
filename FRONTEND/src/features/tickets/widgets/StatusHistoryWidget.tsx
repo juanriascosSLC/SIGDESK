@@ -9,7 +9,7 @@ export function StatusHistoryWidget({ context }: { context: TicketPageContext })
   return (
     <div className="rounded-3xl border border-border/40 bg-surface-container-low p-6">
       <h3 className="mb-4 flex items-center gap-2 border-b border-border/40 pb-3 text-sm font-bold uppercase tracking-wider text-on-surface-variant">
-        <History className="h-4 w-4 text-cyan-400" />
+        <History className="h-4 w-4 text-primary" />
         Status history
       </h3>
       {entries.length === 0 ? (

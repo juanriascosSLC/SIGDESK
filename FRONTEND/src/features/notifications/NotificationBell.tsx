@@ -70,13 +70,13 @@ export function NotificationBell({ enabled = true }: { enabled?: boolean }) {
         aria-label={noLeidas > 0 ? `Notifications (${noLeidas} unread)` : 'Notifications'}
         aria-expanded={abierta}
         data-testid="notification-bell"
-        className="relative w-10 h-10 rounded-full bg-surface-container-low border border-border/50 flex items-center justify-center text-on-surface-variant hover:text-cyan-400 hover:border-cyan-500/30 transition-colors"
+        className="relative w-10 h-10 rounded-full bg-surface-container-low border border-border/50 flex items-center justify-center text-on-surface-variant hover:text-primary hover:border-primary/40 transition-colors"
       >
         <Bell className="w-4 h-4" />
         {noLeidas > 0 && (
           <span
             data-testid="notification-bell-count"
-            className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-red-500 text-[#ffffff] text-[10px] font-black flex items-center justify-center border-2 border-surface shadow-[0_0_10px_rgba(239,68,68,0.5)]"
+            className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-status-danger-fg text-white text-[10px] font-black flex items-center justify-center border-2 border-surface shadow-[0_0_10px_rgba(239,68,68,0.5)]"
           >
             {noLeidas > 99 ? '99+' : noLeidas}
           </span>
@@ -100,7 +100,7 @@ export function NotificationBell({ enabled = true }: { enabled?: boolean }) {
                 onClick={() => marcarTodas.mutate()}
                 disabled={noLeidas === 0 || marcarTodas.isPending}
                 data-testid="notification-mark-all"
-                className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 transition-colors disabled:opacity-40 disabled:hover:text-cyan-400"
+                className="text-[10px] font-bold text-primary hover:text-primary/80 transition-colors disabled:opacity-40 disabled:hover:text-primary"
               >
                 {marcarTodas.isPending ? 'Marking…' : 'Mark all as read'}
               </button>
@@ -110,7 +110,7 @@ export function NotificationBell({ enabled = true }: { enabled?: boolean }) {
                 onClick={() => setMostrandoPreferencias((value) => !value)}
                 aria-label={mostrandoPreferencias ? 'Back to notifications' : 'Configure notifications'}
                 data-testid="notification-preferences-button"
-                className="text-on-surface-variant hover:text-cyan-400 transition-colors"
+                className="text-on-surface-variant hover:text-primary transition-colors"
               >
                 <Settings2 className="h-4 w-4" />
               </button>
@@ -142,7 +142,7 @@ export function NotificationBell({ enabled = true }: { enabled?: boolean }) {
 
               {bandeja.isError && (
                 <div data-testid="notification-error" className="px-5 py-8 text-center">
-                  <AlertTriangle className="w-6 h-6 text-amber-400 mx-auto mb-3" />
+                  <AlertTriangle className="w-6 h-6 text-status-warning-icon mx-auto mb-3" />
                   <p className="text-sm text-on-surface">Could not load your notifications.</p>
                   <p className="mt-1 text-xs text-on-surface-variant">
                     {bandeja.error instanceof Error ? bandeja.error.message : 'Unknown error'}
@@ -150,7 +150,7 @@ export function NotificationBell({ enabled = true }: { enabled?: boolean }) {
                   <button
                     onClick={() => void bandeja.refetch()}
                     data-testid="notification-retry"
-                    className="mt-4 inline-flex items-center gap-2 rounded-xl border border-border/50 px-4 py-2 text-xs font-bold text-on-surface hover:border-cyan-500/40 hover:text-cyan-400 transition-colors"
+                    className="mt-4 inline-flex items-center gap-2 rounded-xl border border-border/50 px-4 py-2 text-xs font-bold text-on-surface hover:border-primary/40 hover:text-primary transition-colors"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     Retry
@@ -215,9 +215,9 @@ function NotificationPreferencesPanel({
   if (error) {
     return (
       <div className="px-5 py-8 text-center">
-        <AlertTriangle className="mx-auto mb-3 h-6 w-6 text-amber-400" />
+        <AlertTriangle className="mx-auto mb-3 h-6 w-6 text-status-warning-icon" />
         <p className="text-sm text-on-surface">Could not load your preferences.</p>
-        <button type="button" onClick={onRetry} className="mt-3 text-xs font-bold text-cyan-400">
+        <button type="button" onClick={onRetry} className="mt-3 text-xs font-bold text-primary">
           Retry
         </button>
       </div>
@@ -233,7 +233,7 @@ function NotificationPreferencesPanel({
       </div>
       <div className="flex items-center justify-between rounded-xl border border-border/40 bg-surface-container-low px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
-          <Mail className="h-4 w-4 shrink-0 text-cyan-400" />
+          <Mail className="h-4 w-4 shrink-0 text-primary" />
           <div>
             <p className="text-sm font-bold text-on-surface">Email</p>
             <p className="text-[11px] text-on-surface-variant">
@@ -251,7 +251,7 @@ function NotificationPreferencesPanel({
           onClick={onToggleEmail}
           data-testid="notification-email-toggle"
           className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-            emailEnabled ? 'bg-cyan-500' : 'bg-on-surface/20'
+            emailEnabled ? 'bg-primary' : 'bg-on-surface/20'
           }`}
         >
           <span
@@ -262,7 +262,7 @@ function NotificationPreferencesPanel({
         </button>
       </div>
       {saveError && (
-        <p className="text-xs text-red-400" role="alert">
+        <p className="text-xs text-status-danger-fg" role="alert">
           Could not save changes. Please try again.
         </p>
       )}

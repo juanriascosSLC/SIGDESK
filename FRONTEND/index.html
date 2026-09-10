@@ -5,6 +5,40 @@
     <link rel="icon" type="image/png" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SIG-DESK</title>
+    <script>
+      (function() {
+        try {
+          var raw = localStorage.getItem('theme-storage');
+          var theme = 'dark';
+          if (raw) {
+            try {
+              var parsed = JSON.parse(raw);
+              if (parsed && typeof parsed === 'object') {
+                var t = (parsed.state && parsed.state.theme) || parsed.theme;
+                if (t === 'light' || t === 'dark' || t === 'system') theme = t;
+              } else if (parsed === 'light' || parsed === 'dark' || parsed === 'system') {
+                theme = parsed;
+              }
+            } catch (e) {
+              var trimmed = String(raw).trim().toLowerCase();
+              if (trimmed === 'light' || trimmed === 'dark' || trimmed === 'system') theme = trimmed;
+            }
+          }
+          var isDark = theme === 'dark' || (theme === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var root = document.documentElement;
+          if (isDark) {
+            root.classList.add('dark');
+            root.style.colorScheme = 'dark';
+          } else {
+            root.classList.remove('dark');
+            root.style.colorScheme = 'light';
+          }
+        } catch (e) {
+          document.documentElement.classList.add('dark');
+          document.documentElement.style.colorScheme = 'dark';
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

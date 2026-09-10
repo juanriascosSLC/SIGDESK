@@ -7,7 +7,7 @@ export function RelationsWidget({ context }: { context: TicketPageContext }) {
   return (
     <div className="rounded-3xl border border-border/40 bg-surface-container-low p-6">
       <h3 className="mb-4 flex items-center gap-2 border-b border-border/40 pb-3 text-sm font-bold uppercase tracking-wider text-on-surface-variant">
-        <Link2 className="h-4 w-4 text-cyan-400" />
+        <Link2 className="h-4 w-4 text-primary" />
         ITSM Relations
       </h3>
       <div className="grid gap-3 md:grid-cols-2">
@@ -52,7 +52,7 @@ export function RelationsWidget({ context }: { context: TicketPageContext }) {
                   type="button"
                   onClick={() => relations.onDelete?.(relation.id)}
                   aria-label={`Remove relation with ${humanId}`}
-                  className="rounded-lg p-2 text-on-surface-variant hover:bg-red-500/10 hover:text-red-300"
+                  className="rounded-lg p-2 text-on-surface-variant hover:bg-status-danger-bg hover:text-status-danger-fg"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>

@@ -8,12 +8,12 @@ import { cn } from './cn';
 export type BadgeTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger' | 'primary';
 
 const toneClasses: Record<BadgeTone, string> = {
-  neutral: 'bg-surface-container-high text-on-surface-variant',
-  info: 'bg-cyan-400/10 text-cyan-600 dark:text-cyan-400',
-  success: 'bg-emerald-400/10 text-emerald-600 dark:text-emerald-400',
-  warning: 'bg-amber-400/10 text-amber-600 dark:text-amber-400',
-  danger: 'bg-red-400/10 text-red-600 dark:text-red-400',
-  primary: 'bg-primary/10 text-primary',
+  neutral: 'bg-status-neutral-bg text-status-neutral-fg border border-status-neutral-border',
+  info: 'bg-status-info-bg text-status-info-fg border border-status-info-border',
+  success: 'bg-status-success-bg text-status-success-fg border border-status-success-border',
+  warning: 'bg-status-warning-bg text-status-warning-fg border border-status-warning-border',
+  danger: 'bg-status-danger-bg text-status-danger-fg border border-status-danger-border',
+  primary: 'bg-primary/15 text-primary-foreground bg-primary/10 text-cyan-800 dark:text-cyan-300 border border-primary/25',
 };
 
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {

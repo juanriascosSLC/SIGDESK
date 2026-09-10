@@ -27,8 +27,8 @@ function StateShell({
 }) {
   const iconToneClass = {
     neutral: 'text-on-surface-variant',
-    danger: 'text-red-500',
-    warning: 'text-amber-500',
+    danger: 'text-red-700 dark:text-red-400',
+    warning: 'text-amber-800 dark:text-amber-400',
   }[tone];
   return (
     <div

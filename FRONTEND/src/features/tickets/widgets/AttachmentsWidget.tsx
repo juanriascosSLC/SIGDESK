@@ -11,7 +11,7 @@ export function AttachmentsWidget({ context }: { context: TicketPageContext }) {
     <div className="bg-surface-container-low border border-border/40 rounded-3xl p-6">
       <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2">
         <h3 className="text-sm font-bold text-on-surface-variant uppercase tracking-wider flex items-center gap-2">
-          <Paperclip className="w-4 h-4 text-cyan-400" />
+          <Paperclip className="w-4 h-4 text-primary" />
           Attachments
           <span className="px-1.5 py-0.5 rounded-md bg-surface-container-high text-[10px] font-black text-on-surface-variant">
             {items.length}
@@ -25,13 +25,13 @@ export function AttachmentsWidget({ context }: { context: TicketPageContext }) {
             return (
               <div
                 key={attachment.id}
-                className="flex items-center gap-3 p-3 rounded-2xl bg-surface-container border border-border/40 hover:border-cyan-500/30 transition-colors group"
+                className="flex items-center gap-3 p-3 rounded-2xl bg-surface-container border border-border/40 hover:border-primary/40 transition-colors group"
               >
                 <div
                   className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${
                     isImage
-                      ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
-                      : 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20'
+                      ? 'text-status-success-fg bg-status-success-bg border-status-success-border'
+                      : 'text-status-info-fg bg-status-info-bg border-status-info-border'
                   }`}
                 >
                   {isImage ? <ImageIcon className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
@@ -48,7 +48,7 @@ export function AttachmentsWidget({ context }: { context: TicketPageContext }) {
                   type="button"
                   aria-label={`Descargar ${attachment.fileName}`}
                   onClick={() => void downloadAttachment(attachment.id, attachment.fileName)}
-                  className="p-2 rounded-lg text-on-surface-variant opacity-0 group-hover:opacity-100 hover:text-cyan-400 hover:bg-on-surface/5 transition-all shrink-0"
+                  className="p-2 rounded-lg text-on-surface-variant opacity-0 group-hover:opacity-100 hover:text-primary hover:bg-on-surface/5 transition-all shrink-0"
                 >
                   <Download className="w-4 h-4" />
                 </button>
@@ -74,7 +74,7 @@ export function AttachmentsWidget({ context }: { context: TicketPageContext }) {
           if (canUpload) onUpload(event.dataTransfer.files);
         }}
         aria-disabled={!canUpload}
-        className={`flex items-center justify-center gap-3 p-4 rounded-2xl border-2 border-dashed border-border/50 text-on-surface-variant transition-colors ${canUpload ? 'cursor-pointer hover:border-cyan-500/30 hover:text-cyan-400' : 'cursor-not-allowed opacity-60'}`}
+        className={`flex items-center justify-center gap-3 p-4 rounded-2xl border-2 border-dashed border-border/50 text-on-surface-variant transition-colors ${canUpload ? 'cursor-pointer hover:border-primary/50 hover:text-primary' : 'cursor-not-allowed opacity-60'}`}
       >
         <UploadCloud className="w-4 h-4" />
         <span className="text-xs font-bold">
@@ -84,12 +84,12 @@ export function AttachmentsWidget({ context }: { context: TicketPageContext }) {
             'Uploading…'
           ) : (
             <>
-              Drop files here or <span className="text-cyan-400 underline underline-offset-2">browse</span>
+              Drop files here or <span className="text-primary underline underline-offset-2">browse</span>
             </>
           )}
         </span>
       </div>
-      {uploadError && <p className="mt-2 text-sm text-red-400">{uploadError}</p>}
+      {uploadError && <p className="mt-2 text-sm text-status-danger-fg">{uploadError}</p>}
     </div>
   );
 }

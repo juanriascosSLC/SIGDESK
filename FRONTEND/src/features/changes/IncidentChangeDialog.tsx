@@ -101,10 +101,10 @@ export function IncidentChangeDialog({ open, ticket, currentUserName, onClose, o
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md">
-      <form onSubmit={(event: FormEvent) => { event.preventDefault(); workflow.mutate(); }} className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl border border-amber-500/30 bg-surface-container-low shadow-2xl">
+      <form onSubmit={(event: FormEvent) => { event.preventDefault(); workflow.mutate(); }} className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl border border-status-warning-border bg-surface-container-low shadow-2xl">
         <div className="sticky top-0 z-10 flex items-start justify-between border-b border-border/40 bg-surface-container-low/95 p-6 backdrop-blur-md">
           <div>
-            <div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-300"><GitPullRequest className="h-4 w-4" /> INC → RFC</div>
+            <div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-status-warning-fg"><GitPullRequest className="h-4 w-4 text-status-warning-icon" /> INC → RFC</div>
             <h2 className="text-xl font-black text-on-surface">Create change from this incident</h2>
             <p className="mt-1 text-xs text-on-surface-variant">Change Management will manage execution; both records will keep their relation and versions.</p>
           </div>
@@ -117,7 +117,7 @@ export function IncidentChangeDialog({ open, ticket, currentUserName, onClose, o
             </div>
           ))}
         </div>
-        {workflow.isError && <div className="mx-6 mb-4 flex gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300"><AlertTriangle className="h-4 w-4" />{workflow.error.message}</div>}
+        {workflow.isError && <div className="mx-6 mb-4 flex gap-3 rounded-2xl border border-status-danger-border bg-status-danger-bg p-4 text-sm text-status-danger-fg"><AlertTriangle className="h-4 w-4 text-status-danger-icon" />{workflow.error.message}</div>}
         <div className="sticky bottom-0 flex justify-end gap-3 border-t border-border/40 bg-surface-container-low/95 p-6">
           <button type="button" onClick={onClose} className="secondary-button">Cancel</button>
           <button type="submit" disabled={workflow.isPending || !definition.data} className="primary-button disabled:opacity-50"><CheckCircle2 className="h-4 w-4" />{workflow.isPending ? 'Creating and linking…' : 'Create RFC and link'}</button>

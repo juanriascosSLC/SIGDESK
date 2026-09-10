@@ -55,7 +55,7 @@ export function PlacementCard({
             onRemove();
           }}
           aria-label={`Remove ${label}`}
-          className="shrink-0 text-on-surface-variant opacity-0 group-hover:opacity-100 hover:text-red-400"
+          className="shrink-0 text-on-surface-variant opacity-0 group-hover:opacity-100 hover:text-status-danger-fg"
         >
           <X className="h-3.5 w-3.5" />
         </button>

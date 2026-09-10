@@ -135,9 +135,9 @@ export function AutomationsBindingsEditor({
                     {ausente && (
                       <p
                         data-testid="automation-binding-missing"
-                        className="mt-2 flex items-center gap-2 text-xs font-bold text-red-200"
+                        className="mt-2 flex items-center gap-2 text-xs font-bold text-status-danger-fg"
                       >
-                        <AlertTriangle className="h-4 w-4 shrink-0" />
+                        <AlertTriangle className="h-4 w-4 shrink-0 text-status-danger-icon" />
                         No longer published or was archived. Publishing this definition will be rejected
                         until another version is selected.
                       </p>
@@ -188,10 +188,9 @@ export function AutomationsBindingsEditor({
             onChange={(event) => {
               if (event.target.value) vincular(event.target.value);
             }}
-            className="friendly-input mt-2 w-full bg-[#1d2026] text-[#e1e2eb]"
-            style={{ colorScheme: 'dark' }}
+            className="friendly-input mt-2 w-full"
           >
-            <option value="" className="bg-[#191c22] text-[#e1e2eb]">
+            <option value="">
               {recursos.isPending
                 ? 'Loading automations…'
                 : seleccionables.length === 0
@@ -202,7 +201,6 @@ export function AutomationsBindingsEditor({
               <option
                 key={recurso.reference.resourceInstanceId}
                 value={recurso.reference.resourceInstanceId}
-                className="bg-[#191c22] text-[#e1e2eb]"
               >
                 {recurso.displayName} · v{recurso.reference.resourceVersion}
               </option>

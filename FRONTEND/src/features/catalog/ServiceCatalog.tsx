@@ -40,12 +40,12 @@ export function ServiceCatalog() {
           This catalog is generated directly from the definitions published in the Catalog Builder.
         </p>
         <div className="relative max-w-2xl mx-auto mt-6">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-cyan-400" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-primary" />
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search a published definition…"
-            className="w-full bg-surface-container-low border border-cyan-500/30 text-on-surface text-lg rounded-2xl pl-12 pr-6 py-4 focus:outline-none focus:border-cyan-400"
+            className="w-full bg-surface-container-low border border-primary/30 text-on-surface text-lg rounded-2xl pl-12 pr-6 py-4 focus:outline-none focus:border-primary"
           />
         </div>
       </div>
@@ -54,7 +54,7 @@ export function ServiceCatalog() {
         <p className="text-center text-on-surface-variant">Loading metamodel…</p>
       )}
       {definitionsQuery.isError && (
-        <p className="text-center text-red-400">{definitionsQuery.error.message}</p>
+        <p className="text-center text-status-danger-fg">{definitionsQuery.error.message}</p>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {definitions.map((definition) => (
@@ -62,11 +62,11 @@ export function ServiceCatalog() {
             key={definition.id}
             data-testid={`catalog-option-${definition.entityKey}`}
             onClick={() => navigate(`../catalog/${definition.entityKey}`)}
-            className="group text-left bg-surface-container-low border border-border rounded-3xl p-6 hover:border-cyan-500/40 hover:bg-on-surface/[0.03] transition-all"
+            className="group text-left bg-surface-container-low border border-border rounded-3xl p-6 hover:border-primary/40 hover:bg-on-surface/[0.03] transition-all"
           >
             <div className="flex items-start justify-between mb-6">
-              <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center">
-                <Braces className="w-6 h-6 text-cyan-400" />
+              <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                <Braces className="w-6 h-6 text-primary" />
               </div>
               <span className="font-mono text-xs text-on-surface-variant">v{definition.version}</span>
             </div>

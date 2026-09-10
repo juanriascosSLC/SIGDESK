@@ -99,7 +99,7 @@ export function IconButton({
       disabled={disabled}
       className={`w-9 h-9 rounded-lg flex items-center justify-center disabled:opacity-25 ${
         danger
-          ? 'text-red-400 hover:bg-red-500/10'
+          ? 'text-status-danger-fg hover:bg-status-danger-bg'
           : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
       }`}
     >

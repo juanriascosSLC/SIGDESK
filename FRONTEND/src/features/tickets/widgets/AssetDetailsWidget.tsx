@@ -39,7 +39,7 @@ export function AssetDetailsWidget({ context }: { context: TicketPageContext }) 
                     </div>
                     <p className="mt-1 text-xs text-on-surface-variant">{type}</p>
                   </div>
-                  {status && <span className="inline-flex items-center gap-1 text-xs text-emerald-300"><CircleDot className="h-3 w-3" />{status}</span>}
+                  {status && <span className="inline-flex items-center gap-1 text-xs text-status-success-fg"><CircleDot className="h-3 w-3 text-status-success-icon" />{status}</span>}
                 </div>
                 <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
                   {text(snapshot, 'manufacturer') && <div><dt className="text-on-surface-variant">Manufacturer</dt><dd className="font-semibold text-on-surface">{text(snapshot, 'manufacturer')}</dd></div>}

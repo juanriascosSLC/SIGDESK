@@ -155,14 +155,12 @@ export function ResourcesEditor({
                           return current;
                         })
                       }
-                      className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
-                      style={{ colorScheme: 'dark' }}
+                      className="friendly-input"
                     >
                       {clasesGenericas.map((kind) => (
                         <option
                           key={`${kind.module}:${kind.resourceType}`}
                           value={`${kind.module}:${kind.resourceType}`}
-                          className="bg-[#191c22] text-[#e1e2eb]"
                         >
                           {kind.label}
                         </option>
@@ -190,17 +188,15 @@ export function ResourcesEditor({
                           return current;
                         })
                       }
-                      className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
-                      style={{ colorScheme: 'dark' }}
+                      className="friendly-input"
                     >
                       {compatibleResources.length === 0 && (
-                        <option value="" className="bg-[#191c22] text-[#e1e2eb]">No published resources</option>
+                        <option value="">No published resources</option>
                       )}
                       {compatibleResources.map((resource) => (
                         <option
                           key={`${resource.reference.resourceId}:${resource.reference.resourceVersion}`}
                           value={resource.reference.resourceId}
-                          className="bg-[#191c22] text-[#e1e2eb]"
                         >
                           {resource.displayName} · v{resource.reference.resourceVersion}
                         </option>

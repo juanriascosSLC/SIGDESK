@@ -553,13 +553,12 @@ export function PageDesigner({
               }}
               data-testid="page-designer-audience"
               className="rounded-lg border border-border/40 bg-surface-container-low px-2 py-1.5 text-xs font-bold text-on-surface"
-              style={{ colorScheme: 'dark' }}
             >
-              <option value="" className="bg-[#191c22] text-[#e1e2eb]">
+              <option value="">
                 Default
               </option>
               {availableVariantKeys.map((audience) => (
-                <option key={audience} value={audience} className="bg-[#191c22] text-[#e1e2eb]">
+                <option key={audience} value={audience}>
                   {AUDIENCE_LABELS[audience]}
                 </option>
               ))}
@@ -574,13 +573,12 @@ export function PageDesigner({
               data-testid="page-designer-add-audience"
               aria-label="Add audience variant"
               className="rounded-lg border border-dashed border-primary/40 bg-primary/5 px-2 py-1.5 text-xs font-bold text-primary"
-              style={{ colorScheme: 'dark' }}
             >
-              <option value="" className="bg-[#191c22] text-[#e1e2eb]">
+              <option value="">
                 + Variant…
               </option>
               {creatableAudiences.map((audience) => (
-                <option key={audience} value={audience} className="bg-[#191c22] text-[#e1e2eb]">
+                <option key={audience} value={audience}>
                   {AUDIENCE_LABELS[audience]}
                 </option>
               ))}
@@ -593,7 +591,7 @@ export function PageDesigner({
               data-testid="page-designer-remove-audience"
               title={`Delete ${AUDIENCE_LABELS[activeVariantKey]} variant`}
               aria-label={`Delete ${AUDIENCE_LABELS[activeVariantKey]} variant`}
-              className="rounded-lg border border-red-500/30 p-2 text-red-300 hover:bg-red-500/10"
+              className="rounded-lg border border-red-500/30 p-2 text-red-600 dark:text-red-400 hover:bg-red-500/10"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>

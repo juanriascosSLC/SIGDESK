@@ -14,10 +14,10 @@ interface ToastRecord extends ToastOptions {
 }
 
 const toneConfig: Record<ToastTone, { icon: typeof CheckCircle2; className: string }> = {
-  success: { icon: CheckCircle2, className: 'text-emerald-500' },
-  error: { icon: XCircle, className: 'text-red-500' },
-  warning: { icon: AlertTriangle, className: 'text-amber-500' },
-  info: { icon: Info, className: 'text-cyan-500' },
+  success: { icon: CheckCircle2, className: 'text-emerald-700 dark:text-emerald-400' },
+  error: { icon: XCircle, className: 'text-red-700 dark:text-red-400' },
+  warning: { icon: AlertTriangle, className: 'text-amber-800 dark:text-amber-400' },
+  info: { icon: Info, className: 'text-cyan-700 dark:text-cyan-400' },
 };
 
 const DEFAULT_DURATION_MS = 6000;
