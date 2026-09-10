@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Loader2, MapPin } from 'lucide-react';
@@ -15,9 +15,12 @@ import {
   EQUIPMENT_ITEM_TONES,
   SRV_STATUS_LABELS,
   SRV_STATUS_TONES,
+  nextActionFor,
 } from './presentation';
 import { SubcontractorPicker } from './SubcontractorPicker';
 import { POCCard } from './POCCard';
+import { StatusStepper } from './StatusStepper';
+import { QuoteCard } from './QuoteCard';
 
 export default function SrvDetail() {
   const { id } = useParams<{ id: string }>();
@@ -33,6 +36,18 @@ export default function SrvDetail() {
     setLastSeenId(id);
     setSubcontractorId(undefined);
   }
+
+  // "Resolve blockers" had no handler at all (bug: neither real nor mocked
+  // — a click did literally nothing). Until the real resolution flow lands
+  // (PR2 stepper work, see `services/pr2-invoice-workflow-embed-stepper`),
+  // the honest interim behavior is to bring the equipment checklist named
+  // in the CTA's own copy ("Confirm the missing equipment below") into
+  // view and focus it — a real action, not a fake success state.
+  const equipmentChecklistRef = useRef<HTMLDivElement>(null);
+  const handleResolveBlockers = () => {
+    equipmentChecklistRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    equipmentChecklistRef.current?.focus();
+  };
 
   const ticketQuery = useQuery({
     queryKey: ['services', 'srv-ticket', id],
@@ -63,6 +78,8 @@ export default function SrvDetail() {
   }
 
   const ticket = ticketQuery.data;
+  const nextAction = nextActionFor(ticket);
+  const hasMissingEquipment = ticket.equipment.some((item) => item.status === 'missing');
 
   return (
     <DepartmentScope
@@ -84,24 +101,48 @@ export default function SrvDetail() {
         actions={<StatusBadge label={SRV_STATUS_LABELS[ticket.status]} tone={SRV_STATUS_TONES[ticket.status]} />}
       />
 
-      {/* Next Action — the single primary button on the screen (Design
-          Review Pass 1). PR1 has no per-status action copy beyond this one
-          blocking check (Design Review Pass 7 leaves exact per-stage copy
-          an open decision for PR2's stepper work). */}
-      <Card className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-xs font-bold uppercase tracking-wider text-services-on-surface-variant">
-            Next Action
+      {/* Progress stepper first, Next Action second — the information
+          hierarchy fixed in /plan-design-review Pass 1. */}
+      <Card>
+        <StatusStepper
+          currentStage={ticket.currentStage}
+          flag={ticket.stageFlag}
+          returnedBy={ticket.returnedBy}
+        />
+
+        {/* Next Action — the single primary button on the screen (Design
+            Review Pass 1). Copy now varies per stage (spec §4) instead of
+            the generic PR1 pair, and the button is disabled with an explicit
+            "waiting on X" whenever the actor is someone else: a primary
+            button never lies (docs/design-rules.md R-5). */}
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-services-border pt-4">
+          <div>
+            <div className="text-xs font-bold uppercase tracking-wider text-services-on-surface-variant">
+              Next Action
+            </div>
+            <p className="mt-1 text-sm" data-testid="srv-next-action-description">
+              {nextAction.description}
+            </p>
           </div>
-          <p className="mt-1 text-sm">
-            {ticket.status === 'requires_action'
-              ? 'Confirm the missing equipment below before dispatch.'
-              : 'No blocking action right now.'}
-          </p>
+          {/* Merge note (Hector → PR2): Hector wired handleResolveBlockers
+              onto a SECOND, separate "Resolve blockers" button. PR2 folded
+              that CTA into this single per-stage Next Action button —
+              nextActionFor() emits the identical label and copy for the
+              missing-equipment case — so keeping both would have put two
+              buttons named "Resolve blockers" on the screen (breaking the
+              one-primary-button rule, and making the role query in
+              services-next-action-blockers.spec.ts ambiguous). Hector's
+              interim scroll-and-focus behavior is preserved here, gated to
+              the stage where the copy actually points "below", so the
+              button is never a dead CTA. */}
+          <Button
+            disabled={nextAction.disabled}
+            onClick={hasMissingEquipment ? handleResolveBlockers : undefined}
+            data-testid="srv-next-action-button"
+          >
+            {nextAction.label}
+          </Button>
         </div>
-        <Button disabled={!ticket.equipment.some((item) => item.status === 'missing')}>
-          Resolve blockers
-        </Button>
       </Card>
 
       {/* Blockers — never hidden behind a tab (Design Review Pass 1). */}
@@ -115,7 +156,7 @@ export default function SrvDetail() {
       <div className="grid gap-4 lg:grid-cols-2">
         <POCCard dealershipId={ticket.dealershipId} />
 
-        <Card data-testid="srv-equipment-checklist">
+        <Card data-testid="srv-equipment-checklist" ref={equipmentChecklistRef} tabIndex={-1}>
           <CardHeader>
             <CardTitle>Affected Equipment</CardTitle>
           </CardHeader>
@@ -164,6 +205,10 @@ export default function SrvDetail() {
           <Card><LoadingState label="Loading dealership context…" compact /></Card>
         )}
       </div>
+
+      {/* Both money documents for this visit (step 5). Below the checklist:
+          equipment blocks dispatch, money does not. */}
+      <QuoteCard srvId={ticket.id} coveredTickets={ticket.coveredTickets} />
     </DepartmentScope>
   );
 }

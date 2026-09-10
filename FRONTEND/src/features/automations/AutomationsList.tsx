@@ -5,6 +5,7 @@ import { AlertTriangle, Plus, RefreshCw, Search, ServerCrash, Workflow, Zap } fr
 import { useAuth } from '@/features/auth/useAuth';
 import { PERMISSIONS } from '@/features/auth/permissions';
 import { deactivateWorkflow, listWorkflows } from './api';
+import { useAutomationsBasePath } from './basePath';
 
 const actionLabels: Record<string, string> = {
   notificar_interesados: 'Notify creator and stakeholders',
@@ -16,6 +17,7 @@ const actionLabels: Record<string, string> = {
 
 export default function AutomationsList() {
   const navigate = useNavigate();
+  const basePath = useAutomationsBasePath();
   const queryClient = useQueryClient();
   const { can } = useAuth();
   const [search, setSearch] = useState('');
@@ -48,7 +50,7 @@ export default function AutomationsList() {
           </p>
         </div>
         {canManage && (
-          <button onClick={() => navigate('/app/automations/new')} className="primary-button">
+          <button onClick={() => navigate(`${basePath}/new`)} className="primary-button">
             <Plus className="w-5 h-5" /> Create workflow
           </button>
         )}
@@ -106,7 +108,7 @@ export default function AutomationsList() {
                 ))}
               </div>
               <div className="mt-5 flex gap-2 border-t border-border/30 pt-4">
-                <button type="button" onClick={() => navigate(`/app/automations/${flow.id}`)} className="secondary-button flex-1">View definition</button>
+                <button type="button" onClick={() => navigate(`${basePath}/${flow.id}`)} className="secondary-button flex-1">View definition</button>
                 {canManage && flow.estado === 'publicado' && (
                   <button type="button" disabled={deactivate.isPending} onClick={() => deactivate.mutate(flow.id)} className="secondary-button text-amber-300">Deactivate</button>
                 )}

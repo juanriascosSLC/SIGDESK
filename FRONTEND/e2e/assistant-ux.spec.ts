@@ -34,3 +34,21 @@ test('assistant distinguishes an unavailable knowledge search from an answer', a
   await page.getByRole('button', { name: 'Send question' }).click();
   await expect(page.getByRole('status')).toContainText('Knowledge search is temporarily unavailable');
 });
+
+test('assistant renders supported Markdown as a readable procedure', async ({ page }) => {
+  await mockAuthenticatedRequester(page, { forwardUnmatched: false });
+  await page.route('**/ia_advisor/chat', (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({
+      answer: '## Shipping procedure\n1. **Review the purchasing ticket** [FUENTE 1]\n2. **Record the tracking number** [FUENTE 1]',
+      rag_available: true, sources: [{ type: 'articulo', id: '3:1', score: 0.81 }],
+    }),
+  }));
+  await page.goto('/portal');
+  await page.getByRole('button', { name: 'Open SIG Assistant' }).click();
+  await page.getByRole('textbox').fill('How do I ship equipment?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+  await expect(page.getByRole('heading', { name: 'Shipping procedure' })).toBeVisible();
+  await expect(page.locator('strong', { hasText: 'Review the purchasing ticket' })).toBeVisible();
+  await expect(page.getByText('[FUENTE 1]').first()).toBeVisible();
+});

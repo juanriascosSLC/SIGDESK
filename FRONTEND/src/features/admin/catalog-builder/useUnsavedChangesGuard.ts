@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 // Warns before losing unsaved changes, both when closing the tab and when
 // navigating WITHIN the app.
 //
-// Catalog Builder used to only have `beforeunload`, which the browser fires
+// Entity Builder used to only have `beforeunload`, which the browser fires
 // on reload/close — never on an SPA navigation. Clicking any sidebar entry
 // unmounted the editor and took the draft with it, silently.
 //

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Calendar,
   ChevronDown,
@@ -20,11 +20,15 @@ import type {
   CatalogSpecification,
   FieldDefinition,
   FieldType,
+  LayoutDocument,
 } from '@/features/catalog/metamodel';
 import { fieldTypeUsesOptions } from '@/features/catalog/metamodel';
 import {
   appendCatalogFieldRow,
   mapPageDefinition,
+  pageHasCatalogField,
+  resolveFormPageLayout,
+  upgradeSpecificationToFormPages,
 } from '@/features/catalog/runtime/form-page-normalizer';
 import { upgradeSpecificationToPageLayout } from '@/features/catalog/runtime/page-layout-normalizer';
 import { removeFieldEverywhere, renameFieldEverywhere } from './field-references';
@@ -61,7 +65,10 @@ const QUICK_FIELD_TEMPLATES: Array<{
   },
   { label: 'Date', type: 'date', icon: Calendar, color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
   { label: 'Number', type: 'number', icon: Hash, color: 'text-violet-400 bg-violet-500/10 border-violet-500/20' },
-  { label: 'CMDB Device', type: 'text', icon: Server, color: 'text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20', bindsTo: 'assetId' },
+  // Renamed from "CMDB Device" on main: an inventory device is always
+  // scoped by a site, and `ensureSiteAssetBinding` below now materializes
+  // that prerequisite, so the label names the site-scoped thing it binds.
+  { label: 'Site Device', type: 'text', icon: Server, color: 'text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20', bindsTo: 'assetId' },
   { label: 'Yes / No', type: 'boolean', icon: ToggleLeft, color: 'text-teal-400 bg-teal-500/10 border-teal-500/20' },
   { label: 'Email', type: 'email', icon: Mail, color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
 ];
@@ -75,7 +82,9 @@ export function FieldsEditor({
   updateSpecification: (updater: (current: CatalogSpecification) => CatalogSpecification) => void;
   guided?: boolean;
 }) {
-  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  // La clave técnica puede cambiar mientras se edita la etiqueta. La
+  // tarjeta abierta depende de su índice, no de esa clave mutable.
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [query, setQuery] = useState('');
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
@@ -119,6 +128,96 @@ export function FieldsEditor({
 
   const canReorder = trimmedQuery === '' && categoryFilter === 'all';
 
+  // `bindsTo` has a runtime invariant: the value must be collectable while
+  // creating the record. A field may have been created before the page
+  // designer existed, or removed from it and later turned into a binding, so
+  // adding the binding must repair the placement instead of asking the admin
+  // to discover a backend-only validation error at publish time.
+  function ensureCreatePlacement(
+    specification: CatalogSpecification,
+    key: string,
+  ): CatalogSpecification {
+    const next = specification.createPage || specification.layouts?.create
+      ? specification
+      : upgradeSpecificationToFormPages(specification);
+
+    next.views = next.views ?? {};
+    next.views.create = [...new Set([...(next.views.create ?? []), key])];
+
+    const appendToLegacyDocument = (document: LayoutDocument) => {
+      const alreadyPlaced = document.sections.some((section) =>
+        section.placements.some(
+          (placement) => placement.kind === 'field' && placement.source === 'catalog' && placement.fieldKey === key,
+        ),
+      );
+      if (alreadyPlaced) return;
+      const placement = {
+        id: `placement-create-${key}`,
+        kind: 'field' as const,
+        source: 'catalog' as const,
+        fieldKey: key,
+        columnSpan: 1 as const,
+      };
+      const section = document.sections[0];
+      if (section) section.placements.push(placement);
+      else document.sections.push({ id: 'section-create-main', columns: 1, placements: [placement] });
+    };
+
+    if (next.layouts?.create) {
+      appendToLegacyDocument(next.layouts.create.default);
+      next.layouts.create.variants?.forEach((variant) => appendToLegacyDocument(variant.document));
+    }
+    if (next.createPage) {
+      next.createPage = mapPageDefinition(next.createPage, (page) => appendCatalogFieldRow(page, key));
+    }
+    return next;
+  }
+
+  // Inventory devices are always scoped by a site. Reuse the existing
+  // `assetId` ("Dispositivo del sitio") binding, but make its prerequisite
+  // explicit so the API never receives an impossible definition.
+  function ensureSiteAssetBinding(current: CatalogSpecification): CatalogSpecification {
+    if (current.fields.some((field) => field.bindsTo === 'siteAssetId')) return current;
+
+    const siteKey = uniqueFieldKey(
+      current.fields.map((field) => field.key),
+      'siteAfectado',
+    );
+    const firstDevice = current.fields.findIndex((field) => field.bindsTo === 'assetId');
+    const siteField: FieldDefinition = {
+      key: siteKey,
+      label: 'Affected Site',
+      type: 'text',
+      required: false,
+      bindsTo: 'siteAssetId',
+    };
+    // Keep the logical field order intuitive even when repairing an old draft.
+    current.fields.splice(firstDevice < 0 ? current.fields.length : firstDevice, 0, siteField);
+    placeNewField(current, siteKey);
+    return current;
+  }
+
+  // Also repair drafts authored before this guard existed. Without this, a
+  // field that is already `bindsTo` would require the admin to toggle its
+  // selector off and on again before the definition could be published.
+  useEffect(() => {
+    const needsSite =
+      specification.fields.some((field) => field.bindsTo === 'assetId') &&
+      !specification.fields.some((field) => field.bindsTo === 'siteAssetId');
+    const missing = specification.fields.filter(
+      (field) =>
+        field.bindsTo &&
+        !(['agent', 'requester', 'supervisor'] as const).some((audience) =>
+          pageHasCatalogField(resolveFormPageLayout(specification, 'create', audience), field.key),
+        ),
+    );
+    if (!needsSite && missing.length === 0) return;
+    updateSpecification((current) => {
+      const withSite = needsSite ? ensureSiteAssetBinding(current) : current;
+      return missing.reduce((next, field) => ensureCreatePlacement(next, field.key), withSite);
+    });
+  }, [specification, updateSpecification]);
+
   function updateField(index: number, changes: Partial<FieldDefinition>) {
     updateSpecification((current) => {
       const previous = current.fields[index];
@@ -129,10 +228,15 @@ export function FieldsEditor({
         const safeKey = uniqueFieldKey(others, changes.key);
         next.key = safeKey;
         renameFieldEverywhere(current, previous.key, safeKey);
-        setExpandedKey((currentKey) => (currentKey === previous.key ? safeKey : currentKey));
       }
-      if (changes.bindsTo) {
-        if (current.layouts?.edit) {
+      const withDependencies = next.bindsTo === 'assetId'
+        ? ensureSiteAssetBinding(current)
+        : current;
+      const withCreatePlacement = next.bindsTo
+        ? ensureCreatePlacement(withDependencies, next.key)
+        : current;
+      if (next.bindsTo) {
+        if (withCreatePlacement.layouts?.edit) {
           const markReadOnly = (document: { sections: { placements: { fieldKey?: string; readOnly?: boolean }[] }[] }) => {
             for (const section of document.sections) {
               for (const placement of section.placements) {
@@ -140,11 +244,11 @@ export function FieldsEditor({
               }
             }
           };
-          markReadOnly(current.layouts.edit.default);
-          current.layouts.edit.variants?.forEach((variant) => markReadOnly(variant.document));
+          markReadOnly(withCreatePlacement.layouts.edit.default);
+          withCreatePlacement.layouts.edit.variants?.forEach((variant) => markReadOnly(variant.document));
         }
-        if (current.editPage) {
-          current.editPage = mapPageDefinition(current.editPage, (page) => ({
+        if (withCreatePlacement.editPage) {
+          withCreatePlacement.editPage = mapPageDefinition(withCreatePlacement.editPage, (page) => ({
             ...page,
             main: {
               ...page.main,
@@ -155,7 +259,7 @@ export function FieldsEditor({
           }));
         }
       }
-      return current;
+      return withCreatePlacement;
     });
   }
 
@@ -213,6 +317,7 @@ export function FieldsEditor({
       labelPreset ? technicalKey(labelPreset) : `field${specification.fields.length + 1}`,
     );
     updateSpecification((current) => {
+      if (bindsToPreset === 'assetId') ensureSiteAssetBinding(current);
       const newField: FieldDefinition = {
         key,
         label,
@@ -225,7 +330,7 @@ export function FieldsEditor({
       placeNewField(current, key);
       return current;
     });
-    setExpandedKey(key);
+    setExpandedIndex(specification.fields.length);
     setQuery('');
     setCategoryFilter('all');
     setShowQuickMenu(false);
@@ -242,7 +347,7 @@ export function FieldsEditor({
       placeNewField(current, copy.key);
       return current;
     });
-    setExpandedKey(copy.key);
+    setExpandedIndex(index + 1);
     setQuery('');
   }
 
@@ -253,7 +358,11 @@ export function FieldsEditor({
       removeFieldEverywhere(current, removedKey);
       return current;
     });
-    setExpandedKey((current) => (current === removedKey ? null : current));
+    setExpandedIndex((current) => {
+      if (current === null) return null;
+      if (current === index) return null;
+      return current > index ? current - 1 : current;
+    });
   }
 
   function move(from: number, to: number) {
@@ -410,16 +519,16 @@ export function FieldsEditor({
             <button
               type="button"
               onClick={() => {
-                if (expandedKey) {
-                  setExpandedKey(null);
+                if (expandedIndex !== null) {
+                  setExpandedIndex(null);
                 } else if (specification.fields.length > 0) {
-                  setExpandedKey(specification.fields[0].key);
+                  setExpandedIndex(0);
                 }
               }}
               className="secondary-button !px-3 !py-2 text-xs"
-              title={expandedKey ? 'Collapse active card' : 'Expand first field'}
+              title={expandedIndex !== null ? 'Collapse active card' : 'Expand first field'}
             >
-              {expandedKey ? (
+              {expandedIndex !== null ? (
                 <>
                   <ChevronsDownUp className="w-3.5 h-3.5" /> Collapse
                 </>
@@ -570,16 +679,22 @@ export function FieldsEditor({
         ) : (
           visible.map(({ field, index }) => (
             <FieldCard
-              key={`${field.key}-${index}`}
+              // La clave técnica puede cambiar mientras se escribe la
+              // etiqueta. Usarla aquí desmonta la tarjeta en cada tecla,
+              // haciendo que el input pierda el foco y que el navegador
+              // recalcule el scroll del contenedor. El índice es estable
+              // durante la edición; las operaciones de reordenamiento siguen
+              // actualizando la lista desde el padre.
+              key={index}
               field={field}
               index={index}
               total={specification.fields.length}
               specification={specification}
-              expanded={expandedKey === field.key}
+              expanded={expandedIndex === index}
               draggable={canReorder}
               guided={guided}
               dragging={dragFrom === index}
-              onToggle={() => setExpandedKey((current) => (current === field.key ? null : field.key))}
+              onToggle={() => setExpandedIndex((current) => (current === index ? null : index))}
               onChange={(changes) => updateField(index, changes)}
               onChangeType={(type) => changeType(index, type)}
               onDuplicate={() => duplicate(index)}

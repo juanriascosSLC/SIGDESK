@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Clock3, RefreshCw, X } from 'lucide-react';
 import WorkflowCanvasEditor from './WorkflowCanvasEditor';
+import { useAutomationsBasePath } from './basePath';
 import {
   getWorkflow,
   listWorkflowExecutions,
@@ -176,12 +177,13 @@ function ExistingWorkflow({ id }: { id: string }) {
  *  predecesora y solo a ella. */
 function PublishedViewer({ definition }: { definition: WorkflowDefinition }) {
   const navigate = useNavigate();
+  const basePath = useAutomationsBasePath();
   const queryClient = useQueryClient();
   const crear = useMutation({
     mutationFn: () => createDraftFromVersion(definition.id),
     onSuccess: async (borrador) => {
       await queryClient.invalidateQueries({ queryKey: ['workflows'] });
-      navigate(`/app/automations/${borrador.id}`);
+      navigate(`${basePath}/${borrador.id}`);
     },
   });
 
@@ -232,12 +234,13 @@ function DraftEditor({ definition }: { definition: WorkflowDefinition }) {
 
 function NewWorkflow() {
   const navigate = useNavigate();
+  const basePath = useAutomationsBasePath();
   const queryClient = useQueryClient();
   const publish = useMutation({
     mutationFn: (payload: PublishWorkflowInput) => publishWorkflow(payload),
     onSuccess: async (created) => {
       await queryClient.invalidateQueries({ queryKey: ['workflows'] });
-      navigate(`/app/automations/${created.id}`);
+      navigate(`${basePath}/${created.id}`);
     },
   });
   // Guardar sin publicar crea el borrador y lleva a su propia URL. Desde ahí
@@ -247,7 +250,7 @@ function NewWorkflow() {
     mutationFn: (payload: SaveDraftInput) => saveWorkflowDraft(payload),
     onSuccess: async (borrador) => {
       await queryClient.invalidateQueries({ queryKey: ['workflows'] });
-      navigate(`/app/automations/${borrador.id}`);
+      navigate(`${basePath}/${borrador.id}`);
     },
   });
 

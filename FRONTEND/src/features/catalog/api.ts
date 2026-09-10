@@ -18,7 +18,7 @@ import type { FieldDefinition, PageLayout } from './metamodel';
 export type LayoutResolutionMode = 'latest-compatible' | 'previous-compatible' | 'legacy-synthesized';
 
 // `layouts.detail`/`layouts.detailPage` se redacta como JSON libre (el editor
-// avanzado del Catalog Builder acepta cualquier objeto), así que a nivel de
+// avanzado del Entity Builder acepta cualquier objeto), así que a nivel de
 // tipo sólo puede ser un PageLayout pelado o un envoltorio `{ default,
 // variants? }` — quien lo consuma debe estrechar el tipo antes de confiar en
 // él (ver TicketDetail.tsx).

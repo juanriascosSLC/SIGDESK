@@ -4,7 +4,7 @@ import type { FormPageContext } from './context';
 import { FORM_WIDGETS } from './FormWidgetRegistry';
 
 // Dispatches a `field`/`widget` placement to its real component — the exact
-// same lookup used by the real create/edit form, the Catalog Builder preview
+// same lookup used by the real create/edit form, the Entity Builder preview
 // and the designer canvas, so what is designed is what ships. `content`
 // placements are handled internally by PageLayoutRenderer.
 export function renderFormPlacementContent(

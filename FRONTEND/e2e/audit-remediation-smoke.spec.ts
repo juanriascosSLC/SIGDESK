@@ -216,7 +216,7 @@ test.describe('Audit Remediation Smoke Suite', () => {
     await expect(page.getByRole('heading', { name: 'Core Switch Firmware Upgrade' })).toBeVisible();
 
     // Verify relations section heading is loaded
-    await expect(page.getByRole('heading', { name: /Relaciones ITSM|ITSM Relations/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Related Cases/i })).toBeVisible();
 
     // 4. Check supported interactive relations (INC, PRB, RFC) resolve to correct destinations
     const incLink = page.locator('[data-testid="relation-link-rel-inc"]');

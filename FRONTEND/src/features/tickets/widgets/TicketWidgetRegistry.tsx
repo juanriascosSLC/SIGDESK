@@ -119,7 +119,7 @@ export const TICKET_WIDGETS: Record<TicketWidgetKey, TicketWidgetDefinition> = {
   },
   itsmRelations: {
     key: 'itsmRelations',
-    label: 'ITSM Relations',
+    label: 'Related Cases',
     icon: Link2,
     ownerModule: 'Tickets',
     allowedRegions: ['main', 'sidebar', 'footer'],

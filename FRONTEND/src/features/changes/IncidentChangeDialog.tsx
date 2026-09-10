@@ -81,11 +81,11 @@ export function IncidentChangeDialog({ open, ticket, currentUserName, onClose, o
         ticket.entityId,
         ticket.assetContext
           ? {
-              siteAssetId: ticket.assetContext.siteAssetId,
-              links: ticket.assetContext.links
-                .filter((link) => link.assetId !== ticket.assetContext?.siteAssetId)
-                .map((link) => ({ assetId: link.assetId, role: link.role })),
-            }
+            siteAssetId: ticket.assetContext.siteAssetId,
+            links: ticket.assetContext.links
+              .filter((link) => link.assetId !== ticket.assetContext?.siteAssetId)
+              .map((link) => ({ assetId: link.assetId, role: link.role })),
+          }
           : undefined,
         idempotencyKey.current,
       );
@@ -94,7 +94,9 @@ export function IncidentChangeDialog({ open, ticket, currentUserName, onClose, o
       void queryClient.invalidateQueries({ queryKey: ['changes'] });
       onLinked();
       onClose();
-      navigate(`/app/changes/${encodeURIComponent(change.humanId)}`);
+      // Bug found 2026-09-09: navigated with change.humanId; /app/changes/:id
+      // expects the internal id, same invariant as tickets/problems.
+      navigate(`/app/changes/${encodeURIComponent(change.id)}`);
     },
   });
 
@@ -104,7 +106,14 @@ export function IncidentChangeDialog({ open, ticket, currentUserName, onClose, o
       <form onSubmit={(event: FormEvent) => { event.preventDefault(); workflow.mutate(); }} className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl border border-status-warning-border bg-surface-container-low shadow-2xl">
         <div className="sticky top-0 z-10 flex items-start justify-between border-b border-border/40 bg-surface-container-low/95 p-6 backdrop-blur-md">
           <div>
-            <div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-status-warning-fg"><GitPullRequest className="h-4 w-4 text-status-warning-icon" /> INC → RFC</div>
+            {/* Was "INC -> RFC": the real relation (origin_inc, change_service)
+                has the RFC as origin and the INC as destination -- see
+                Docs/glossary.md's "Relaciones entre tipos de caso" (DIV-23).
+                Functionally harmless (the backend already creates the
+                relation in the right direction either way), but the label
+                taught users the wrong mental model of which side owns the
+                relation. Fixed 2026-09-09. */}
+            <div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-300"><GitPullRequest className="h-4 w-4" /> RFC → INC</div>
             <h2 className="text-xl font-black text-on-surface">Create change from this incident</h2>
             <p className="mt-1 text-xs text-on-surface-variant">Change Management will manage execution; both records will keep their relation and versions.</p>
           </div>

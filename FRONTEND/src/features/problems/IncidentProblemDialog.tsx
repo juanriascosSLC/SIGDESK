@@ -146,7 +146,10 @@ export function IncidentProblemDialog({
       void queryClient.invalidateQueries({ queryKey: ['problems'] });
       onLinked();
       onClose();
-      navigate(`/app/problems/${encodeURIComponent(problem.humanId)}`);
+      // Bug found 2026-09-09: navigated with problem.humanId; /app/problems/:id
+      // expects the internal id (line 138 already uses problem.id correctly
+      // for the relation call above -- this navigate() was the outlier).
+      navigate(`/app/problems/${encodeURIComponent(problem.id)}`);
     },
   });
 

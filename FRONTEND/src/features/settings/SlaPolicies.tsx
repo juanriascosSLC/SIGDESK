@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { formatDate } from '@/i18n/format';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CalendarClock,
@@ -108,7 +109,7 @@ export default function SlaPolicies() {
       await queryClient.invalidateQueries({ queryKey: ['catalog-definitions'] });
       await queryClient.invalidateQueries({ queryKey: ['catalog-resources'] });
       setSelected(structuredClone(policy));
-      setNotice(`${policy.name} v${policy.version} is active and available in Catalog Builder.`);
+      setNotice(`${policy.name} v${policy.version} is active and available in Entity Builder.`);
     },
   });
   const previewMutation = useMutation({
@@ -218,11 +219,10 @@ export default function SlaPolicies() {
                     <button
                       key={policy.id}
                       onClick={() => choosePolicy(policy)}
-                      className={`w-full rounded-xl border px-3 py-2 flex items-center justify-between text-xs font-medium transition-all ${
-                        selected.id === policy.id
+                      className={`w-full rounded-xl border px-3 py-2 flex items-center justify-between text-xs font-medium transition-all ${selected.id === policy.id
                           ? 'border-primary/60 bg-primary/15 text-primary font-bold shadow-[0_0_12px_rgba(34,211,238,0.12)]'
                           : 'border-transparent hover:bg-surface-container text-on-surface'
-                      }`}
+                        }`}
                     >
                       <span>Version {policy.version}</span>
                       <Status value={policy.status} />
@@ -354,11 +354,10 @@ export default function SlaPolicies() {
                   return (
                     <tr key={priority} className="hover:bg-surface-container/30 transition-colors">
                       <td className="py-3.5 px-3">
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                          isCritical ? 'bg-status-danger-bg text-status-danger-fg border-status-danger-border' :
-                          isHigh ? 'bg-status-warning-bg text-status-warning-fg border-status-warning-border' :
-                          'bg-surface-container-high text-on-surface-variant border-border/40'
-                        }`}>
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${isCritical ? 'bg-status-danger-bg text-status-danger-fg border-status-danger-border' :
+                            isHigh ? 'bg-status-warning-bg text-status-warning-fg border-status-warning-border' :
+                              'bg-surface-container-high text-on-surface-variant border-border/40'
+                          }`}>
                           {priority}
                         </span>
                       </td>
@@ -449,8 +448,8 @@ export default function SlaPolicies() {
           {previewMutation.data && (
             <div className="rounded-2xl border border-status-info-border bg-status-info-bg p-4 text-sm text-status-info-fg shadow-sm">
               <strong>Live calculation ({previewMutation.data.priority}):</strong> response before{' '}
-              <span className="underline decoration-primary font-bold">{formatDate(previewMutation.data.responseDueAt)}</span> and resolution before{' '}
-              <span className="underline decoration-primary font-bold">{formatDate(previewMutation.data.resolutionDueAt)}</span>.
+              <span className="underline decoration-cyan-400 font-bold">{formatDateTime(previewMutation.data.responseDueAt)}</span> and resolution before{' '}
+              <span className="underline decoration-cyan-400 font-bold">{formatDateTime(previewMutation.data.resolutionDueAt)}</span>.
             </div>
           )}
           {mutationError && (
@@ -511,9 +510,3 @@ function Status({ value }: { value?: string }) {
   return <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${classes}`}>{label}</span>;
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
-}

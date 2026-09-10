@@ -94,7 +94,7 @@ export function ResourcesEditor({
       <div className="mt-6 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4 flex gap-3 text-sm">
         <Check className="w-5 h-5 text-cyan-300 shrink-0" />
         <p className="text-on-surface-variant">
-          The Catalog Builder determines which resource this entity uses. The specialized module remains
+          The Entity Builder determines which resource this entity uses. The specialized module remains
           the owner of its configuration.
         </p>
       </div>

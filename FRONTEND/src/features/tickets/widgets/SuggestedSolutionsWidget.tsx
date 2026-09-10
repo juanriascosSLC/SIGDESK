@@ -12,7 +12,8 @@ export function SuggestedSolutionsWidget({ context }: { context: TicketPageConte
       const outbound = relation.sourceEntityId === ticket.entityId;
       const entityKey = outbound ? relation.targetEntityKey : relation.sourceEntityKey;
       const humanId = outbound ? relation.targetHumanId : relation.sourceHumanId;
-      return { relation, entityKey, humanId };
+      const entityId = outbound ? relation.targetEntityId : relation.sourceEntityId;
+      return { relation, entityKey, humanId, entityId };
     })
     .filter((candidate) => candidate.entityKey === 'PRB');
 
@@ -29,11 +30,14 @@ export function SuggestedSolutionsWidget({ context }: { context: TicketPageConte
         </p>
       ) : (
         <div className="space-y-2">
-          {problemRelations.map(({ relation, humanId }) => (
+          {problemRelations.map(({ relation, humanId, entityId }) => (
             <button
               key={relation.id}
-              onClick={() => onNavigate(`/app/problems/${encodeURIComponent(humanId)}`)}
-              className="w-full rounded-2xl border border-status-warning-border bg-status-warning-bg p-4 text-left hover:border-status-warning-icon transition-colors"
+              // Bug found 2026-09-09: navigated with humanId; /app/problems/:id
+              // expects the internal entity id (see RelationsWidget.tsx and
+              // api.ts's id-vs-humanId invariant) -- a humanId here is a 400.
+              onClick={() => onNavigate(`/app/problems/${encodeURIComponent(entityId)}`)}
+              className="w-full rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 text-left hover:border-amber-500/40"
             >
               <div className="text-[10px] font-black uppercase text-status-warning-fg">Related problem</div>
               <div className="mt-1 font-mono text-sm font-bold text-on-surface">{humanId}</div>

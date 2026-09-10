@@ -8,7 +8,7 @@ import { bindingIsMultiple } from '@/features/catalog/metamodel';
 import { conditionOperators, defaultConditionValue, parseConditionValue } from './config';
 import { Toggle } from './ui';
 
-// El ÚNICO editor de condiciones del Catalog Builder.
+// El ÚNICO editor de condiciones del Entity Builder.
 //
 // Antes había tres implementaciones divergentes — ésta (la de campos), la del
 // diseñador de formularios y la del diseñador de página — y dos de ellas

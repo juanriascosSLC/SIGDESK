@@ -31,7 +31,7 @@ export interface DesignerRegionLayout {
 // from a placement (toDesignerRegion, paletteItemToPlacement's caller) —
 // centralized here so callers that only have a placement id (e.g. the
 // properties panel, which identifies placements the same way the rest of
-// Catalog Builder does) can address a cell without re-deriving the format.
+// Entity Builder does) can address a cell without re-deriving the format.
 export function cellIdForPlacement(placementId: string): string {
   return `cell-${placementId}`;
 }

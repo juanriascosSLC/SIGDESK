@@ -86,6 +86,24 @@ export interface Company {
   parentId: string | null;
 }
 
+export interface TestAgentInput {
+  name: string;
+  email: string;
+  companyId: string;
+  roleId: string;
+  skill: string;
+  capacity: number;
+}
+
+interface UsuarioDTO {
+  id: string;
+  nombre: string;
+  email: string;
+  company_id: string;
+  role_id: string;
+  estado: string;
+}
+
 // --- Wire DTOs (organization_service/adapters/in/dto.go) -------------------
 
 interface PermisoDTO {
@@ -261,6 +279,31 @@ export const rbacService = {
       method: 'POST',
       body: JSON.stringify({ company_id: input.companyId, role_id: input.roleId }),
     }),
+
+  /**
+   * Crea una cuenta local para pruebas y, enseguida, su registro de Agente
+   * IT. La segunda llamada es necesaria: tener el rol "Agente" no convierte
+   * por sí solo a un Usuario en una opción válida para `bindsTo: agenteItId`.
+   */
+  createTestAgent: async (input: TestAgentInput): Promise<void> => {
+    const user = await apiRequest<UsuarioDTO>('/usuarios', {
+      method: 'POST',
+      body: JSON.stringify({
+        nombre: input.name,
+        email: input.email,
+        company_id: input.companyId,
+        role_id: input.roleId,
+      }),
+    });
+    await apiRequest('/agentes_it', {
+      method: 'POST',
+      body: JSON.stringify({
+        usuario_id: user.id,
+        habilidad: input.skill,
+        capacidad_carga: input.capacity,
+      }),
+    });
+  },
 
   updateUser: (
     userId: string,

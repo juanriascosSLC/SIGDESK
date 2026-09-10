@@ -7,8 +7,8 @@ export function RelationsWidget({ context }: { context: TicketPageContext }) {
   return (
     <div className="rounded-3xl border border-border/40 bg-surface-container-low p-6">
       <h3 className="mb-4 flex items-center gap-2 border-b border-border/40 pb-3 text-sm font-bold uppercase tracking-wider text-on-surface-variant">
-        <Link2 className="h-4 w-4 text-primary" />
-        ITSM Relations
+        <Link2 className="h-4 w-4 text-cyan-400" />
+        Related Cases
       </h3>
       <div className="grid gap-3 md:grid-cols-2">
         {relations.items.map((relation) => {
@@ -25,16 +25,28 @@ export function RelationsWidget({ context }: { context: TicketPageContext }) {
           // itself, showing the wrong side of the relation. `ticket.category`
           // is always this ticket's own entityKey (`category <- entityKey`,
           // api.ts), so comparing it alongside the id disambiguates for real.
+          // NB: that invariant was NOT actually held by ConfiguredRecordDetail
+          // (it mapped `category` from record.data), which silently flipped
+          // every relation on the PRB/RFC detail pages. It now maps
+          // record.entityKey. Any new Ticket producer has to honour it too —
+          // configured-record-detail.spec.ts is the regression guard.
           const outbound = relation.sourceEntityId === ticket.entityId && relation.sourceEntityKey === ticket.category;
           const entityKey = outbound ? relation.targetEntityKey : relation.sourceEntityKey;
           const humanId = outbound ? relation.targetHumanId : relation.sourceHumanId;
+          // Bug found 2026-09-09: navigation used humanId in the URL, but
+          // /app/tickets/:id (and the equivalent problems/changes routes)
+          // feed the path straight into getTicket/getEntity, which parse it
+          // as the internal int64 id -- a humanId there is a 400 per
+          // api.ts's own documented id-vs-humanId invariant. Navigate with
+          // the real entity id; keep humanId only as the visible label.
+          const entityId = outbound ? relation.targetEntityId : relation.sourceEntityId;
           const label = outbound ? relation.relationLabel : relation.inverseLabel;
           const destination =
             entityKey === 'PRB'
-              ? `/app/problems/${encodeURIComponent(humanId)}`
+              ? `/app/problems/${encodeURIComponent(entityId)}`
               : entityKey === 'RFC'
-                ? `/app/changes/${encodeURIComponent(humanId)}`
-                : `/app/tickets/${encodeURIComponent(humanId)}`;
+                ? `/app/changes/${encodeURIComponent(entityId)}`
+                : `/app/tickets/${encodeURIComponent(entityId)}`;
           return (
             <div
               key={relation.id}

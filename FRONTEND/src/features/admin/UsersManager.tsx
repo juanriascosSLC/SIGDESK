@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Search,
@@ -20,6 +20,7 @@ import {
   type Permission,
   type PermissionCatalog,
   type Role,
+  type TestAgentInput,
 } from './rbac.service';
 import { useAuth, initialsOf } from '../auth/useAuth';
 import { EmptyState, ErrorState, PermissionDeniedState } from '@/components/ui/states';
@@ -508,7 +509,7 @@ function OrganizationTab() {
         <div>
           <h2 className="font-bold text-on-surface">Organizational structure</h2>
           <p className="text-xs text-on-surface-variant mt-1">
-            Company → areas/departments → teams. You can expand this structure as the company needs it.
+            Organizational unit → areas/departments → teams. You can expand this structure as the organization needs it.
           </p>
         </div>
         {canCreate && (
@@ -554,7 +555,7 @@ function OrganizationTab() {
               className="bg-surface-container border border-border/50 rounded-lg px-3 py-2 text-sm text-on-surface outline-none focus:border-primary"
             >
               <option value="empresa" disabled={rootExists}>
-                Company{rootExists ? ' (already exists)' : ''}
+                Organizational unit{rootExists ? ' (already exists)' : ''}
               </option>
               <option value="departamento">Department</option>
               <option value="equipo">Team</option>
@@ -597,7 +598,7 @@ function OrganizationTab() {
       <div className="bg-surface-container-low border border-border/40 rounded-3xl overflow-hidden">
         {ordered.length === 0 ? (
           <p className="p-8 text-sm text-center text-on-surface-variant">
-            Create the root company to start the organizational structure.
+            Create the root organizational unit to start the organizational structure.
           </p>
         ) : (
           <div className="divide-y divide-border/20">
@@ -649,6 +650,7 @@ function UsersTab() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
+  const [creatingTestAgent, setCreatingTestAgent] = useState(false);
   const canReadRoles = can('roles:read');
   const canReadCompanies = can('companies:read');
   const canAssignRoles = can('usuarios:update') && canReadRoles;
@@ -697,9 +699,18 @@ function UsersTab() {
       setEditing(null);
     },
   });
+  const createTestAgent = useMutation({
+    mutationFn: rbacService.createTestAgent,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['rbac'] });
+      setCreatingTestAgent(false);
+    },
+  });
 
   const roles = rolesQuery.data ?? [];
   const companies = companiesQuery.data ?? [];
+  const suggestedAgentRole = roles.find((role) => role.name.trim().toLocaleLowerCase().includes('agente'));
+  const organizationalUnits = companies.filter((company) => company.type !== 'empresa');
   const users = useMemo(() => {
     const term = search.toLowerCase().trim();
     const all = usersQuery.data ?? [];
@@ -729,7 +740,8 @@ function UsersTab() {
 
   return (
     <div className="space-y-4">
-      <div className="relative max-w-md">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="relative w-full max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
         <input
           value={search}
@@ -738,6 +750,30 @@ function UsersTab() {
           className="w-full bg-surface-container border border-border/50 text-sm rounded-lg pl-10 pr-4 py-2 text-on-surface outline-none focus:border-primary"
         />
       </div>
+        {canProvisionUsers && (
+          <button
+            type="button"
+            data-testid="create-test-agent"
+            onClick={() => setCreatingTestAgent((current) => !current)}
+            disabled={roles.length === 0 || organizationalUnits.length === 0}
+            className="inline-flex items-center gap-2 rounded-xl bg-cyan-500 px-4 py-2 text-sm font-black text-slate-950 disabled:opacity-50"
+          >
+            <Plus className="h-4 w-4" /> Crear agente de prueba
+          </button>
+        )}
+      </div>
+
+      {creatingTestAgent && (
+        <TestAgentForm
+          key={`${suggestedAgentRole?.id ?? ''}-${organizationalUnits[0]?.id ?? ''}`}
+          roles={roles}
+          companies={organizationalUnits}
+          suggestedRoleId={suggestedAgentRole?.id ?? ''}
+          isPending={createTestAgent.isPending}
+          onCancel={() => setCreatingTestAgent(false)}
+          onSubmit={(input) => createTestAgent.mutate(input)}
+        />
+      )}
 
       {setUserRole.isError && (
         <p className="text-xs text-status-danger-fg">
@@ -754,6 +790,13 @@ function UsersTab() {
           {provisionUser.error instanceof Error
             ? provisionUser.error.message
             : 'Could not provision the user.'}
+        </p>
+      )}
+      {createTestAgent.isError && (
+        <p className="text-xs text-red-300" role="alert">
+          {createTestAgent.error instanceof Error
+            ? createTestAgent.error.message
+            : 'No se pudo crear el agente de prueba.'}
         </p>
       )}
 
@@ -813,6 +856,140 @@ function UsersTab() {
   );
 }
 
+function TestAgentForm({
+  roles,
+  companies,
+  suggestedRoleId,
+  isPending,
+  onCancel,
+  onSubmit,
+}: {
+  roles: Role[];
+  companies: Company[];
+  suggestedRoleId: string;
+  isPending: boolean;
+  onCancel: () => void;
+  onSubmit: (input: TestAgentInput) => void;
+}) {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [companyId, setCompanyId] = useState(companies[0]?.id ?? '');
+  const [roleId, setRoleId] = useState(suggestedRoleId || roles[0]?.id || '');
+  const [skill, setSkill] = useState('Soporte general');
+  const [capacity, setCapacity] = useState('10');
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const parsedCapacity = Number(capacity);
+    if (!Number.isInteger(parsedCapacity) || parsedCapacity < 0) return;
+    onSubmit({
+      name: name.trim(),
+      email: email.trim(),
+      companyId,
+      roleId,
+      skill: skill.trim(),
+      capacity: parsedCapacity,
+    });
+  }
+
+  return (
+    <form
+      onSubmit={submit}
+      data-testid="create-test-agent-form"
+      className="grid gap-4 rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-5 md:grid-cols-2 xl:grid-cols-3"
+    >
+      <div className="md:col-span-2 xl:col-span-3">
+        <h2 className="text-sm font-black text-on-surface">Nuevo agente de prueba</h2>
+        <p className="mt-1 text-xs text-on-surface-variant">
+          Crea el Usuario, le asigna una unidad organizacional y registra su perfil de Agente IT.
+        </p>
+      </div>
+      <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
+        Nombre completo
+        <input
+          required
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Ej. Ana Soporte"
+          className="rounded-lg border border-border/50 bg-surface-container px-3 py-2 text-sm text-on-surface outline-none focus:border-cyan-500/50"
+        />
+      </label>
+      <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
+        Correo de prueba
+        <input
+          required
+          type="email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          placeholder="ana.soporte@example.test"
+          className="rounded-lg border border-border/50 bg-surface-container px-3 py-2 text-sm text-on-surface outline-none focus:border-cyan-500/50"
+        />
+      </label>
+      <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
+        Area o equipo IT
+        <select
+          required
+          value={companyId}
+          onChange={(event) => setCompanyId(event.target.value)}
+          className="rounded-lg border border-border/50 bg-surface-container px-3 py-2 text-sm text-on-surface outline-none focus:border-cyan-500/50"
+        >
+          {companies.map((company) => (
+            <option key={company.id} value={company.id}>
+              {company.name} ({company.type})
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
+        Rol
+        <select
+          required
+          value={roleId}
+          onChange={(event) => setRoleId(event.target.value)}
+          className="rounded-lg border border-border/50 bg-surface-container px-3 py-2 text-sm text-on-surface outline-none focus:border-cyan-500/50"
+        >
+          {roles.map((role) => (
+            <option key={role.id} value={role.id}>{role.name}</option>
+          ))}
+        </select>
+      </label>
+      <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
+        Habilidad
+        <input
+          required
+          value={skill}
+          onChange={(event) => setSkill(event.target.value)}
+          className="rounded-lg border border-border/50 bg-surface-container px-3 py-2 text-sm text-on-surface outline-none focus:border-cyan-500/50"
+        />
+      </label>
+      <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
+        Capacidad simultanea
+        <input
+          required
+          min="0"
+          step="1"
+          type="number"
+          value={capacity}
+          onChange={(event) => setCapacity(event.target.value)}
+          className="rounded-lg border border-border/50 bg-surface-container px-3 py-2 text-sm text-on-surface outline-none focus:border-cyan-500/50"
+        />
+      </label>
+      <div className="flex items-end justify-end gap-3 md:col-span-2 xl:col-span-3">
+        <button type="button" onClick={onCancel} className="text-xs font-bold text-on-surface-variant hover:text-on-surface">
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          disabled={isPending || !name.trim() || !email.trim() || !companyId || !roleId || !skill.trim()}
+          className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-black text-slate-950 disabled:opacity-50"
+        >
+          {isPending ? 'Creando...' : 'Crear agente de prueba'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function UserRow({
   user,
   roles,
@@ -861,7 +1038,7 @@ function UserRow({
           {isEditing ? (
             <div className="min-w-56">
               <select
-                aria-label="Company, department or team"
+                aria-label="Organizational unit, department or team"
                 value={draftCompanyId}
                 onChange={(event) => setDraftCompanyId(event.target.value)}
                 className="bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-1.5 text-on-surface outline-none focus:border-primary"

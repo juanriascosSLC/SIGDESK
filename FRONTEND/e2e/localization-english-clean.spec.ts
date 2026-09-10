@@ -885,7 +885,7 @@ test.describe('Localization & UTF-8 Encoding Verification', () => {
     await expect(page.getByText('Open → In Progress')).toBeVisible();
 
     // Verify Relations widget
-    await expect(page.getByRole('heading', { name: 'ITSM Relations' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Related Cases' })).toBeVisible();
     await expect(page.getByText('contract v1')).toBeVisible();
 
     await assertPageIsCleanEnglish(page);
@@ -976,7 +976,7 @@ test.describe('Localization & UTF-8 Encoding Verification', () => {
     await expect(page.getByRole('heading', { name: 'Lifecycle' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Change definition and plan' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Traceability' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'ITSM Relations' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Related Cases' })).toBeVisible();
 
     // Transition buttons & ConfirmDialog
     await expect(page.getByRole('button', { name: 'Reject RFC' })).toBeVisible();
@@ -1034,7 +1034,7 @@ test.describe('Localization & UTF-8 Encoding Verification', () => {
     await expect(page.getByRole('button', { name: /Form Fields/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Visual Design/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /States & Transitions/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /ITSM Relations/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Related Cases/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Validate & Publish/i })).toBeVisible();
 
     // Switch to Visual Design and verify Detail palette in exact English
@@ -1045,7 +1045,7 @@ test.describe('Localization & UTF-8 Encoding Verification', () => {
     await expect(palette.getByText('Attachments', { exact: true }).first()).toBeVisible();
     await expect(palette.getByText('Activity & Comments', { exact: true })).toBeVisible();
     await expect(palette.getByText('Merged Tickets', { exact: true })).toBeVisible();
-    await expect(palette.getByText('ITSM Relations', { exact: true })).toBeVisible();
+    await expect(palette.getByText('Related Cases', { exact: true })).toBeVisible();
     await expect(palette.getByText('Asset Details', { exact: true })).toBeVisible();
     await expect(palette.getByText('Suggested Solutions', { exact: true })).toBeVisible();
     await expect(palette.getByText('Requester Details', { exact: true })).toBeVisible();
