@@ -228,8 +228,12 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
               to="/app/catalog"
               className="bg-primary text-primary-foreground px-3 sm:px-4 py-2 rounded-xl text-sm font-bold shadow-[0_0_15px_rgba(34,211,238,0.3)] hover:shadow-[0_0_25px_rgba(34,211,238,0.5)] transition-all flex items-center gap-2 min-h-[44px]"
             >
+              {/* Points at /app/catalog, which opens ANY published case type
+                  (INC, PRB, RFC…). "Ticket" in the glossary means INC
+                  specifically, so the old label promised less — and
+                  something other — than the destination delivers. */}
               <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">New Ticket</span>
+              <span className="hidden sm:inline">New Case</span>
             </Link>
 
             {/* La campana real: contador de no leídas, bandeja del backend y

@@ -2,6 +2,15 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
 
+## [0.2.1-beta] - 2026-09-10
+
+### Cambiado
+
+- Sidebar del workspace reagrupado por función real, no por framework: "Cases" reúne los pools de creación de caso (Incidents, Problems, Changes, New Case) que antes estaban repartidos entre "Service Desk (ITSM)" y "Change & Config (ITIL)"; "Reference" separa lo que se consulta (Knowledge Base, Assets/CMDB) de lo que se crea.
+- "Service Catalog" renombrado a "New Case" (workspace) y "Home" (portal): la pantalla es el selector de definiciones publicadas para crear un caso, no un catálogo de servicios — "Catálogo" fue deprecado de cara al usuario el 2026-09-08 junto con el rename Catalog Builder → Entity Builder.
+- "Tickets & Issues" → "Incidents", "Change Mgmt" → "Changes", "Problem Mgmt" → "Problems", "Mis tareas" → "My Tasks": los tres pools de caso ahora se leen en paralelo, sin abreviaturas ni idiomas mezclados.
+- Íconos duplicados de nav eliminados; "Assistant Feedback" movido al final de Administration con ícono propio.
+
 ## [0.2.0-beta] - 2026-09-05
 
 ### Agregado

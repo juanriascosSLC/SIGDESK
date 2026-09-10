@@ -1,4 +1,4 @@
-import { FolderKanban, BookOpen, Ticket as TicketIcon, type LucideIcon } from 'lucide-react';
+import { FilePlus2, BookOpen, Ticket as TicketIcon, type LucideIcon } from 'lucide-react';
 
 /**
  * The single source of truth for the end-user portal's navigation —
@@ -23,7 +23,12 @@ export interface PortalNavItem {
 }
 
 export const PORTAL_NAV_ITEMS: PortalNavItem[] = [
-  { key: 'catalog', label: 'Service Catalog', route: '/portal/catalog', icon: FolderKanban },
+  // Same screen the agent workspace reaches as "New Case" (features/catalog/
+  // ServiceCatalog.tsx): a selector of published definitions to CREATE a
+  // case, not a catalogue of services. The glossary deprecated user-facing
+  // "Catalog" on 2026-09-08 (rename "Catalog Builder" -> "Entity Builder"),
+  // so both surfaces use the same non-deprecated label for the same thing.
+  { key: 'catalog', label: 'New Case', route: '/portal/catalog', icon: FilePlus2 },
   { key: 'knowledge', label: 'Knowledge Base', route: '/portal/knowledge', icon: BookOpen },
   { key: 'tickets', label: 'My Tickets', route: '/portal/tickets', icon: TicketIcon },
 ];

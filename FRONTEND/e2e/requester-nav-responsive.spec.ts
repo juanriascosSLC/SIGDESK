@@ -31,7 +31,7 @@ const BREAKPOINT_GAP_VIEWPORTS = [
 ];
 
 /**
- * Every test in this file that actually CLICKS through to Service Catalog
+ * Every test in this file that actually CLICKS through to New Case
  * or My Tickets needs `forwardUnmatched: false` plus these two stubs.
  * Without them, `mockAuthenticatedRequester`'s default forwards
  * `GET /catalog/definitions` and `GET /entities/INC?createdBy=me` to the
@@ -68,7 +68,7 @@ test.describe('Mobile (390x844) — compact header + bottom nav', () => {
     await expect(topNav).toBeHidden();
 
     const bottomNav = page.locator('nav[aria-label="Primary"]').last();
-    await expect(bottomNav.getByRole('link', { name: 'Service Catalog' })).toBeVisible();
+    await expect(bottomNav.getByRole('link', { name: 'New Case' })).toBeVisible();
     await expect(bottomNav.getByRole('link', { name: 'Knowledge Base' })).toBeVisible();
     await expect(bottomNav.getByRole('link', { name: 'My Tickets' })).toBeVisible();
 
@@ -91,7 +91,7 @@ test.describe('Mobile (390x844) — compact header + bottom nav', () => {
 
   test('all three destinations are reachable from the bottom nav', async ({ page }) => {
     const bottomNav = page.locator('nav[aria-label="Primary"]').last();
-    await bottomNav.getByRole('link', { name: 'Service Catalog' }).click();
+    await bottomNav.getByRole('link', { name: 'New Case' }).click();
     await expect(page).toHaveURL(/\/portal\/catalog$/);
 
     await bottomNav.getByRole('link', { name: 'Knowledge Base' }).click();
@@ -154,7 +154,7 @@ test.describe('The 640-767px breakpoint gap', () => {
       // All three destinations reachable through whichever surface is
       // active, exercising real navigation, not just visibility.
       const activeNav = isTopNavWidth ? topNav : bottomNav;
-      await activeNav.getByRole('link', { name: 'Service Catalog' }).click();
+      await activeNav.getByRole('link', { name: 'New Case' }).click();
       await expect(page).toHaveURL(/\/portal\/catalog$/);
       await activeNav.getByRole('link', { name: 'Knowledge Base' }).click();
       await expect(page).toHaveURL(/\/portal\/knowledge$/);
@@ -198,7 +198,7 @@ test.describe('Desktop/tablet (1440x900 and 768x1024) — top nav preserved', ()
       await page.goto('/portal');
 
       const topNav = page.locator('header').getByRole('navigation', { name: 'Primary' });
-      await expect(topNav.getByRole('link', { name: 'Service Catalog' })).toBeVisible();
+      await expect(topNav.getByRole('link', { name: 'New Case' })).toBeVisible();
       await expect(topNav.getByRole('link', { name: 'Knowledge Base' })).toBeVisible();
       await expect(topNav.getByRole('link', { name: 'My Tickets' })).toBeVisible();
       await expect(page.locator('nav[aria-label="Primary"]').last()).toBeHidden();
@@ -210,7 +210,7 @@ test.describe('Desktop/tablet (1440x900 and 768x1024) — top nav preserved', ()
 });
 
 test.describe('Active-state correctness on child routes', () => {
-  test('/portal/catalog/:id marks Service Catalog active', async ({ page }) => {
+  test('/portal/catalog/:id marks New Case active', async ({ page }) => {
     await mockAuthenticatedRequester(page, { forwardUnmatched: false });
     await page.route('**/catalog/definitions/INC', (route) =>
       route.fulfill({
@@ -236,7 +236,7 @@ test.describe('Active-state correctness on child routes', () => {
     await page.goto('/portal/catalog/INC');
 
     const topNav = page.locator('header').getByRole('navigation', { name: 'Primary' });
-    await expect(topNav.getByRole('link', { name: 'Service Catalog' })).toHaveAttribute('aria-current', 'page');
+    await expect(topNav.getByRole('link', { name: 'New Case' })).toHaveAttribute('aria-current', 'page');
     await expect(topNav.getByRole('link', { name: 'My Tickets' })).not.toHaveAttribute('aria-current', 'page');
   });
 
@@ -253,6 +253,6 @@ test.describe('Active-state correctness on child routes', () => {
 
     const topNav = page.locator('header').getByRole('navigation', { name: 'Primary' });
     await expect(topNav.getByRole('link', { name: 'My Tickets' })).toHaveAttribute('aria-current', 'page');
-    await expect(topNav.getByRole('link', { name: 'Service Catalog' })).not.toHaveAttribute('aria-current', 'page');
+    await expect(topNav.getByRole('link', { name: 'New Case' })).not.toHaveAttribute('aria-current', 'page');
   });
 });

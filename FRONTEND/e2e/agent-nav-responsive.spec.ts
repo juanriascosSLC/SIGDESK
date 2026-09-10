@@ -37,10 +37,14 @@ test.describe('Permission matrix — same shared config, different visible items
 
     const nav = page.locator('#app-nav');
     await expect(nav.getByRole('link', { name: 'Dashboard' })).toBeVisible();
-    await expect(nav.getByRole('link', { name: 'Tickets & Issues' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Incidents' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'My Tasks' })).toHaveCount(0);
     await expect(nav.getByText('Administration')).toHaveCount(0);
-    await expect(nav.getByText('Tipos de Caso')).toHaveCount(0);
+    // Incidents lives under "Cases", so that heading DOES render for this
+    // persona. "Reference" (Knowledge Base + Assets / CMDB) does not:
+    // `tickets:read:global` grants neither.
+    await expect(nav.getByText('Cases', { exact: true })).toBeVisible();
+    await expect(nav.getByText('Reference', { exact: true })).toHaveCount(0);
   });
 
   test('Task-only operator sees Dashboard + My Tasks only, reaches the real inbox', async ({ page }) => {
@@ -51,14 +55,14 @@ test.describe('Permission matrix — same shared config, different visible items
     const nav = page.locator('#app-nav');
     await expect(nav.getByRole('link', { name: 'Dashboard' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'My Tasks' })).toBeVisible();
-    await expect(nav.getByRole('link', { name: 'Tickets & Issues' })).toHaveCount(0);
+    await expect(nav.getByRole('link', { name: 'Incidents' })).toHaveCount(0);
     await expect(nav.getByText('Administration')).toHaveCount(0);
 
     await nav.getByRole('link', { name: 'My Tasks' }).click();
     await expect(page).toHaveURL(/\/app\/changes\/my-tasks$/);
   });
 
-  test('Supervisor sees Workspace + Tipos de Caso sections but no Users & Roles', async ({ page }) => {
+  test('Supervisor sees Workspace + Cases + Reference sections but no Users & Roles', async ({ page }) => {
     await mockAuthenticatedSupervisor(page);
     await stubNotifications(page);
     await page.setViewportSize(DESKTOP_1440);
@@ -66,9 +70,12 @@ test.describe('Permission matrix — same shared config, different visible items
 
     const nav = page.locator('#app-nav');
     await expect(nav.getByText('Workspace', { exact: true })).toBeVisible();
-    await expect(nav.getByText('Tipos de Caso')).toBeVisible();
-    await expect(nav.getByRole('link', { name: 'Change Mgmt' })).toBeVisible();
-    await expect(nav.getByRole('link', { name: 'Problem Mgmt' })).toBeVisible();
+    await expect(nav.getByText('Cases', { exact: true })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Changes' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Problems' })).toBeVisible();
+    // Configuration items are Reference, not a case pool — the grouping
+    // this branch introduced is exactly this distinction.
+    await expect(nav.getByText('Reference', { exact: true })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Assets / CMDB' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Users & Roles' })).toHaveCount(0);
   });
@@ -136,11 +143,11 @@ test.describe('Desktop (1440x900 and 1024x768) — persistent sidebar', () => {
     await page.goto('/app');
 
     await page.getByTestId('app-nav-toggle').click(); // collapse the rail
-    const ticketsLink = page.locator('#app-nav').getByRole('link', { name: 'Tickets & Issues' });
+    const ticketsLink = page.locator('#app-nav').getByRole('link', { name: 'Incidents' });
     await expect(page.getByRole('tooltip')).toHaveCount(0);
 
     await ticketsLink.focus();
-    const tooltip = page.getByRole('tooltip', { name: 'Tickets & Issues' });
+    const tooltip = page.getByRole('tooltip', { name: 'Incidents' });
     await expect(tooltip).toBeVisible();
 
     await ticketsLink.blur();
@@ -220,7 +227,7 @@ test.describe('Desktop (1440x900 and 1024x768) — persistent sidebar', () => {
     // First item (top edge) and last item (bottom edge / vertical-scroll
     // edge) — clipping bugs often only show up at one edge of a scroll
     // container, so checking only the first item would have missed it.
-    await assertTooltipClearsClipping('Tickets & Issues');
+    await assertTooltipClearsClipping('Incidents');
     await assertTooltipClearsClipping('API Keys');
   });
 
@@ -231,9 +238,9 @@ test.describe('Desktop (1440x900 and 1024x768) — persistent sidebar', () => {
     await page.goto('/app/knowledge'); // start off Tickets, so Enter below is a real navigation
     await page.getByTestId('app-nav-toggle').click();
 
-    const link = page.locator('#app-nav').getByRole('link', { name: 'Tickets & Issues' });
+    const link = page.locator('#app-nav').getByRole('link', { name: 'Incidents' });
     await link.focus();
-    const tooltip = page.getByRole('tooltip', { name: 'Tickets & Issues' });
+    const tooltip = page.getByRole('tooltip', { name: 'Incidents' });
     await expect(tooltip).toBeVisible();
 
     await page.keyboard.press('Escape');
@@ -485,7 +492,7 @@ test.describe('Mobile (390x844) — no empty More for a limited persona', () => 
     const bottomNav = page.locator('nav[aria-label="Primary"]');
     await expect(bottomNav).toBeVisible();
     await expect(bottomNav.getByRole('link', { name: 'Dashboard' })).toBeVisible();
-    await expect(bottomNav.getByRole('link', { name: 'Tickets & Issues' })).toBeVisible();
+    await expect(bottomNav.getByRole('link', { name: 'Incidents' })).toBeVisible();
 
     // Every permitted item (Dashboard, Tickets) fits in the primary slots —
     // there is nothing left for "More" to hold, so it must not render at
@@ -496,7 +503,7 @@ test.describe('Mobile (390x844) — no empty More for a limited persona', () => 
 });
 
 test.describe('Deep links and active-state correctness', () => {
-  test('a deep link into a ticket detail marks Tickets & Issues active, not Dashboard', async ({ page }) => {
+  test('a deep link into a ticket detail marks Incidents active, not Dashboard', async ({ page }) => {
     await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
     await stubNotifications(page);
     await page.route('**/entities/INC/*', (route) =>
@@ -505,13 +512,13 @@ test.describe('Deep links and active-state correctness', () => {
     await page.setViewportSize(DESKTOP_1440);
     await page.goto('/app/tickets/999999');
 
-    const ticketsLink = page.locator('#app-nav').getByRole('link', { name: 'Tickets & Issues' });
+    const ticketsLink = page.locator('#app-nav').getByRole('link', { name: 'Incidents' });
     await expect(ticketsLink).toHaveAttribute('aria-current', 'page');
     const dashboardLink = page.locator('#app-nav').getByRole('link', { name: 'Dashboard' });
     await expect(dashboardLink).not.toHaveAttribute('aria-current', 'page');
   });
 
-  test('/app/changes/my-tasks marks My Tasks active, not Change Mgmt (longest-match tie-break)', async ({ page }) => {
+  test('/app/changes/my-tasks marks My Tasks active, not Changes (longest-match tie-break)', async ({ page }) => {
     await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
     await stubNotifications(page);
     await page.route('**/change-tasks*', (route) =>
@@ -522,7 +529,7 @@ test.describe('Deep links and active-state correctness', () => {
 
     const nav = page.locator('#app-nav');
     await expect(nav.getByRole('link', { name: 'My Tasks' })).toHaveAttribute('aria-current', 'page');
-    await expect(nav.getByRole('link', { name: 'Change Mgmt' })).not.toHaveAttribute('aria-current', 'page');
+    await expect(nav.getByRole('link', { name: 'Changes' })).not.toHaveAttribute('aria-current', 'page');
   });
 });
 

@@ -88,7 +88,7 @@ test('el asignado entra a su bandeja aunque no pueda leer las RFC', async ({ pag
 
   const nav = page.locator('#app-nav');
   await expect(nav.getByText('My Tasks')).toBeVisible();
-  await expect(nav.getByText('Change Mgmt')).toHaveCount(0);
+  await expect(nav.getByText('Changes', { exact: true })).toHaveCount(0);
 });
 
 test('la tarjeta muestra nombres del snapshot y solo el contexto minimo de la RFC', async ({ page }) => {
@@ -197,5 +197,5 @@ test('un administrador global ve la bandeja y tambien el tablero de RFC', async 
 
   await page.goto('/app/changes/my-tasks');
   await expect(page.locator('article').filter({ hasText: 'TSK-000009' })).toBeVisible();
-  await expect(page.locator('#app-nav').getByText('Change Mgmt')).toBeVisible();
+  await expect(page.locator('#app-nav').getByText('Changes')).toBeVisible();
 });

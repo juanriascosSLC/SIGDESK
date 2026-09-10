@@ -2,8 +2,10 @@ import {
   LayoutDashboard,
   Ticket as TicketIcon,
   ListChecks,
-  FolderKanban,
-  ShieldCheck,
+  FilePlus2,
+  Boxes,
+  Bot,
+  BookOpen,
   BarChart3,
   Network,
   SearchCode,
@@ -29,7 +31,21 @@ import { PERMISSIONS } from '@/features/auth/permissions';
  * silently stale in the other two.
  */
 
-export type NavSection = 'workspace' | 'itsm' | 'administration';
+/**
+ * Sections group by what an item IS, not by the framework it came from.
+ *  - `cases` holds the pools of the glossary's case types (INC, PRB, RFC,
+ *    SR) plus the single point where one is created. The old split —
+ *    "Service Desk (ITSM)" for INC and "Change & Config (ITIL)" for
+ *    PRB/RFC — named the same framework twice and tore in half a group the
+ *    glossary defines as one ("the 4 case types").
+ *  - `reference` is what an agent consults WHILE working a case without it
+ *    being a case: Knowledge Base and Assets / CMDB (configuration items,
+ *    which the glossary marks explicitly as a different category from a
+ *    case type).
+ *  - `workspace` is the orientation surfaces: the board, one's own inbox,
+ *    and the metrics.
+ */
+export type NavSection = 'workspace' | 'cases' | 'reference' | 'administration';
 export type NavSurface = 'sidebar' | 'drawer' | 'bottomnav';
 
 /** Section headers as actually displayed — sentence case, never forced
@@ -37,7 +53,8 @@ export type NavSurface = 'sidebar' | 'drawer' | 'bottomnav';
  *  walked that back everywhere else; the nav is no exception). */
 export const NAV_SECTION_LABELS: Record<NavSection, string> = {
   workspace: 'Workspace',
-  itsm: 'Tipos de Caso',
+  cases: 'Cases',
+  reference: 'Reference',
   administration: 'Administration',
 };
 
@@ -90,15 +107,6 @@ export const NAV_ITEMS: NavItem[] = [
     exact: true,
   },
   {
-    key: 'tickets',
-    label: 'Tickets & Issues',
-    route: '/app/tickets',
-    icon: TicketIcon,
-    section: 'workspace',
-    permission: (ctx) => ctx.canViewTickets,
-    surfaces: ['sidebar', 'drawer', 'bottomnav'],
-  },
-  {
     key: 'my-tasks',
     label: 'My Tasks',
     route: '/app/changes/my-tasks',
@@ -112,24 +120,6 @@ export const NAV_ITEMS: NavItem[] = [
     exact: true,
   },
   {
-    key: 'catalog',
-    label: 'Service Catalog',
-    route: '/app/catalog',
-    icon: FolderKanban,
-    section: 'workspace',
-    permission: (ctx) => ctx.can(PERMISSIONS.catalogView),
-    surfaces: ['sidebar', 'drawer', 'bottomnav'],
-  },
-  {
-    key: 'knowledge',
-    label: 'Knowledge Base',
-    route: '/app/knowledge',
-    icon: ShieldCheck,
-    section: 'workspace',
-    permission: (ctx) => ctx.can(PERMISSIONS.knowledgeView),
-    surfaces: ['sidebar', 'drawer'],
-  },
-  {
     key: 'reports',
     label: 'Reports',
     route: '/app/reports',
@@ -138,35 +128,50 @@ export const NAV_ITEMS: NavItem[] = [
     permission: (ctx) => ctx.can(PERMISSIONS.reportsView),
     surfaces: ['sidebar', 'drawer'],
   },
-  // "Change Mgmt"/"Problem Mgmt"/"Assets" are Tipos de Caso's coordination
-  // surfaces (cross-team process work) — deliberately its own section,
-  // never merged with Service Catalog (self-service intake) above, which
-  // is a different concern that only looks adjacent.
+  // The `cases` block below: the creation point first, then the pools in
+  // the order of the glossary's canonical table (INC, PRB, RFC, SR).
   {
-    key: 'changes',
-    label: 'Change Mgmt',
-    route: '/app/changes',
-    icon: Network,
-    section: 'itsm',
-    permission: (ctx) => ctx.can(PERMISSIONS.changesView),
-    surfaces: ['sidebar', 'drawer'],
+    // Not a catalogue of services: the selector of published definitions
+    // used to CREATE a case ("What do you need to create?"). "Case
+    // Catalog" was rejected too — the glossary deprecated user-facing
+    // "Catalog" on 2026-09-08 (rename "Catalog Builder" -> "Entity
+    // Builder"), and "Catalog" shares a root with "ticket category",
+    // which is a different thing.
+    key: 'catalog',
+    label: 'New Case',
+    route: '/app/catalog',
+    icon: FilePlus2,
+    section: 'cases',
+    permission: (ctx) => ctx.can(PERMISSIONS.catalogView),
+    surfaces: ['sidebar', 'drawer', 'bottomnav'],
+  },
+  {
+    // "Issues" isn't in the glossary and collides with Problems (PRB);
+    // this pool is INC and nothing else.
+    key: 'tickets',
+    label: 'Incidents',
+    route: '/app/tickets',
+    icon: TicketIcon,
+    section: 'cases',
+    permission: (ctx) => ctx.canViewTickets,
+    surfaces: ['sidebar', 'drawer', 'bottomnav'],
   },
   {
     key: 'problems',
-    label: 'Problem Mgmt',
+    label: 'Problems',
     route: '/app/problems',
     icon: SearchCode,
-    section: 'itsm',
+    section: 'cases',
     permission: (ctx) => ctx.can(PERMISSIONS.problemsView),
     surfaces: ['sidebar', 'drawer'],
   },
   {
-    key: 'assets',
-    label: 'Assets / CMDB',
-    route: '/app/assets',
-    icon: Server,
-    section: 'itsm',
-    permission: (ctx) => ctx.can(PERMISSIONS.assetsView),
+    key: 'changes',
+    label: 'Changes',
+    route: '/app/changes',
+    icon: Network,
+    section: 'cases',
+    permission: (ctx) => ctx.can(PERMISSIONS.changesView),
     surfaces: ['sidebar', 'drawer'],
   },
   {
@@ -174,8 +179,31 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Services',
     route: '/app/services',
     icon: Wrench,
-    section: 'itsm',
+    section: 'cases',
     permission: (ctx) => ctx.can(PERMISSIONS.changesView),
+    surfaces: ['sidebar', 'drawer'],
+  },
+  {
+    key: 'knowledge',
+    label: 'Knowledge Base',
+    route: '/app/knowledge',
+    // Same icon the portal and the search already use for articles;
+    // ShieldCheck belonged to nothing this destination is about.
+    icon: BookOpen,
+    section: 'reference',
+    permission: (ctx) => ctx.can(PERMISSIONS.knowledgeView),
+    surfaces: ['sidebar', 'drawer'],
+  },
+  {
+    // Configuration items — the glossary marks these explicitly as a
+    // category distinct from a case type, so they belong beside the
+    // Knowledge Base, not inside the case pools.
+    key: 'assets',
+    label: 'Assets / CMDB',
+    route: '/app/assets',
+    icon: Server,
+    section: 'reference',
+    permission: (ctx) => ctx.can(PERMISSIONS.assetsView),
     surfaces: ['sidebar', 'drawer'],
   },
   {
@@ -188,24 +216,12 @@ export const NAV_ITEMS: NavItem[] = [
     surfaces: ['sidebar', 'drawer'],
   },
   {
-    // Arrived on main while this branch was open, as an inline NavButton in
-    // the pre-refactor AgentLayout sidebar. Re-expressed here on merge so
-    // the destination keeps its nav entry on EVERY surface (the old inline
-    // list only fed the desktop rail) — the route guard in App.tsx gates on
-    // `canManageUsersAndRoles`, so this mirrors it exactly.
-    key: 'admin-assistant-feedback',
-    label: 'Assistant Feedback',
-    route: '/app/admin/assistant-feedback',
-    icon: MessageSquare,
-    section: 'administration',
-    permission: (ctx) => ctx.can(PERMISSIONS.assistantFeedbackView),
-    surfaces: ['sidebar', 'drawer'],
-  },
-  {
     key: 'catalog-builder',
     label: 'Entity Builder',
     route: '/app/admin/catalog-builder',
-    icon: FolderKanban,
+    // Its own icon: FolderKanban used to be shared with the catalog entry
+    // above, so two different destinations rendered the same glyph.
+    icon: Boxes,
     section: 'administration',
     permission: (ctx) => ctx.can(PERMISSIONS.catalogAuthor),
     surfaces: ['sidebar', 'drawer'],
@@ -249,6 +265,20 @@ export const NAV_ITEMS: NavItem[] = [
     permission: (ctx) => ctx.canManageUsersAndRoles,
     surfaces: ['sidebar', 'drawer'],
   },
+  {
+    // Last in Administration and with an icon of its own: this is
+    // AI-assistant tuning, not identity management — it used to sit
+    // against "Users & Roles" and share MessageSquare with ChatOps.
+    // The route guard in App.tsx gates the destination itself; this
+    // mirrors it exactly.
+    key: 'admin-assistant-feedback',
+    label: 'Assistant Feedback',
+    route: '/app/admin/assistant-feedback',
+    icon: Bot,
+    section: 'administration',
+    permission: (ctx) => ctx.can(PERMISSIONS.assistantFeedbackView),
+    surfaces: ['sidebar', 'drawer'],
+  },
 ];
 
 function isVisible(item: NavItem, ctx: NavPermissionContext): boolean {
@@ -271,7 +301,7 @@ export function selectDrawerItems(ctx: NavPermissionContext): NavItem[] {
 
 /** Up to `max` primary destinations for the mobile bottom bar — a
  *  deliberately curated subset (`surfaces.includes('bottomnav')`), not
- *  "the first N of everything": Change/Problem/Assets/Reports/Knowledge
+ *  "the first N of everything": Changes/Problems/Services/Assets/Reports/Knowledge
  *  and all of Administration are one tap away in "More" instead, rather
  *  than crowding out day-to-day destinations on a phone. */
 export function selectBottomNavItems(ctx: NavPermissionContext, max = 4): NavItem[] {
@@ -306,7 +336,7 @@ export function findActiveNavItem<T extends { route: string; exact?: boolean }>(
 /** Groups items by section, dropping empty sections — an "Administration"
  *  heading over zero links reads as a broken page, not an empty one. */
 export function groupBySection(items: NavItem[]): Array<{ section: NavSection; items: NavItem[] }> {
-  const order: NavSection[] = ['workspace', 'itsm', 'administration'];
+  const order: NavSection[] = ['workspace', 'cases', 'reference', 'administration'];
   return order
     .map((section) => ({ section, items: items.filter((item) => item.section === section) }))
     .filter((group) => group.items.length > 0);

@@ -7,8 +7,9 @@ import {
   ListChecks,
   SearchCode,
   Server,
-  FolderKanban,
-  ShieldCheck,
+  FilePlus2,
+  Boxes,
+  BookOpen,
   Workflow,
   Timer,
   Users,
@@ -91,16 +92,20 @@ export function Dashboard() {
   const canViewSla = can(PERMISSIONS.slaView);
 
   const moduleLinks: ModuleLink[] = [
-    { to: '/app/tickets', label: 'Tickets & Issues', icon: TicketIcon, visible: canViewTickets },
+    // Same labels and icons as config/navigation.ts — these tiles are a
+    // second door to the very same destinations, so a rename that lands
+    // in only one of the two lists is the drift this comment exists to
+    // prevent.
+    { to: '/app/tickets', label: 'Incidents', icon: TicketIcon, visible: canViewTickets },
     { to: '/app/reports', label: 'Reports', icon: BarChart3, visible: canViewReports },
-    { to: '/app/changes', label: 'Change Mgmt', icon: Network, visible: canViewChanges },
+    { to: '/app/changes', label: 'Changes', icon: Network, visible: canViewChanges },
     { to: '/app/changes/my-tasks', label: 'My Tasks', icon: ListChecks, visible: canViewChangeTasks },
-    { to: '/app/problems', label: 'Problem Mgmt', icon: SearchCode, visible: canViewProblems },
+    { to: '/app/problems', label: 'Problems', icon: SearchCode, visible: canViewProblems },
     { to: '/app/assets', label: 'Assets / CMDB', icon: Server, visible: canViewAssets },
-    { to: '/app/catalog', label: 'Service Catalog', icon: FolderKanban, visible: canViewCatalog },
-    { to: '/app/knowledge', label: 'Knowledge Base', icon: ShieldCheck, visible: canViewKnowledge },
+    { to: '/app/catalog', label: 'New Case', icon: FilePlus2, visible: canViewCatalog },
+    { to: '/app/knowledge', label: 'Knowledge Base', icon: BookOpen, visible: canViewKnowledge },
     { to: '/app/admin/users', label: 'Users & Roles', icon: Users, visible: canManageUsersAndRoles },
-    { to: '/app/admin/catalog-builder', label: 'Entity Builder', icon: FolderKanban, visible: canAuthorCatalog },
+    { to: '/app/admin/catalog-builder', label: 'Entity Builder', icon: Boxes, visible: canAuthorCatalog },
     { to: '/app/automations', label: 'Automations', icon: Workflow, visible: canViewAutomations },
     { to: '/app/settings/sla', label: 'SLA Policies', icon: Timer, visible: canViewSla },
   ];
