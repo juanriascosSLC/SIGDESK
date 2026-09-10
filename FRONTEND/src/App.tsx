@@ -331,7 +331,7 @@ function AppRoutes() {
                 </ProtectedRoute>
               } />
               <Route path="/admin/assistant-feedback" element={
-                <ProtectedRoute requireCondition={canManageUsersAndRoles} fallbackTo="/app">
+                <ProtectedRoute requiredPermission={PERMISSIONS.assistantFeedbackView} fallbackTo="/app">
                   <AssistantFeedback />
                 </ProtectedRoute>
               } />

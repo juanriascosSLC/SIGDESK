@@ -198,7 +198,7 @@ export const NAV_ITEMS: NavItem[] = [
     route: '/app/admin/assistant-feedback',
     icon: MessageSquare,
     section: 'administration',
-    permission: (ctx) => ctx.canManageUsersAndRoles,
+    permission: (ctx) => ctx.can(PERMISSIONS.assistantFeedbackView),
     surfaces: ['sidebar', 'drawer'],
   },
   {
