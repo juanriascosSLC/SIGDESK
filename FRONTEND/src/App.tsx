@@ -124,7 +124,7 @@ function LandingRedirect() {
   // An admin keeps landing on the workspace shell, where the Administration
   // nav lives. Someone whose real grant is only over tickets lands straight
   // on their pool instead of /app: the Dashboard there is not their working
-  // surface, "Tickets & Issues" is.
+  // surface, "Incidents" is.
   if (canManageUsersAndRoles) return <Navigate to="/app" replace />;
   if (canViewTickets) return <Navigate to="/app/tickets" replace />;
   if (can(PERMISSIONS.changesView)) return <Navigate to="/app/changes" replace />;

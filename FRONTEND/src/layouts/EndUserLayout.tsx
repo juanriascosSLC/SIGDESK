@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { FolderKanban, BookOpen, Ticket as TicketIcon } from 'lucide-react';
+import { Home, BookOpen, Ticket as TicketIcon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import UserProfilePopover from '../components/layout/UserProfilePopover';
 import RagChatbot from '../features/assistant/RagChatbot';
@@ -43,7 +43,10 @@ export default function EndUserLayout({ children }: { children: React.ReactNode 
 
           {/* Nav Links */}
           <nav className="flex items-center gap-2">
-            <NavItem active={currentPath === '/portal'} to="/portal" icon={FolderKanban} label="Service Catalog" />
+            {/* /portal es la home del portal (búsqueda + tickets recientes +
+                artículos), no un catálogo: el catálogo real del portal vive
+                en /portal/catalog/:categoryId. */}
+            <NavItem active={currentPath === '/portal'} to="/portal" icon={Home} label="Home" />
             <NavItem active={currentPath.startsWith('/portal/knowledge')} to="/portal/knowledge" icon={BookOpen} label="Knowledge Base" />
             <NavItem active={currentPath.startsWith('/portal/tickets')} to="/portal/tickets" icon={TicketIcon} label="My Tickets" />
           </nav>

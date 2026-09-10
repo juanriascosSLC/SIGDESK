@@ -151,16 +151,16 @@ test('un requester permanece en el portal aunque pueda leer sus propios tickets'
   await mockAuthenticatedRequester(page, { forwardUnmatched: false });
   await page.goto('/app/tickets', { waitUntil: 'domcontentloaded' });
   await expect(page).toHaveURL(/\/portal\/?$/);
-  await expect(page.getByRole('link', { name: 'Tickets & Issues' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Incidents' })).toHaveCount(0);
 });
 
 test('un supervisor ve operación y reportes pero no administración de roles ni catálogo', async ({ page }) => {
   await mockAuthenticatedSupervisor(page, { forwardUnmatched: false });
   await page.goto('/app', { waitUntil: 'domcontentloaded' });
-  await expect(page.getByRole('link', { name: 'Tickets & Issues' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Change Mgmt' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Problem Mgmt' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Incidents' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Changes' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Problems' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Reports' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Users & Roles' })).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Catalog Builder' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Entity Builder' })).toHaveCount(0);
 });

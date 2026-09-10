@@ -37,7 +37,7 @@ export function ServiceCatalog() {
       <div className="text-center space-y-4 mb-12">
         <h1 className="text-4xl font-black text-on-surface tracking-tight">¿Qué necesitas crear?</h1>
         <p className="text-on-surface-variant max-w-xl mx-auto">
-          Este catálogo se genera directamente desde las definiciones publicadas del Catalog Builder.
+          Esta lista se genera directamente desde las definiciones publicadas del Entity Builder.
         </p>
         <div className="relative max-w-2xl mx-auto mt-6">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-cyan-400" />

@@ -3,9 +3,10 @@ import { useLocation, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Ticket as TicketIcon,
-  FolderKanban,
+  FilePlus2,
+  Boxes,
+  Bot,
   LogOut,
-  ShieldCheck,
   Search,
   Plus,
   Settings,
@@ -138,7 +139,19 @@ function Sidebar({ collapsed }: { collapsed: boolean }) {
   const canAuthorCatalog = can(PERMISSIONS.catalogAuthor);
   const canViewAutomations = can(PERMISSIONS.automationsView);
   const canViewSla = can(PERMISSIONS.slaView);
-  const showChangeAndConfig = canViewChanges || canViewChangeTasks || canViewProblems || canViewAssets;
+  // Agrupación por lo que el ítem ES, no por el framework del que viene:
+  //  - "Cases" reúne los pools de los tipos de caso del glosario (INC, PRB,
+  //    RFC) + el punto de creación. Antes INC vivía en "Service Desk (ITSM)"
+  //    y PRB/RFC en "Change & Config (ITIL)", separados por Reports: dos
+  //    títulos que nombran el mismo framework y parten un grupo que el
+  //    glosario define como uno solo ("Los 4 tipos de caso").
+  //  - "Reference" son las superficies que se consultan MIENTRAS se trabaja
+  //    un caso pero no son casos: Knowledge Base y Assets/CMDB (items de
+  //    configuración, explícitamente no un tipo de caso en el glosario).
+  //  - "Workspace" son las superficies de orientación: el tablero, la
+  //    bandeja propia y las métricas.
+  const showCases = canViewCatalog || canViewTickets || canViewProblems || canViewChanges;
+  const showReference = canViewKnowledge || canViewAssets;
   const showAdministration = canManageUsersAndRoles || canAuthorCatalog || canViewAutomations || canViewSla;
 
   const handleLogout = async () => {
@@ -184,7 +197,7 @@ function Sidebar({ collapsed }: { collapsed: boolean }) {
         <div className="flex flex-col gap-1 py-2">
         
           <div className="mb-2">
-            <SectionHeader collapsed={collapsed} title="Service Desk (ITSM)" />
+            <SectionHeader collapsed={collapsed} title="Workspace" />
             <NavButton
               collapsed={collapsed}
               active={currentPath === '/app'}
@@ -192,13 +205,13 @@ function Sidebar({ collapsed }: { collapsed: boolean }) {
               icon={LayoutDashboard}
               label="Dashboard"
             />
-            {canViewTickets && (
+            {canViewChangeTasks && (
               <NavButton
                 collapsed={collapsed}
-                active={currentPath.startsWith('/app/tickets')}
-                to="/app/tickets"
-                icon={TicketIcon}
-                label="Tickets & Issues"
+                active={currentPath === '/app/changes/my-tasks'}
+                to="/app/changes/my-tasks"
+                icon={ListChecks}
+                label="My Tasks"
               />
             )}
             {canViewReports && (
@@ -212,25 +225,25 @@ function Sidebar({ collapsed }: { collapsed: boolean }) {
             )}
           </div>
 
-          {showChangeAndConfig && (
+          {showCases && (
             <div className="mb-2">
-              <SectionHeader collapsed={collapsed} title="Change & Config (ITIL)" />
-              {canViewChanges && (
+              <SectionHeader collapsed={collapsed} title="Cases" />
+              {canViewCatalog && (
                 <NavButton
                   collapsed={collapsed}
-                  active={currentPath.startsWith('/app/changes') && currentPath !== '/app/changes/my-tasks'}
-                  to="/app/changes"
-                  icon={Network}
-                  label="Change Mgmt"
+                  active={currentPath.startsWith('/app/catalog')}
+                  to="/app/catalog"
+                  icon={FilePlus2}
+                  label="New Case"
                 />
               )}
-              {canViewChangeTasks && (
+              {canViewTickets && (
                 <NavButton
                   collapsed={collapsed}
-                  active={currentPath === '/app/changes/my-tasks'}
-                  to="/app/changes/my-tasks"
-                  icon={ListChecks}
-                  label="Mis tareas"
+                  active={currentPath.startsWith('/app/tickets')}
+                  to="/app/tickets"
+                  icon={TicketIcon}
+                  label="Incidents"
                 />
               )}
               {canViewProblems && (
@@ -239,7 +252,31 @@ function Sidebar({ collapsed }: { collapsed: boolean }) {
                   active={currentPath.startsWith('/app/problems')}
                   to="/app/problems"
                   icon={SearchCode}
-                  label="Problem Mgmt"
+                  label="Problems"
+                />
+              )}
+              {canViewChanges && (
+                <NavButton
+                  collapsed={collapsed}
+                  active={currentPath.startsWith('/app/changes') && currentPath !== '/app/changes/my-tasks'}
+                  to="/app/changes"
+                  icon={Network}
+                  label="Changes"
+                />
+              )}
+            </div>
+          )}
+
+          {showReference && (
+            <div className="mb-2">
+              <SectionHeader collapsed={collapsed} title="Reference" />
+              {canViewKnowledge && (
+                <NavButton
+                  collapsed={collapsed}
+                  active={currentPath.startsWith('/app/knowledge')}
+                  to="/app/knowledge"
+                  icon={BookOpen}
+                  label="Knowledge Base"
                 />
               )}
               {canViewAssets && (
@@ -254,34 +291,11 @@ function Sidebar({ collapsed }: { collapsed: boolean }) {
             </div>
           )}
 
-          <div className="mb-2">
-            <SectionHeader collapsed={collapsed} title="Self Service" />
-            {canViewCatalog && (
-              <NavButton
-                collapsed={collapsed}
-                active={currentPath.startsWith('/app/catalog')}
-                to="/app/catalog"
-                icon={FolderKanban}
-                label="Service Catalog"
-              />
-            )}
-            {canViewKnowledge && (
-              <NavButton
-                collapsed={collapsed}
-                active={currentPath.startsWith('/app/knowledge')}
-                to="/app/knowledge"
-                icon={ShieldCheck}
-                label="Knowledge Base"
-              />
-            )}
-          </div>
-
           {showAdministration && (
             <div className="mb-2">
               <SectionHeader collapsed={collapsed} title="Administration" />
               {canManageUsersAndRoles && <NavButton collapsed={collapsed} active={currentPath.startsWith('/app/admin/users')} to="/app/admin/users" icon={Users} label="Users & Roles" />}
-              {canManageUsersAndRoles && <NavButton collapsed={collapsed} active={currentPath.startsWith('/app/admin/assistant-feedback')} to="/app/admin/assistant-feedback" icon={MessageSquare} label="Assistant Feedback" />}
-              {canAuthorCatalog && <NavButton collapsed={collapsed} active={currentPath.startsWith('/app/admin/catalog-builder')} to="/app/admin/catalog-builder" icon={FolderKanban} label="Catalog Builder" />}
+              {canAuthorCatalog && <NavButton collapsed={collapsed} active={currentPath.startsWith('/app/admin/catalog-builder')} to="/app/admin/catalog-builder" icon={Boxes} label="Entity Builder" />}
               {canViewAutomations && <NavButton collapsed={collapsed} active={currentPath.startsWith('/app/automations')} to="/app/automations" icon={Workflow} label="Automations" />}
               {canViewSla && <NavButton collapsed={collapsed} active={currentPath.startsWith('/app/settings/sla')} to="/app/settings/sla" icon={Timer} label="SLA Policies" />}
               {canManageUsersAndRoles && <>
@@ -298,6 +312,16 @@ function Sidebar({ collapsed }: { collapsed: boolean }) {
                 to="/app/settings/api-keys"
                 icon={Settings}
                 label="API Keys"
+              />
+              {/* Al final del bloque y con icono propio: es afinado del
+                  asistente de IA, no gestión de identidades — estaba pegado a
+                  "Users & Roles" y compartía icono con ChatOps. */}
+              <NavButton
+                collapsed={collapsed}
+                active={currentPath.startsWith('/app/admin/assistant-feedback')}
+                to="/app/admin/assistant-feedback"
+                icon={Bot}
+                label="Assistant Feedback"
               />
               </>}
             </div>
@@ -434,8 +458,12 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
           </div>
           <div className="flex items-center gap-4">
             <Link to="/app/catalog" className="bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-bold shadow-[0_0_15px_rgba(34,211,238,0.3)] hover:shadow-[0_0_25px_rgba(34,211,238,0.5)] transition-all flex items-center gap-2">
+               {/* Apunta a /app/catalog, que abre CUALQUIER tipo de caso
+                   publicado (INC, PRB, RFC…). "Ticket" en el glosario
+                   significa específicamente INC, así que el label prometía
+                   menos — y otra cosa — de lo que el destino hace. */}
                <Plus className="w-4 h-4" />
-               New Ticket
+               New Case
             </Link>
 
             {/* La campana real: contador de no leídas, bandeja del backend y
