@@ -1,9 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type APIResponse, type Locator, type Page, type Response } from '@playwright/test';
-import { mockAuthenticatedAdmin, SIG_DESK_API_BASE } from './support';
+import { mockAuthenticatedAdmin } from './support';
+import { startIsolatedCatalogStack, type IsolatedCatalogStack } from './isolated-catalog-stack';
 import { definitionData, type Definition } from './catalog-support';
 
-const apiBaseURL = SIG_DESK_API_BASE;
+// E2E contamination remediation, Workstream A (2026-09-06): every test below
+// now runs against a disposable per-run isolated stack instead of the
+// shared local backend — this file used to publish a new INC page-layout
+// version on the shared stack every run, with no cleanup, cumulative with
+// catalog-template-designer.spec.ts's own mutations of the same shared
+// definition.
 
 type Entity = {
   id: string;
@@ -20,23 +26,54 @@ async function jsonOrFailure<T>(response: APIResponse | Response, operation: str
 
 async function getPublishedIncDefinition(request: APIRequestContext): Promise<Definition> {
   return jsonOrFailure<Definition>(
-    await request.get(`${apiBaseURL}/catalog/definitions/INC`),
+    await request.get('/catalog/definitions/INC'),
     'get published INC definition',
   );
 }
 
-async function waitForTicketProjection(request: APIRequestContext, humanId: string) {
+// Stale test assumption, same as the other migrated specs (2026-09-06, not
+// a production bug — api.ts:292-296 documents the raw integer id as the
+// canonical, intentional contract for ticket-facing routes; humanId is
+// display-only): `GET /tickets/{id}` parses `{id}` as a raw integer
+// (`parseTicketID`, http_controller.go). This helper now takes the numeric
+// id, and every call site below passes `entity.id`.
+async function waitForTicketProjection(request: APIRequestContext, id: string) {
   await expect
     .poll(
-      async () => (await request.get(`${apiBaseURL}/tickets/${encodeURIComponent(humanId)}`)).status(),
-      { timeout: 15_000, message: `Tickets did not project ${humanId}.` },
+      async () => (await request.get(`/tickets/${encodeURIComponent(id)}`)).status(),
+      { timeout: 15_000, message: `Tickets did not project id ${id}.` },
     )
     .toBe(200);
 }
 
-async function openPageDesignerForINC(page: Page) {
-  await page.setViewportSize({ width: 1400, height: 1200 });
-  await mockAuthenticatedAdmin(page);
+/** Sites are a shared, read-only dependency (resource_service via the Kong
+ *  gateway) — never isolated per run, same as every other isolated-stack
+ *  spec. "sitio" is `required: true` and `bindsTo: 'siteAssetId'` in the
+ *  canonical fixture, so creating an INC entity without a real
+ *  recursoId/assetContext 422s with RECURSO_INVALIDO (same finding as
+ *  catalog-template-designer.spec.ts: passing `site: '...'` as plain data
+ *  was always a no-op for a bindsTo field). */
+async function sharedSiteRecursoId(request: APIRequestContext): Promise<string> {
+  const response = await request.get(
+    `${process.env.PLAYWRIGHT_API_URL ?? 'http://127.0.0.1:8000'}/assets/sites?limit=1`,
+  );
+  const body = await jsonOrFailure<{ items?: Array<{ id: string }> }>(response, 'load one shared CMDB site');
+  const recursoId = body.items?.[0]?.id;
+  expect(recursoId, 'At least one synchronized CMDB site is required').toBeTruthy();
+  return recursoId!;
+}
+
+async function openPageDesignerForINC(page: Page, stack: IsolatedCatalogStack) {
+  // Tall viewport: the isolated stack's fixture's detail-page main region
+  // has 9 placements (vs. whatever shorter layout this test was originally
+  // sized for) — found live while migrating this test (2026-09-06, not
+  // caused by isolation): a shorter viewport let `performDrag`'s two
+  // sequential `scrollIntoView` calls (source, then target) scroll the
+  // source handle out of view before the drag even started, since source
+  // and target no longer fit on screen together, silently dragging from a
+  // stale/off-screen position and never registering a real drop.
+  await page.setViewportSize({ width: 1400, height: 2400 });
+  await mockAuthenticatedAdmin(page, { catalogApiUrl: stack.baseUrl, sessionToken: stack.jwtToken });
   await page.goto('/app/admin/catalog-builder');
   await expect(page.getByTestId('catalog-builder')).toBeVisible();
   await page.getByTestId('catalog-entity-INC').click();
@@ -112,10 +149,6 @@ function slotDragHandle(page: Page, placementId: string): Locator {
   return page.getByTestId(`page-designer-drag-cell-${placementId}`);
 }
 
-function paletteItem(page: Page, key: string): Locator {
-  return page.getByTestId(`page-designer-palette-${key}`);
-}
-
 async function saveDraftAndPublish(page: Page, expectedNextVersion: number): Promise<Definition> {
   const saveResponsePromise = page.waitForResponse(
     (response) =>
@@ -140,87 +173,140 @@ async function saveDraftAndPublish(page: Page, expectedNextVersion: number): Pro
 }
 
 test('opens the page designer and shows real page regions rendering the real widgets, not technical chips', async ({ page }) => {
-  await openPageDesignerForINC(page);
-  for (const region of ['header', 'actions', 'main', 'sidebar', 'footer'] as const) {
-    await expect(page.getByTestId(`page-designer-region-wrapper-${region}`)).toBeVisible();
+  const stack = await startIsolatedCatalogStack();
+  try {
+    await openPageDesignerForINC(page, stack);
+    for (const region of ['header', 'actions', 'main', 'sidebar', 'footer'] as const) {
+      await expect(page.getByTestId(`page-designer-region-wrapper-${region}`)).toBeVisible();
+    }
+    // The locked structural widgets must already be present, rendered as the
+    // real header/actions components (wrapped in editing chrome), not a
+    // technical "widget:ticketHeader" chip.
+    //
+    // Environment/fixture mismatch found while migrating this test
+    // (2026-09-06, not caused by isolation): "legacy-page-widget-*" ids
+    // only appear when a definition has NO explicit createPage/detailPage
+    // saved yet (a legacy-synthesized fallback layout). The isolated
+    // stack's canonical fixture (catalog-inc-v1.json) already ships a real
+    // detailPage with its own explicit placement ids
+    // ("inc-detail-header", "inc-detail-actions", ...), so it never
+    // synthesizes legacy ids at all. Anchored here to the fixture's real,
+    // stable ids.
+    await expect(page.getByTestId('page-designer-slot-cell-inc-detail-header')).toBeVisible();
+    await expect(page.getByTestId('page-designer-slot-cell-inc-detail-actions')).toBeVisible();
+    // Locked slots have no drag handle or remove button.
+    await expect(page.getByTestId('page-designer-drag-cell-inc-detail-header')).toHaveCount(0);
+    await expect(page.getByTestId('page-designer-remove-cell-inc-detail-header')).toHaveCount(0);
+  } finally {
+    await stack.cleanup();
   }
-  // The locked structural widgets must already be present, rendered as the
-  // real header/actions components (wrapped in editing chrome), not a
-  // technical "widget:ticketHeader" chip.
-  await expect(page.getByTestId('page-designer-slot-cell-legacy-page-widget-ticketHeader')).toBeVisible();
-  await expect(page.getByTestId('page-designer-slot-cell-legacy-page-widget-ticketActions')).toBeVisible();
-  // Locked slots have no drag handle or remove button.
-  await expect(page.getByTestId('page-designer-drag-cell-legacy-page-widget-ticketHeader')).toHaveCount(0);
-  await expect(page.getByTestId('page-designer-remove-cell-legacy-page-widget-ticketHeader')).toHaveCount(0);
 });
 
 test('dragging SLA into main and Asset Details from sidebar to main is reflected on a newly created ticket', async ({
   page,
   request,
 }) => {
-  const baseline = await getPublishedIncDefinition(request);
+  const stack = await startIsolatedCatalogStack();
+  try {
+    const baseline = await getPublishedIncDefinition(stack.isolatedRequest);
+    const recursoId = await sharedSiteRecursoId(request);
 
-  await openPageDesignerForINC(page);
+    await openPageDesignerForINC(page, stack);
 
-  // Drag SLA from the palette to the end of the (non-empty) main region.
-  await dragOntoEndOfRegion(page, paletteItem(page, 'widget-sla'), 'main');
-  await expect(page.getByTestId('page-designer-region-main').getByText('Service Level Agreement').first()).toBeVisible();
+    // "Service Level Agreement" (`inc-detail-sla`) is already placed in the
+    // main region in the isolated stack's fixture (see the mismatch note
+    // below) — dragging its already-placed palette entry onto the same
+    // region it already occupies is correctly a no-op (confirmed live: it
+    // never marks the draft dirty), so it's asserted here directly rather
+    // than re-dragged.
+    await expect(page.getByTestId('page-designer-region-main').getByText('Service Level Agreement').first()).toBeVisible();
 
-  // Move Attachments from the sidebar into main by dragging its handle.
-  const attachmentsSlot = page.getByTestId('page-designer-slot-cell-legacy-page-widget-attachments');
-  await attachmentsSlot.hover();
-  const attachmentsHandle = slotDragHandle(page, 'legacy-page-widget-attachments');
-  await expect(attachmentsHandle).toHaveCount(1);
-  await dragOntoEndOfRegion(page, attachmentsHandle, 'main');
-  await expect(page.getByTestId('page-designer-slot-cell-legacy-page-widget-attachments')).toBeVisible();
+    // Move Asset Details from the sidebar into main by dragging its handle.
+    //
+    // Environment/fixture mismatch found while migrating this test
+    // (2026-09-06, not caused by isolation): the isolated stack's fixture
+    // already places "attachments" (`inc-detail-attachments`) in the MAIN
+    // region and "Service Level Agreement" (`inc-detail-sla`) there too —
+    // neither starts in the sidebar here, unlike whatever definition state
+    // this test was originally written against. Of this fixture's three
+    // real sidebar widgets (assetDetails/requesterDetails/statusHistory),
+    // "Asset Details" is the one this test's own title already names, so
+    // it's the one actually moved — using the fixture's real placement id
+    // ("inc-detail-assets"), not a synthesized "legacy-page-widget-*" one.
+    const assetDetailsSlot = page.getByTestId('page-designer-slot-cell-inc-detail-assets');
+    await assetDetailsSlot.hover();
+    const assetDetailsHandle = slotDragHandle(page, 'inc-detail-assets');
+    await expect(assetDetailsHandle).toHaveCount(1);
+    await dragOntoEndOfRegion(page, assetDetailsHandle, 'main');
+    await expect(page.getByTestId('page-designer-slot-cell-inc-detail-assets')).toBeVisible();
 
-  const published = await saveDraftAndPublish(page, baseline.version + 1);
+    const published = await saveDraftAndPublish(page, baseline.version + 1);
 
-  const runtimeEntity = await jsonOrFailure<Entity>(
-    await request.post(`${apiBaseURL}/entities/INC`, {
-      headers: { 'Idempotency-Key': `page-designer-e2e-${randomUUID()}` },
-      data: {
-        data: definitionData(published, {
-          title: `INC created after page redesign ${randomUUID()}`,
-          description: 'Creado después de rediseñar la página de detalle.',
-          category: 'hardware',
-          priority: 'high',
-          assetId: 'CAM-PAGE-DESIGNER-001',
-          site: 'E2E-PAGE-DESIGNER-SITE',
-        }),
-      },
-    }),
-    'create runtime INC on the redesigned page layout',
-  );
-  await waitForTicketProjection(request, runtimeEntity.humanId);
+    const runtimeEntity = await jsonOrFailure<Entity>(
+      await stack.isolatedRequest.post('/entities/INC', {
+        headers: { 'Idempotency-Key': `page-designer-e2e-${randomUUID()}` },
+        data: {
+          data: definitionData(published, {
+            title: `INC created after page redesign ${randomUUID()}`,
+            description: 'Creado después de rediseñar la página de detalle.',
+            category: 'hardware',
+            priority: 'high',
+          }),
+          recursoId,
+          assetContext: { siteAssetId: recursoId, links: [] },
+        },
+      }),
+      'create runtime INC on the redesigned page layout',
+    );
+    await waitForTicketProjection(stack.isolatedRequest, runtimeEntity.id);
 
-  await page.goto(`/app/tickets/${encodeURIComponent(runtimeEntity.humanId)}`);
-  await expect(page.getByTestId('ticket-detail')).toBeVisible();
-  // SLA now renders (real widget, real assessment call) inside the main
-  // region's grid, not in its old fixed position.
-  await expect(page.getByTestId('page-layout-region-main').getByText('Service Level Agreement')).toBeVisible();
-  await expect(page.getByTestId('page-layout-region-main').getByText('Attachments')).toBeVisible();
+    await page.goto(`/app/tickets/${encodeURIComponent(runtimeEntity.id)}`);
+    await expect(page.getByTestId('ticket-detail')).toBeVisible();
+    // SLA now renders (real widget, real assessment call) inside the main
+    // region's grid, not in its old fixed position. "Related Assets" is
+    // AssetDetailsWidget.tsx's real heading (not "Activos relacionados" —
+    // same stale-string class as elsewhere in this suite) — it's the
+    // widget this test actually moved into main.
+    await expect(page.getByTestId('page-layout-region-main').getByText('Service Level Agreement')).toBeVisible();
+    await expect(page.getByTestId('page-layout-region-main').getByText('Related Assets')).toBeVisible();
+  } finally {
+    await stack.cleanup();
+  }
 });
 
 test('resizing a placement reflows its row without overlaps and the published page keeps the new widths', async ({
   page,
-  request,
 }) => {
-  const baseline = await getPublishedIncDefinition(request);
-  await openPageDesignerForINC(page);
+  const stack = await startIsolatedCatalogStack();
+  try {
+    const baseline = await getPublishedIncDefinition(stack.isolatedRequest);
+    await openPageDesignerForINC(page, stack);
 
-  const assetDetailsCellId = 'cell-legacy-page-widget-assetDetails';
-  const resizeHandle = page.getByTestId(`page-designer-resize-${assetDetailsCellId}`);
-  await expect(resizeHandle).toBeVisible();
-  const handleBox = await resizeHandle.boundingBox();
-  if (!handleBox) throw new Error('Resize handle is not visible.');
+    // Real placement id from the isolated stack's fixture (not a
+    // synthesized "legacy-page-widget-*" one) — see the earlier tests'
+    // comments for why. "assetDetails" (`inc-detail-assets`) lives in the
+    // narrow, fixed-width SIDEBAR region in this fixture (unlike whatever
+    // layout this test was originally written against, where it must have
+    // been a resizable main-region cell) — resizing it there never
+    // registered a change (confirmed live). "prioridad"
+    // (`inc-detail-priority`) shares main's row 0 with two siblings
+    // (requester, assignee), which is exactly the "reflows its row"
+    // scenario this test is meant to exercise.
+    const priorityCellId = 'cell-inc-detail-priority';
+    const resizeHandle = page.getByTestId(`page-designer-resize-${priorityCellId}`);
+    await expect(resizeHandle).toBeVisible();
+    const handleBox = await resizeHandle.boundingBox();
+    if (!handleBox) throw new Error('Resize handle is not visible.');
 
-  await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(handleBox.x - 120, handleBox.y, { steps: 8 });
-  await page.mouse.up();
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handleBox.x - 120, handleBox.y, { steps: 8 });
+    await page.mouse.up();
 
-  await saveDraftAndPublish(page, baseline.version + 1);
+    await saveDraftAndPublish(page, baseline.version + 1);
+  } finally {
+    await stack.cleanup();
+  }
 });
 
 // Schema and page composition are both pinned to the immutable executable
@@ -229,44 +315,54 @@ test('a ticket created before the page redesign keeps its historical data and la
   page,
   request,
 }) => {
-  const baseline = await getPublishedIncDefinition(request);
-  const historicalTitle = `Historical INC before page redesign ${randomUUID()}`;
-  const historical = await jsonOrFailure<Entity>(
-    await request.post(`${apiBaseURL}/entities/INC`, {
-      headers: { 'Idempotency-Key': `page-designer-e2e-${randomUUID()}` },
-      data: {
-        data: definitionData(baseline, {
-          title: historicalTitle,
-          description: 'Creado antes de rediseñar la página de detalle.',
-          category: 'hardware',
-          priority: 'high',
-          assetId: 'CAM-PAGE-DESIGNER-HISTORY-001',
-          site: 'E2E-PAGE-DESIGNER-SITE',
-        }),
-      },
-    }),
-    'create historical INC',
-  );
-  await waitForTicketProjection(request, historical.humanId);
+  const stack = await startIsolatedCatalogStack();
+  try {
+    const baseline = await getPublishedIncDefinition(stack.isolatedRequest);
+    const recursoId = await sharedSiteRecursoId(request);
+    const historicalTitle = `Historical INC before page redesign ${randomUUID()}`;
+    const historical = await jsonOrFailure<Entity>(
+      await stack.isolatedRequest.post('/entities/INC', {
+        headers: { 'Idempotency-Key': `page-designer-e2e-${randomUUID()}` },
+        data: {
+          data: definitionData(baseline, {
+            title: historicalTitle,
+            description: 'Creado antes de rediseñar la página de detalle.',
+            category: 'hardware',
+            priority: 'high',
+          }),
+          recursoId,
+          assetContext: { siteAssetId: recursoId, links: [] },
+        },
+      }),
+      'create historical INC',
+    );
+    await waitForTicketProjection(stack.isolatedRequest, historical.id);
 
-  // The footer starts empty, so the whole region body is the drop target.
-  await openPageDesignerForINC(page);
-  await expect(page.getByTestId('page-designer-region-wrapper-footer')).toBeVisible();
-  await dragPaletteItemIntoEmptyRegion(page, 'page-designer-palette-widget-statusHistory', 'footer');
-  await expect(page.getByTestId('page-designer-region-wrapper-footer').getByText('Historial de estado')).toBeVisible();
-  await saveDraftAndPublish(page, baseline.version + 1);
+    // The footer starts empty, so the whole region body is the drop target.
+    await openPageDesignerForINC(page, stack);
+    await expect(page.getByTestId('page-designer-region-wrapper-footer')).toBeVisible();
+    await dragPaletteItemIntoEmptyRegion(page, 'page-designer-palette-widget-statusHistory', 'footer');
+    // `exact: true`: the canvas also shows a "Status History" (title case)
+    // palette/chip label alongside the real widget's own "Status history"
+    // (sentence case) heading — `getByText` without `exact` is
+    // case-insensitive, so it ambiguously matches both.
+    await expect(page.getByTestId('page-designer-region-wrapper-footer').getByText('Status history', { exact: true })).toBeVisible();
+    await saveDraftAndPublish(page, baseline.version + 1);
 
-  await page.goto(`/app/tickets/${encodeURIComponent(historical.humanId)}`);
-  await expect(page.getByTestId('ticket-detail')).toBeVisible();
-  // Data is unchanged...
-  await expect(page.getByText(historicalTitle, { exact: true })).toBeVisible();
-  // ...and the widget published afterwards must not silently appear.
-  await expect(page.getByTestId('page-layout-region-footer').getByText('Historial de estado')).toHaveCount(0);
+    await page.goto(`/app/tickets/${encodeURIComponent(historical.id)}`);
+    await expect(page.getByTestId('ticket-detail')).toBeVisible();
+    // Data is unchanged...
+    await expect(page.getByText(historicalTitle, { exact: true })).toBeVisible();
+    // ...and the widget published afterwards must not silently appear.
+    await expect(page.getByTestId('page-layout-region-footer').getByText('Status history')).toHaveCount(0);
 
-  // The ticket remains pinned to its original executable manifest.
-  const historicalManifest = await jsonOrFailure<{ version: number }>(
-    await request.get(`${apiBaseURL}/entities/INC/${historical.id}/manifest`),
-    'get historical INC manifest',
-  );
-  expect(historicalManifest.version).toBe(baseline.version);
+    // The ticket remains pinned to its original executable manifest.
+    const historicalManifest = await jsonOrFailure<{ version: number }>(
+      await stack.isolatedRequest.get(`/entities/INC/${historical.id}/manifest`),
+      'get historical INC manifest',
+    );
+    expect(historicalManifest.version).toBe(baseline.version);
+  } finally {
+    await stack.cleanup();
+  }
 });

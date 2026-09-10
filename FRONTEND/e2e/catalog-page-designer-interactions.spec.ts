@@ -19,6 +19,16 @@ import { mockAuthenticatedAdmin } from './support';
 //     nothing on the canvas, so adding one looked like a no-op;
 //   * and drag was the only way to add anything at all.
 
+// Estos casos necesitan más de los 60 s por omisión.
+//
+// No es que sean lentos por descuido: cada uno abre el Catalog Builder contra
+// el backend real, entra al diseñador de la definición de INC y arrastra con
+// el ratón paso a paso, que es la única forma de ejercitar dnd-kit de verdad.
+// «Una región fija rechaza todo lo que ofrece la paleta» tarda ~51 s sola, así
+// que con la carga del resto del archivo cruzaba el límite y expiraba — un
+// fallo que parecía del arrastre y era del reloj. Se midió antes de subirlo.
+test.setTimeout(120_000);
+
 async function openPageDesignerForINC(page: Page, expand = true) {
   await page.setViewportSize({ width: 1400, height: 1200 });
   await mockAuthenticatedAdmin(page);
@@ -42,7 +52,26 @@ async function openPageDesignerForEntity(page: Page, entityKey: 'PRB' | 'RFC') {
   await expect(page.getByTestId('page-designer')).toBeVisible();
 }
 
-async function performDrag(page: Page, source: Locator, target: Locator, atBottom = true) {
+/**
+ * Arrastra `source` hasta `target` y suelta.
+ *
+ * `expectAccepted` NO es cosmético: es lo que hace la espera determinista.
+ * Antes el helper esperaba un tiempo fijo antes de soltar, y no podía hacer
+ * otra cosa porque no sabía si el destino iba a aceptar. Bajo carga ese tiempo
+ * se quedaba corto, el suelto caía en el vacío y dos pruebas de este archivo
+ * fallaban alternándose según lo llena que estuviera la suite.
+ *
+ * Sabiendo la expectativa, cada caso espera la señal que le corresponde:
+ * el que acepta espera a que el destino se marque activo (`data-over`), y el
+ * que rechaza comprueba que no se marque nunca.
+ */
+async function performDrag(
+  page: Page,
+  source: Locator,
+  target: Locator,
+  atBottom = true,
+  expectAccepted = true,
+) {
   await source.scrollIntoViewIfNeeded();
   await page.waitForTimeout(100);
   const sourceBox = await source.boundingBox();
@@ -61,16 +90,48 @@ async function performDrag(page: Page, source: Locator, target: Locator, atBotto
   const endY = atBottom ? targetBox.y + Math.max(10, targetBox.height - 15) : targetBox.y + targetBox.height / 2;
 
   await page.mouse.move(endX, endY, { steps: 15 });
-  await page.waitForTimeout(150);
+  // Un segundo movimiento en el destino: dnd-kit resuelve el destino activo al
+  // recibir un movimiento, y con uno solo la última posición puede llegar antes
+  // de que haya medido las zonas.
+  await page.mouse.move(endX, endY);
+
+  const activo = target.and(page.locator('[data-over="true"]'));
+  if (expectAccepted) {
+    // Se espera a que el destino DIGA que está activo. Si no lo dice, mover
+    // otra vez y volver a esperar: un solo reintento cubre el caso de que la
+    // primera medida de dnd-kit llegara antes de que la capa de arrastre
+    // estuviera montada, sin esconder un destino que de verdad no acepta.
+    try {
+      await expect(activo).toHaveCount(1, { timeout: 3_000 });
+    } catch {
+      await page.mouse.move(endX + 1, endY + 1);
+      await page.mouse.move(endX, endY);
+      await expect(
+        activo,
+        'el destino nunca se marco activo: el arrastre no llego, y soltar aqui no probaria nada',
+      ).toHaveCount(1, { timeout: 5_000 });
+    }
+  } else {
+    // El caso que RECHAZA. No hay señal que esperar —una zona bloqueada no se
+    // activa nunca— así que se comprueba justamente eso, y de paso se le da
+    // tiempo real al arrastre para equivocarse si fuera a hacerlo.
+    await expect(activo).toHaveCount(0);
+    await page.waitForTimeout(300);
+    await expect(
+      activo,
+      'una region fija no debe marcarse activa durante el arrastre',
+    ).toHaveCount(0);
+  }
+
   await page.mouse.up();
   await page.waitForTimeout(200);
 }
 
 async function ensureAssetDetailsSlot(page: Page) {
-  let slot = page.locator('[data-testid^="page-designer-slot-cell-"]').filter({ hasText: 'Detalles del activo' }).first();
+  let slot = page.locator('[data-testid^="page-designer-slot-cell-"]').filter({ hasText: 'Asset Details' }).first();
   if (!(await slot.count())) {
     await page.getByTestId('page-designer-palette-widget-assetDetails').click();
-    slot = page.locator('[data-testid^="page-designer-slot-cell-"]').filter({ hasText: 'Detalles del activo' }).first();
+    slot = page.locator('[data-testid^="page-designer-slot-cell-"]').filter({ hasText: 'Asset Details' }).first();
   }
   await expect(slot).toBeVisible();
   return slot;
@@ -85,7 +146,7 @@ test('drag from palette into an empty region still works', async ({ page }) => {
     false,
   );
   await expect(
-    page.getByTestId('page-designer-region-wrapper-footer').getByText('Soluciones sugeridas').first(),
+    page.getByTestId('page-designer-region-wrapper-footer').getByText('Suggested Solutions').first(),
   ).toBeVisible();
 });
 
@@ -117,15 +178,15 @@ test('drag an existing slot from the sidebar into main still works', async ({ pa
     false,
   );
   await expect(
-    page.getByTestId('page-designer-region-wrapper-main').getByText('Detalles del activo').first(),
+    page.getByTestId('page-designer-region-wrapper-main').getByText('Asset Details').first(),
   ).toBeVisible();
 });
 
 test('a fixed region rejects everything the palette offers', async ({ page }) => {
   await openPageDesignerForINC(page, false);
   const header = page.getByTestId('page-designer-region-wrapper-header');
-  await performDrag(page, page.getByTestId('page-designer-palette-widget-suggestedSolutions'), header, false);
-  await expect(header.getByText('Soluciones sugeridas')).toHaveCount(0);
+  await performDrag(page, page.getByTestId('page-designer-palette-widget-suggestedSolutions'), header, false, false);
+  await expect(header.getByText('Suggested Solutions')).toHaveCount(0);
   // Still exactly the one locked widget it started with.
   await expect(header.getByTestId(/^page-designer-slot-/)).toHaveCount(1);
 });
@@ -134,31 +195,31 @@ test('click-to-add, resize from the panel, Delete and Ctrl+Z', async ({ page }) 
   await openPageDesignerForINC(page);
 
   await page.getByTestId('page-designer-palette-content-divider').click();
-  const slot = page.getByTestId(/^page-designer-slot-cell-/).filter({ hasText: 'Separador' });
+  const slot = page.getByTestId(/^page-designer-slot-cell-/).filter({ hasText: 'Divider' });
   await expect(slot).toHaveCount(1);
-  await expect(page.getByTestId('page-designer-properties').getByText('Elemento estructural')).toBeVisible();
+  await expect(page.getByTestId('page-designer-properties').getByText('Structural element')).toBeVisible();
 
   // Width control in the properties panel drives the same resize path the
   // drag handle does.
-  await page.getByTestId('page-designer-properties').getByRole('button', { name: /La mitad/ }).click();
-  await expect(slot).toHaveAttribute('aria-label', /6 de 12 columnas/);
+  await page.getByTestId('page-designer-properties').getByRole('button', { name: /Half/ }).click();
+  await expect(slot).toHaveAttribute('aria-label', /6 of 12 columns/);
 
   // Delete removes the selection; Ctrl+Z brings it back.
   await page.keyboard.press('Delete');
-  await expect(page.getByTestId(/^page-designer-slot-cell-/).filter({ hasText: 'Separador' })).toHaveCount(0);
+  await expect(page.getByTestId(/^page-designer-slot-cell-/).filter({ hasText: 'Divider' })).toHaveCount(0);
   await page.keyboard.press('Control+z');
-  await expect(page.getByTestId(/^page-designer-slot-cell-/).filter({ hasText: 'Separador' })).toHaveCount(1);
+  await expect(page.getByTestId(/^page-designer-slot-cell-/).filter({ hasText: 'Divider' })).toHaveCount(1);
 });
 
 test('move-to-region from the properties panel relocates the element', async ({ page }) => {
   await openPageDesignerForINC(page);
   const assetSlot = await ensureAssetDetailsSlot(page);
   await assetSlot.click();
-  await page.getByTestId('page-designer-properties').getByRole('button', { name: 'Secciones inferiores' }).click();
+  await page.getByTestId('page-designer-properties').getByRole('button', { name: 'Footer sections' }).click();
   await expect(
     page
       .getByTestId('page-designer-region-wrapper-footer')
-      .getByText('Detalles del activo').first(),
+      .getByText('Asset Details').first(),
   ).toBeVisible();
 });
 
@@ -179,16 +240,24 @@ test('the resize handle still drags, and canvas widgets are inert', async ({ pag
   await page.waitForTimeout(300);
   expect(await slot.getAttribute('aria-label')).not.toBe(before);
 
-  // The previewed widget's own controls are inert: the RESOLVER button is
+  // The previewed widget's own controls are inert: the Resolve button is
   // rendered and visible, but the slot above it takes the pointer, so a click
   // configures the element instead of operating the simulated ticket.
-  const resolve = page.getByTestId('page-designer-region-wrapper-actions').getByText('RESOLVER');
+  //
+  // TicketActionsWidget's real button reads "Resolve" (English) — this test
+  // asserted the stale "RESOLVER" (an all-caps Spanish label that never
+  // existed in the component's actual JSX, only ever in this test), which
+  // made getByText find nothing and every run time out at 60s.
+  // getByText alone is ambiguous here: the status <select>'s own
+  // "Resolved" <option> also matches by substring. The real "Resolve"
+  // control is a <button>, so scope to that role.
+  const resolve = page.getByTestId('page-designer-region-wrapper-actions').getByRole('button', { name: 'Resolve' });
   await expect(resolve).toBeVisible();
   const resolveBox = await resolve.boundingBox();
-  if (!resolveBox) throw new Error('no RESOLVER box');
+  if (!resolveBox) throw new Error('no Resolve box');
   await page.mouse.click(resolveBox.x + resolveBox.width / 2, resolveBox.y + resolveBox.height / 2);
-  await expect(page.getByTestId('page-designer-properties').getByText('Barra de acciones').first()).toBeVisible();
-  // Status untouched: the actions bar still offers RESOLVER, not REABRIR.
+  await expect(page.getByTestId('page-designer-properties').getByText('Action Bar').first()).toBeVisible();
+  // Status untouched: the actions bar still offers Resolve, not Reopen.
   await expect(resolve).toBeVisible();
 });
 

@@ -67,7 +67,7 @@ export function NotificationBell({ enabled = true }: { enabled?: boolean }) {
     <div className="relative">
       <button
         onClick={abrir}
-        aria-label={noLeidas > 0 ? `Notificaciones (${noLeidas} sin leer)` : 'Notificaciones'}
+        aria-label={noLeidas > 0 ? `Notifications (${noLeidas} unread)` : 'Notifications'}
         aria-expanded={abierta}
         data-testid="notification-bell"
         className="relative w-10 h-10 rounded-full bg-surface-container-low border border-border/50 flex items-center justify-center text-on-surface-variant hover:text-cyan-400 hover:border-cyan-500/30 transition-colors"
@@ -92,7 +92,7 @@ export function NotificationBell({ enabled = true }: { enabled?: boolean }) {
           >
             <div className="flex items-center justify-between px-5 py-3 border-b border-border/40">
               <h4 className="text-xs font-black uppercase tracking-[0.15em] text-on-surface">
-                Notificaciones
+                Notifications
               </h4>
               <div className="flex items-center gap-3">
               {!mostrandoPreferencias && (
@@ -102,13 +102,13 @@ export function NotificationBell({ enabled = true }: { enabled?: boolean }) {
                 data-testid="notification-mark-all"
                 className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 transition-colors disabled:opacity-40 disabled:hover:text-cyan-400"
               >
-                {marcarTodas.isPending ? 'Marcando…' : 'Marcar todas como leídas'}
+                {marcarTodas.isPending ? 'Marking…' : 'Mark all as read'}
               </button>
               )}
               <button
                 type="button"
                 onClick={() => setMostrandoPreferencias((value) => !value)}
-                aria-label={mostrandoPreferencias ? 'Volver a notificaciones' : 'Configurar notificaciones'}
+                aria-label={mostrandoPreferencias ? 'Back to notifications' : 'Configure notifications'}
                 data-testid="notification-preferences-button"
                 className="text-on-surface-variant hover:text-cyan-400 transition-colors"
               >
@@ -120,11 +120,11 @@ export function NotificationBell({ enabled = true }: { enabled?: boolean }) {
             {mostrandoPreferencias ? (
               <NotificationPreferencesPanel
                 loading={preferencias.isPending}
-                error={preferencias.isError ? preferencias.error : null}
+                error={preferencias.error instanceof Error ? preferencias.error : null}
                 emailOperational={preferencias.data?.canalesOperativos.includes('email') ?? false}
                 emailEnabled={preferencias.data?.canales.email ?? false}
                 saving={actualizarPreferencias.isPending}
-                saveError={actualizarPreferencias.isError ? actualizarPreferencias.error : null}
+                saveError={actualizarPreferencias.error instanceof Error ? actualizarPreferencias.error : null}
                 onToggleEmail={alternarCorreo}
                 onRetry={() => void preferencias.refetch()}
               />
@@ -136,16 +136,16 @@ export function NotificationBell({ enabled = true }: { enabled?: boolean }) {
                   className="flex items-center justify-center gap-2 px-5 py-10 text-sm text-on-surface-variant"
                 >
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Cargando notificaciones…
+                  Loading notifications…
                 </div>
               )}
 
               {bandeja.isError && (
                 <div data-testid="notification-error" className="px-5 py-8 text-center">
                   <AlertTriangle className="w-6 h-6 text-amber-400 mx-auto mb-3" />
-                  <p className="text-sm text-on-surface">No pudimos cargar tus notificaciones.</p>
+                  <p className="text-sm text-on-surface">Could not load your notifications.</p>
                   <p className="mt-1 text-xs text-on-surface-variant">
-                    {bandeja.error instanceof Error ? bandeja.error.message : 'Error desconocido'}
+                    {bandeja.error instanceof Error ? bandeja.error.message : 'Unknown error'}
                   </p>
                   <button
                     onClick={() => void bandeja.refetch()}
@@ -153,7 +153,7 @@ export function NotificationBell({ enabled = true }: { enabled?: boolean }) {
                     className="mt-4 inline-flex items-center gap-2 rounded-xl border border-border/50 px-4 py-2 text-xs font-bold text-on-surface hover:border-cyan-500/40 hover:text-cyan-400 transition-colors"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
-                    Reintentar
+                    Retry
                   </button>
                 </div>
               )}
@@ -164,7 +164,7 @@ export function NotificationBell({ enabled = true }: { enabled?: boolean }) {
                   className="px-5 py-10 text-center text-sm text-on-surface-variant"
                 >
                   <BellOff className="w-6 h-6 mx-auto mb-3 opacity-60" />
-                  No tienes notificaciones.
+                  You have no notifications.
                 </div>
               )}
 
@@ -208,7 +208,7 @@ function NotificationPreferencesPanel({
     return (
       <div className="flex items-center justify-center gap-2 px-5 py-10 text-sm text-on-surface-variant">
         <Loader2 className="h-4 w-4 animate-spin" />
-        Cargando preferencias…
+        Loading preferences…
       </div>
     );
   }
@@ -216,9 +216,9 @@ function NotificationPreferencesPanel({
     return (
       <div className="px-5 py-8 text-center">
         <AlertTriangle className="mx-auto mb-3 h-6 w-6 text-amber-400" />
-        <p className="text-sm text-on-surface">No pudimos cargar tus preferencias.</p>
+        <p className="text-sm text-on-surface">Could not load your preferences.</p>
         <button type="button" onClick={onRetry} className="mt-3 text-xs font-bold text-cyan-400">
-          Reintentar
+          Retry
         </button>
       </div>
     );
@@ -226,20 +226,20 @@ function NotificationPreferencesPanel({
   return (
     <div className="space-y-4 px-5 py-5" data-testid="notification-preferences-panel">
       <div>
-        <p className="text-sm font-bold text-on-surface">Canales de entrega</p>
+        <p className="text-sm font-bold text-on-surface">Delivery channels</p>
         <p className="mt-1 text-xs text-on-surface-variant">
-          Las notificaciones dentro de SIG-DESK siempre permanecen activas.
+          In-app SIG-DESK notifications always remain active.
         </p>
       </div>
       <div className="flex items-center justify-between rounded-xl border border-border/40 bg-surface-container-low px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
           <Mail className="h-4 w-4 shrink-0 text-cyan-400" />
           <div>
-            <p className="text-sm font-bold text-on-surface">Correo electrónico</p>
+            <p className="text-sm font-bold text-on-surface">Email</p>
             <p className="text-[11px] text-on-surface-variant">
               {emailOperational
-                ? 'Recibe también por el correo de tu perfil.'
-                : 'El administrador aún no configuró Microsoft Graph.'}
+                ? 'Also receive notifications at your profile email address.'
+                : 'Administrator has not configured Microsoft Graph yet.'}
             </p>
           </div>
         </div>
@@ -263,7 +263,7 @@ function NotificationPreferencesPanel({
       </div>
       {saveError && (
         <p className="text-xs text-red-400" role="alert">
-          No pudimos guardar el cambio. Inténtalo nuevamente.
+          Could not save changes. Please try again.
         </p>
       )}
     </div>
@@ -298,7 +298,7 @@ function NotificationRow({
       </div>
       {!notificacion.leida && (
         <span
-          aria-label="Sin leer"
+          aria-label="Unread"
           data-testid="notification-unread-dot"
           className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] shrink-0 mt-1.5"
         />

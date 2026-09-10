@@ -84,10 +84,10 @@ const FIELD_TYPE_ICONS: Record<FieldType, LucideIcon> = {
 };
 
 export const CONTENT_META: Record<ContentKind, { label: string; description: string; icon: LucideIcon }> = {
-  section: { label: 'Título de sección', description: 'Separa el contenido con un encabezado', icon: Heading },
-  text: { label: 'Texto informativo', description: 'Una nota o instrucción fija para el agente', icon: Info },
-  divider: { label: 'Separador', description: 'Una línea divisoria horizontal', icon: Minus },
-  spacer: { label: 'Espacio', description: 'Un espacio en blanco vertical', icon: MoveVertical },
+  section: { label: 'Section title', description: 'Separates content with a header', icon: Heading },
+  text: { label: 'Informational text', description: 'A fixed note or instruction for the agent', icon: Info },
+  divider: { label: 'Divider', description: 'A horizontal dividing line', icon: Minus },
+  spacer: { label: 'Spacer', description: 'A vertical blank space', icon: MoveVertical },
 };
 
 export function widgetLibraryItems(rules: SurfaceRules, entityKey: string): PageLibraryItem[] {
@@ -97,7 +97,7 @@ export function widgetLibraryItems(rules: SurfaceRules, entityKey: string): Page
       kind: 'widget',
       widgetKey: widget.key,
       label: widget.label,
-      description: `Componente de ${widget.ownerModule}`,
+      description: `Component from ${widget.ownerModule}`,
       icon: widget.icon,
     }));
 }
@@ -110,7 +110,7 @@ export function catalogFieldLibraryItems(specification: CatalogSpecification): P
     // A field saved without a label would otherwise render as a blank row
     // with only its description — the technical key is at least identifiable.
     label: field.label || field.key,
-    description: field.required ? 'Campo obligatorio de la definición' : 'Campo de la definición',
+    description: field.required ? 'Required field from definition' : 'Field from definition',
     icon: FIELD_TYPE_ICONS[field.type] ?? Type,
   }));
 }
@@ -130,7 +130,7 @@ export function ticketFieldLibraryItems(
     source: item.source,
     fieldKey: item.fieldKey,
     label: item.label,
-    description: 'Dato que el módulo de Tickets mantiene',
+    description: 'Data maintained by the Tickets module',
     icon: Info,
   }));
 }
@@ -146,7 +146,7 @@ export function contentPaletteItems(): PageLibraryItem[] {
 }
 
 export function contentKindLabel(contentKind: ContentKind | undefined): string {
-  return contentKind ? CONTENT_META[contentKind].label : 'Elemento';
+  return contentKind ? CONTENT_META[contentKind].label : 'Element';
 }
 
 export function contentKindIcon(contentKind: ContentKind | undefined): LucideIcon {

@@ -109,7 +109,7 @@ export function PageRegionsSkeleton({
 // Structural renderer for the real page/preview: fixed region order, each
 // region its own 12-column grid. Field/widget placements are delegated to
 // the caller via `renderPlacement`; `content` placements are rendered
-// internally. Used by the real ticket page and the Catalog Builder preview —
+// internally. Used by the real ticket page and the Entity Builder preview —
 // the only thing that differs between them is what `renderPlacement` returns.
 export function PageLayoutRenderer({
   page,

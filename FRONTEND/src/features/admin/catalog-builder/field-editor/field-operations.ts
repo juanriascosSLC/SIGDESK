@@ -30,9 +30,9 @@ const REGION_NAMES: RegionName[] = ['header', 'actions', 'main', 'sidebar', 'foo
 export type SurfaceKey = 'createPage' | 'editPage' | 'detailPage';
 
 export const SURFACE_LABELS: Record<SurfaceKey, string> = {
-  createPage: 'Crear',
-  editPage: 'Editar',
-  detailPage: 'Detalle',
+  createPage: 'Create',
+  editPage: 'Edit',
+  detailPage: 'Detail',
 };
 
 function pagesOf(definition: PageLayoutDefinition | undefined): PageLayout[] {
@@ -109,7 +109,7 @@ export function uniqueFieldKey(existing: string[], desired: string): string {
  * derivado de la identidad del campo original.
  */
 export function duplicateField(field: FieldDefinition, existingKeys: string[]): FieldDefinition {
-  const label = `${field.label} (copia)`;
+  const label = `${field.label} (copy)`;
   return {
     ...structuredClone(field),
     key: uniqueFieldKey(existingKeys, label),
@@ -191,39 +191,39 @@ export function defaultValueFitsType(value: unknown, type: FieldType): boolean {
 /** Resumen legible de las reglas activas, para la tarjeta colapsada. */
 export function fieldRuleSummary(field: FieldDefinition): string[] {
   const rules: string[] = [];
-  if (field.required) rules.push('obligatorio');
-  if (field.requiredWhen) rules.push('obligatorio condicional');
-  if (field.visibleWhen) rules.push('visible condicional');
-  if (field.readOnly) rules.push('solo lectura');
+  if (field.required) rules.push('required');
+  if (field.requiredWhen) rules.push('conditionally required');
+  if (field.visibleWhen) rules.push('conditionally visible');
+  if (field.readOnly) rules.push('read-only');
   if (field.minLength !== undefined || field.maxLength !== undefined) {
-    rules.push(`${field.minLength ?? 0}–${field.maxLength ?? '∞'} caracteres`);
+    rules.push(`${field.minLength ?? 0}–${field.maxLength ?? '∞'} characters`);
   }
   if (field.min !== undefined || field.max !== undefined) {
     rules.push(`${field.min ?? '−∞'}…${field.max ?? '∞'}`);
   }
-  if (field.step !== undefined) rules.push(`pasos de ${field.step}`);
-  if (field.format) rules.push(`formato ${field.format}`);
-  if (field.pattern) rules.push('patrón propio');
+  if (field.step !== undefined) rules.push(`step of ${field.step}`);
+  if (field.format) rules.push(`${field.format} format`);
+  if (field.pattern) rules.push('custom pattern');
   if (field.minDate || field.maxDate) {
-    rules.push(`fechas ${field.minDate ?? 'sin límite'} → ${field.maxDate ?? 'sin límite'}`);
+    rules.push(`dates ${field.minDate ?? 'no limit'} → ${field.maxDate ?? 'no limit'}`);
   }
   if (field.minItems !== undefined || field.maxItems !== undefined) {
-    const unit = bindingIsMultiple(field) ? 'dispositivos' : 'opciones';
+    const unit = bindingIsMultiple(field) ? 'devices' : 'options';
     rules.push(`${field.minItems ?? 0}–${field.maxItems ?? '∞'} ${unit}`);
   }
   if (fieldTypeUsesOptions(field.type)) {
-    rules.push(`${field.options?.length ?? 0} opciones`);
+    rules.push(`${field.options?.length ?? 0} options`);
   }
   if (field.defaultValue !== undefined && field.defaultValue !== '') {
-    rules.push(`por defecto ${describeDefault(field.defaultValue)}`);
+    rules.push(`default ${describeDefault(field.defaultValue)}`);
   }
-  if (field.bindsTo) rules.push(bindingIsMultiple(field) ? 'varios dispositivos' : 'vinculado');
+  if (field.bindsTo) rules.push(bindingIsMultiple(field) ? 'multiple devices' : 'bound');
   return rules;
 }
 
 function describeDefault(value: unknown): string {
-  if (Array.isArray(value)) return `${value.length} opciones`;
-  if (typeof value === 'boolean') return value ? 'sí' : 'no';
+  if (Array.isArray(value)) return `${value.length} options`;
+  if (typeof value === 'boolean') return value ? 'yes' : 'no';
   return String(value);
 }
 
@@ -266,7 +266,7 @@ export function parseOptionsFromText(
       label = line;
       value = technicalKey(line);
     }
-    if (!value) value = 'opcion';
+    if (!value) value = 'option';
     // Una lista pegada con repetidos produciría opciones que el servidor
     // acepta pero que la persona no puede distinguir.
     let unique = value;

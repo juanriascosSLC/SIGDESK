@@ -34,13 +34,13 @@ function initialChangeData(
   const rootCause = String(problem.data.rootCause || problem.data.description || '');
   return {
     ...data,
-    title: `Resolver ${problem.humanId}: ${String(problem.data.title || 'causa raíz')}`,
-    description: `Cambio controlado para resolver ${problem.humanId}. ${rootCause}`,
+    title: `Resolve ${problem.humanId}: ${String(problem.data.title || 'root cause')}`,
+    description: `Controlled change to resolve ${problem.humanId}. ${rootCause}`,
     changeType: data.changeType || 'normal',
     requester: currentUserName,
     changeOwner: currentUserName,
-    serviceAffected: problem.data.serviceAffected || 'Servicio por determinar',
-    reason: `Eliminar la causa raíz documentada en ${problem.humanId}: ${rootCause}`,
+    serviceAffected: problem.data.serviceAffected || 'Service to be determined',
+    reason: `Eliminate the root cause documented in ${problem.humanId}: ${rootCause}`,
     impact: problem.data.impact || data.impact || 'medium',
     urgency: data.urgency || 'medium',
     probability: data.probability || 'medium',
@@ -97,7 +97,7 @@ export function ProblemChangeDialog({
   const workflowMutation = useMutation({
     mutationFn: async () => {
       const specification = definitionQuery.data?.specification;
-      if (!specification) throw new Error('La definición RFC no está disponible.');
+      if (!specification) throw new Error('The RFC definition is not available.');
       const data: Record<string, unknown> = {};
       for (const field of specification.fields) {
         if (
@@ -111,7 +111,27 @@ export function ProblemChangeDialog({
         if (!isFieldRequired(field, formData) && (value === '' || value == null)) continue;
         data[field.key] = value;
       }
-      const change = await createChange(data, idempotencyKey.current);
+      // Propagates the PRB's own validated asset snapshot to the new RFC
+      // (Asset/CMDB operational-history correction — future-record
+      // correctness): mirrors exactly how IncidentChangeDialog already
+      // forwards ticket.assetContext for INC -> RFC. Without this, an RFC
+      // created through this normal workflow would never populate
+      // rfc_asset_links, and the only way to still find it from the asset
+      // would be relation traversal (via_incident/via_problem) — real, but
+      // never a substitute for the RFC having its own snapshot when one is
+      // available at creation time.
+      const change = await createChange(
+        data,
+        idempotencyKey.current,
+        problem.assetContext
+          ? {
+              siteAssetId: problem.assetContext.siteAssetId,
+              links: problem.assetContext.links
+                .filter((link) => link.assetId !== problem.assetContext?.siteAssetId)
+                .map((link) => ({ assetId: link.assetId, role: link.role })),
+            }
+          : undefined,
+      );
       await createEntityRelation('PRB', problem.id, 'resolvedBy', 'RFC', change.id);
       return change;
     },
@@ -138,12 +158,12 @@ export function ProblemChangeDialog({
             <div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-primary">
               <GitBranch className="h-4 w-4" /> PRB → RFC
             </div>
-            <h2 className="text-xl font-black text-on-surface">Crear cambio para resolver la causa raíz</h2>
+            <h2 className="text-xl font-black text-on-surface">Create a change to resolve the root cause</h2>
             <p className="mt-1 text-xs text-on-surface-variant">
-              Change Management calculará el riesgo y administrará la RFC; el PRB solo conservará la relación tipada.
+              Change Management will calculate risk and manage the RFC; the PRB will only keep the typed relation.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-xl p-2 text-on-surface-variant hover:bg-surface-container" aria-label="Cerrar">
+          <button type="button" onClick={onClose} className="rounded-xl p-2 text-on-surface-variant hover:bg-surface-container" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -168,10 +188,10 @@ export function ProblemChangeDialog({
           </div>
         )}
         <div className="sticky bottom-0 flex justify-end gap-3 border-t border-border/40 bg-surface-container-low/95 p-6">
-          <button type="button" onClick={onClose} className="secondary-button">Cancelar</button>
+          <button type="button" onClick={onClose} className="secondary-button">Cancel</button>
           <button type="submit" disabled={workflowMutation.isPending || !definitionQuery.data} className="primary-button disabled:opacity-50">
             <CheckCircle2 className="h-4 w-4" />
-            {workflowMutation.isPending ? 'Creando y vinculando…' : 'Crear RFC y vincular'}
+            {workflowMutation.isPending ? 'Creating and linking…' : 'Create RFC and link'}
           </button>
         </div>
       </form>

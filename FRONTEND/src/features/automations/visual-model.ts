@@ -11,8 +11,22 @@ import type {
 } from './api';
 import type { WorkflowNode, WorkflowNodeData } from './CustomNodes';
 
-export type CatalogGroup = 'Disparadores' | 'Condiciones' | 'Control' | 'Acciones';
+export type CatalogGroup = 'Triggers' | 'Conditions' | 'Control' | 'Actions';
 export type SupportStatus = 'operational' | 'planned';
+
+// English display labels for the (Spanish-valued) priority enum stored on a
+// ticket/condition node. Shared between the editor's own priority dropdown
+// (WorkflowCanvasEditor) and the canvas node's summary text (CustomNodes) —
+// a single source so both never drift: CustomNodes used to interpolate the
+// raw enum value directly ("Priority = critica"), a real English-localization
+// gap only the canvas summary had, found live while migrating this
+// workstream's E2E specs.
+export const priorityLabels: Record<string, string> = {
+  baja: 'Low',
+  media: 'Medium',
+  alta: 'High',
+  critica: 'Critical',
+};
 
 export interface WorkflowCatalogItem {
   key: string;
@@ -26,50 +40,38 @@ export interface WorkflowCatalogItem {
 }
 
 export const workflowCatalog: WorkflowCatalogItem[] = [
-  { key: 'ticket.created', group: 'Disparadores', nodeType: 'trigger', title: 'INC creado', description: 'Al registrar un incidente.', support: 'operational', color: 'cyan' },
-  { key: 'ticket.status_changed', group: 'Disparadores', nodeType: 'trigger', title: 'Estado modificado', description: 'Al transicionar un ticket.', support: 'planned', color: 'cyan' },
-  { key: 'ticket.assigned', group: 'Disparadores', nodeType: 'trigger', title: 'Ticket asignado', description: 'Al cambiar responsable o equipo.', support: 'planned', color: 'cyan' },
-  { key: 'ticket.comment_added', group: 'Disparadores', nodeType: 'trigger', title: 'Comentario agregado', description: 'Al registrar actividad.', support: 'planned', color: 'cyan' },
-  { key: 'ticket.sla_at_risk', group: 'Disparadores', nodeType: 'trigger', title: 'SLA en riesgo', description: 'Al alcanzar un umbral SLA.', support: 'planned', color: 'cyan' },
-  { key: 'problem.created', group: 'Disparadores', nodeType: 'trigger', title: 'PRB creado', description: 'Al abrir una investigación.', support: 'planned', color: 'cyan' },
-  { key: 'change.created', group: 'Disparadores', nodeType: 'trigger', title: 'RFC creado', description: 'Al registrar un cambio.', support: 'planned', color: 'cyan' },
-  { key: 'task.overdue', group: 'Disparadores', nodeType: 'trigger', title: 'Task vencida', description: 'Cuando vence una tarea RFC.', support: 'planned', color: 'cyan' },
+  { key: 'ticket.created', group: 'Triggers', nodeType: 'trigger', title: 'INC Created', description: 'When an incident is created.', support: 'operational', color: 'cyan' },
+  { key: 'ticket.status_changed', group: 'Triggers', nodeType: 'trigger', title: 'Status Changed', description: 'When a ticket transitions.', support: 'planned', color: 'cyan' },
+  { key: 'ticket.assigned', group: 'Triggers', nodeType: 'trigger', title: 'Ticket Assigned', description: 'When assignee or team changes.', support: 'planned', color: 'cyan' },
+  { key: 'ticket.comment_added', group: 'Triggers', nodeType: 'trigger', title: 'Comment Added', description: 'When activity is recorded.', support: 'planned', color: 'cyan' },
+  { key: 'ticket.sla_at_risk', group: 'Triggers', nodeType: 'trigger', title: 'SLA at Risk', description: 'When an SLA threshold is reached.', support: 'planned', color: 'cyan' },
+  { key: 'problem.created', group: 'Triggers', nodeType: 'trigger', title: 'PRB Created', description: 'When an investigation is opened.', support: 'planned', color: 'cyan' },
+  { key: 'change.created', group: 'Triggers', nodeType: 'trigger', title: 'RFC Created', description: 'When a change is created.', support: 'planned', color: 'cyan' },
+  { key: 'task.overdue', group: 'Triggers', nodeType: 'trigger', title: 'Task Overdue', description: 'When an RFC task is overdue.', support: 'planned', color: 'cyan' },
 
-  { key: 'condition.priority', group: 'Condiciones', nodeType: 'condition', title: 'Prioridad', description: 'Baja, media, alta o crítica.', support: 'operational', color: 'amber', defaults: { conditionMode: 'priority', priority: 'critica' } },
-  { key: 'condition.status', group: 'Condiciones', nodeType: 'condition', title: 'Estado', description: 'Compara el estado actual.', support: 'planned', color: 'amber' },
-  { key: 'condition.site', group: 'Condiciones', nodeType: 'condition', title: 'Sitio', description: 'Filtra por sitio afectado.', support: 'planned', color: 'amber' },
-  { key: 'condition.device_type', group: 'Condiciones', nodeType: 'condition', title: 'Tipo de dispositivo', description: 'Cámara, NVR, switch, PDU…', support: 'planned', color: 'amber' },
-  { key: 'condition.team', group: 'Condiciones', nodeType: 'condition', title: 'Equipo o área', description: 'Responsable o interesado.', support: 'planned', color: 'amber' },
-  { key: 'condition.custom_field', group: 'Condiciones', nodeType: 'condition', title: 'Campo dinámico', description: 'Evalúa un campo del Catalog Builder.', support: 'planned', color: 'amber' },
-  { key: 'condition.sla_percent', group: 'Condiciones', nodeType: 'condition', title: 'Consumo de SLA', description: 'Compara porcentaje consumido.', support: 'planned', color: 'amber' },
+  { key: 'condition.priority', group: 'Conditions', nodeType: 'condition', title: 'Priority', description: 'Low, medium, high, or critical.', support: 'operational', color: 'amber', defaults: { conditionMode: 'priority', priority: 'critica' } },
+  { key: 'condition.status', group: 'Conditions', nodeType: 'condition', title: 'Status', description: 'Compares the current status.', support: 'planned', color: 'amber' },
+  { key: 'condition.site', group: 'Conditions', nodeType: 'condition', title: 'Site', description: 'Filters by affected site.', support: 'planned', color: 'amber' },
+  { key: 'condition.device_type', group: 'Conditions', nodeType: 'condition', title: 'Device Type', description: 'Camera, NVR, switch, PDU…', support: 'planned', color: 'amber' },
+  { key: 'condition.team', group: 'Conditions', nodeType: 'condition', title: 'Team or Area', description: 'Assignee or stakeholder.', support: 'planned', color: 'amber' },
+  { key: 'condition.custom_field', group: 'Conditions', nodeType: 'condition', title: 'Dynamic Field', description: 'Evaluates an Entity Builder field.', support: 'planned', color: 'amber' },
+  { key: 'condition.sla_percent', group: 'Conditions', nodeType: 'condition', title: 'SLA Consumption', description: 'Compares percentage consumed.', support: 'planned', color: 'amber' },
 
-  { key: 'control.delay', group: 'Control', nodeType: 'delay', title: 'Esperar', description: 'Temporizador durable de Temporal.', support: 'operational', color: 'blue', defaults: { delayValue: '15', delayUnit: 'minutes' } },
-  { key: 'control.approval', group: 'Control', nodeType: 'approval', title: 'Solicitar aprobación', description: 'Pausa hasta aprobar o rechazar.', support: 'planned', color: 'purple' },
-  { key: 'control.foreach', group: 'Control', nodeType: 'foreach', title: 'Por cada elemento', description: 'Itera dispositivos o relaciones.', support: 'planned', color: 'cyan' },
-  { key: 'control.parser', group: 'Control', nodeType: 'parser', title: 'Transformar datos', description: 'Mapea variables para una acción.', support: 'planned', color: 'pink' },
+  { key: 'control.delay', group: 'Control', nodeType: 'delay', title: 'Wait', description: 'Temporal durable timer.', support: 'operational', color: 'blue', defaults: { delayValue: '15', delayUnit: 'minutes' } },
+  { key: 'control.approval', group: 'Control', nodeType: 'approval', title: 'Request Approval', description: 'Pauses until approved or rejected.', support: 'planned', color: 'purple' },
+  { key: 'control.foreach', group: 'Control', nodeType: 'foreach', title: 'For Each Item', description: 'Iterates over devices or relations.', support: 'planned', color: 'cyan' },
+  { key: 'control.parser', group: 'Control', nodeType: 'parser', title: 'Transform Data', description: 'Maps variables for an action.', support: 'planned', color: 'pink' },
 
-  { key: 'action.notify_stakeholders', group: 'Acciones', nodeType: 'action', title: 'Notificar interesados', description: 'Creador, personas y áreas interesadas.', support: 'operational', color: 'emerald', defaults: { actionType: 'notify', title: 'Notificar interesados' } },
-  // Un solo bloque, con el modo dentro del panel. Antes eran dos entradas
-  // separadas ("Asignar persona" y "Asignar equipo") y ambas estaban en
-  // preparación porque faltaba el directorio autenticado de Organization. Ya
-  // existe, así que la acción pasa a ser funcional; y se unifica porque elegir
-  // entre equipo y persona es una propiedad de la asignación, no dos bloques
-  // distintos: separarlas obligaba a borrar el nodo y volver a configurarlo
-  // entero solo para cambiar de modo.
-  { key: 'action.assign', group: 'Acciones', nodeType: 'action', title: 'Asignar automáticamente', description: 'Envía el trabajo a un área, equipo o persona.', support: 'operational', color: 'emerald', defaults: { assignmentMode: 'team', overwriteExisting: false } },
-  { key: 'action.add_stakeholder', group: 'Acciones', nodeType: 'action', title: 'Agregar interesado', description: 'Añade persona o área interesada.', support: 'planned', color: 'emerald' },
-  // Operativo desde ADR-0038: hay runtime real detrás
-  // (`cambiar_estado_ticket` → POST /internal/tickets/state), y es una
-  // operación INDEPENDIENTE de la asignación. Antes de eso el bloque estaba en
-  // preparación a propósito: la única ruta a `en_progreso` pasaba por asignar,
-  // así que ofrecerlo habría prometido algo que el backend no hacía.
-  { key: 'action.change_status', group: 'Acciones', nodeType: 'action', title: 'Cambiar estado', description: 'Solicita una transición publicada del lifecycle.', support: 'operational', color: 'emerald', defaults: { actionType: 'changeStatus' } },
-  { key: 'action.change_priority', group: 'Acciones', nodeType: 'action', title: 'Cambiar prioridad', description: 'Actualiza la prioridad del ticket.', support: 'planned', color: 'emerald' },
-  { key: 'action.add_comment', group: 'Acciones', nodeType: 'action', title: 'Agregar comentario', description: 'Registra actividad automática.', support: 'planned', color: 'emerald' },
-  { key: 'action.create_prb', group: 'Acciones', nodeType: 'action', title: 'Crear PRB', description: 'Abre un problema relacionado.', support: 'planned', color: 'emerald' },
-  { key: 'action.create_rfc', group: 'Acciones', nodeType: 'action', title: 'Crear RFC', description: 'Abre un cambio relacionado.', support: 'planned', color: 'emerald' },
-  { key: 'action.create_task', group: 'Acciones', nodeType: 'action', title: 'Crear Task', description: 'Crea trabajo multiárea en un RFC.', support: 'planned', color: 'emerald' },
-  { key: 'action.webhook', group: 'Acciones', nodeType: 'action', title: 'Invocar webhook', description: 'Llama una integración publicada.', support: 'planned', color: 'purple' },
+  { key: 'action.notify_stakeholders', group: 'Actions', nodeType: 'action', title: 'Notify Stakeholders', description: 'Creator, people, and interested areas.', support: 'operational', color: 'emerald', defaults: { actionType: 'notify', title: 'Notify Stakeholders' } },
+  { key: 'action.assign', group: 'Actions', nodeType: 'action', title: 'Assign Automatically', description: 'Routes work to an area, team, or person.', support: 'operational', color: 'emerald', defaults: { assignmentMode: 'team', overwriteExisting: false } },
+  { key: 'action.add_stakeholder', group: 'Actions', nodeType: 'action', title: 'Add Stakeholder', description: 'Adds person or interested area.', support: 'planned', color: 'emerald' },
+  { key: 'action.change_status', group: 'Actions', nodeType: 'action', title: 'Change Status', description: 'Requests a published lifecycle transition.', support: 'operational', color: 'emerald', defaults: { actionType: 'changeStatus' } },
+  { key: 'action.change_priority', group: 'Actions', nodeType: 'action', title: 'Change Priority', description: 'Updates ticket priority.', support: 'planned', color: 'emerald' },
+  { key: 'action.add_comment', group: 'Actions', nodeType: 'action', title: 'Add Comment', description: 'Records automated activity.', support: 'planned', color: 'emerald' },
+  { key: 'action.create_prb', group: 'Actions', nodeType: 'action', title: 'Create PRB', description: 'Opens a related problem.', support: 'planned', color: 'emerald' },
+  { key: 'action.create_rfc', group: 'Actions', nodeType: 'action', title: 'Create RFC', description: 'Opens a related change.', support: 'planned', color: 'emerald' },
+  { key: 'action.create_task', group: 'Actions', nodeType: 'action', title: 'Create Task', description: 'Creates multi-area work in an RFC.', support: 'planned', color: 'emerald' },
+  { key: 'action.webhook', group: 'Actions', nodeType: 'action', title: 'Invoke Webhook', description: 'Calls a published integration.', support: 'planned', color: 'purple' },
 ];
 
 /** Claves que ya no están en la paleta pero sí en diagramas guardados.
@@ -121,9 +123,22 @@ function secondsFromNode(node?: WorkflowNode): number {
   return Math.round(value * (unit === 'hours' ? 3600 : unit === 'days' ? 86400 : unit === 'seconds' ? 1 : 60));
 }
 
+/** Devuelve los ancestros de un nodo, MÁS la rama ('yes'/'no', "Una conexión
+ * sin handle explícito es la rama verdadera" — mismo default que `salidas()`
+ * más abajo, ver línea ~474) por la que se llegó a cada nodo `condition`
+ * encontrado en el camino hacia `nodeID`.
+ *
+ * Bug corregido 2026-09-09: antes esta función ignoraba `edge.sourceHandle`
+ * por completo, así que una acción colgada de la salida "No" de una
+ * condición terminaba con la MISMA `condicion` (la rama verdadera) que una
+ * colgada de "Yes" — lógica invertida en silencio. Como el DSL de `reglas[]`
+ * (`condicion: string`) no tiene hoy una forma de expresar "no se cumple X",
+ * `compileVisualWorkflow` usa `conditionBranch` para bloquear la publicación
+ * de esa rama en vez de inventar una sintaxis de negación no verificada. */
 function ancestorsOf(nodeID: string, nodes: WorkflowNode[], edges: Edge[]) {
   const byID = new Map(nodes.map((node) => [node.id, node]));
   const result: WorkflowNode[] = [];
+  const conditionBranch = new Map<string, 'yes' | 'no'>();
   const queue = [nodeID];
   const visited = new Set<string>([nodeID]);
   while (queue.length > 0) {
@@ -132,11 +147,16 @@ function ancestorsOf(nodeID: string, nodes: WorkflowNode[], edges: Edge[]) {
       if (visited.has(edge.source)) continue;
       visited.add(edge.source);
       const source = byID.get(edge.source);
-      if (source) result.push(source);
+      if (source) {
+        result.push(source);
+        if (source.type === 'condition') {
+          conditionBranch.set(source.id, (edge.sourceHandle as 'yes' | 'no' | undefined) ?? 'yes');
+        }
+      }
       queue.push(edge.source);
     }
   }
-  return result;
+  return { ancestors: result, conditionBranch };
 }
 
 /** Un problema del diagrama, atado al nodo que lo causa cuando se puede.
@@ -171,54 +191,62 @@ export function compileVisualWorkflow(nodes: WorkflowNode[], edges: Edge[], vers
     && (String(node.data.catalogKey) === 'action.notify_stakeholders'
       || String(node.data.catalogKey) === 'action.change_status'
       || esAccionDeAsignacion(node.data.catalogKey)));
-  if (triggers.length !== 1) fallar('El flujo debe tener exactamente un disparador operativo “INC creado”.');
-  if (actions.length === 0) fallar('Conecta al menos una acción operativa.');
+  if (triggers.length !== 1) fallar('The workflow must have exactly one operational trigger: “INC created”.');
+  if (actions.length === 0) fallar('Connect at least one operational action.');
 
   const connectedIDs = new Set(edges.flatMap((edge) => [edge.source, edge.target]));
   for (const node of nodes.filter((candidate) => candidate.data.supportStatus === 'planned')) {
-    if (connectedIDs.has(node.id)) fallar(`“${String(node.data.label)}” está en preparación y todavía no puede publicarse.`, node.id);
-    else warnings.push(`“${String(node.data.label)}” está en el canvas como diseño futuro, pero no se publicará.`);
+    if (connectedIDs.has(node.id)) fallar(`“${String(node.data.label)}” is under development and cannot be published yet.`, node.id);
+    else warnings.push(`“${String(node.data.label)}” is on the canvas as a future design and will not be published.`);
   }
 
   const rules: PublishWorkflowInput['reglas'] = [];
   for (const action of actions) {
-    const ancestors = ancestorsOf(action.id, nodes, edges);
+    const { ancestors, conditionBranch } = ancestorsOf(action.id, nodes, edges);
     if (!ancestors.some((node) => triggers.some((trigger) => trigger.id === node.id))) {
-      fallar(`La acción “${String(action.data.label)}” no está conectada al disparador.`, action.id);
+      fallar(`Action “${String(action.data.label)}” is not connected to the trigger.`, action.id);
       continue;
     }
     const conditions = ancestors.filter((node) => node.type === 'condition' && node.data.supportStatus === 'operational');
     const delays = ancestors.filter((node) => node.type === 'delay' && node.data.supportStatus === 'operational');
-    if (conditions.length > 1) fallar('Cada rama publicable admite una condición operativa en esta versión.', action.id);
-    if (delays.length > 1) fallar('Cada rama publicable admite una sola espera durable en esta versión.', action.id);
+    if (conditions.length > 1) fallar('Each publishable branch supports only one operational condition in this version.', action.id);
+    if (delays.length > 1) fallar('Each publishable branch supports only one durable wait in this version.', action.id);
     const condition = conditions[0];
+    if (condition && condition.data.conditionMode !== 'always' && conditionBranch.get(condition.id) === 'no') {
+      // Bug found 2026-09-09: this branch used to silently compile to the
+      // SAME condition as "Yes" (inverted logic, no error). `reglas[].condicion`
+      // has no way to express "condition NOT met" today — block instead of
+      // guessing a negation syntax that was never verified against the backend.
+      fallar(`“${String(action.data.label)}” is connected to the “No” output of “${String(condition.data.label)}” — publishing actions on the “No” branch isn’t supported yet. Connect it to “Yes”, or remove the condition.`, action.id);
+      continue;
+    }
     const conditionText = condition
       ? (condition.data.conditionMode === 'always' ? 'siempre' : `prioridad == ${String(condition.data.priority ?? 'critica')}`)
       : 'siempre';
     const delaySeconds = secondsFromNode(delays[0]);
-    if (delaySeconds > 2_592_000) fallar('La espera máxima publicable es de 30 días.', delays[0]?.id);
+    if (delaySeconds > 2_592_000) fallar('Maximum publishable wait is 30 days.', delays[0]?.id);
     if (String(action.data.catalogKey) === 'action.notify_stakeholders') {
       rules.push({ id: action.id, accion: 'notificar_interesados', condicion: conditionText, demora_segundos: delaySeconds });
       continue;
     }
 
     if (String(action.data.catalogKey) === 'action.change_status') {
-      // Una referencia a una transición que Catalog Builder ya no publica NO se
+      // Una referencia a una transición que Entity Builder ya no publica NO se
       // borra en silencio: el editor la marca al cargar las transiciones y aquí
       // bloquea la publicación. Limpiarla sola cambiaría lo que hace el flujo
       // sin que nadie lo decidiera.
       const ausentesEstado = Array.isArray(action.data.missingReferences) ? action.data.missingReferences as string[] : [];
       if (ausentesEstado.length > 0) {
-        fallar(`“${String(action.data.label)}” apunta a ${ausentesEstado.join(', ')} que Catalog Builder ya no publica. Vuelve a elegir la transición.`, action.id);
+        fallar(`“${String(action.data.label)}” points to ${ausentesEstado.join(', ')} which Entity Builder no longer publishes. Re-select the transition.`, action.id);
         continue;
       }
       const transitionKey = String(action.data.transitionKey ?? '').trim();
       if (!transitionKey) {
-        fallar(`Elige la transición en “${String(action.data.label)}”.`, action.id);
+        fallar(`Select a transition in “${String(action.data.label)}”.`, action.id);
         continue;
       }
       if (transitionKey !== String(action.data.transitionKey)) {
-        fallar(`La transición de “${String(action.data.label)}” contiene espacios alrededor.`, action.id);
+        fallar(`Transition in “${String(action.data.label)}” contains surrounding whitespace.`, action.id);
         continue;
       }
       rules.push({
@@ -244,17 +272,17 @@ export function compileVisualWorkflow(nodes: WorkflowNode[], edges: Edge[], vers
     // nadie lo decidiera.
     const ausentes = Array.isArray(action.data.missingReferences) ? action.data.missingReferences as string[] : [];
     if (ausentes.length > 0) {
-      fallar(`“${String(action.data.label)}” apunta a ${ausentes.join(', ')} que Organization ya no reconoce. Vuelve a elegir el destino.`, action.id);
+      fallar(`“${String(action.data.label)}” points to ${ausentes.join(', ')} which Organization no longer recognizes. Re-select the destination.`, action.id);
       continue;
     }
     if (!departmentID || !teamID || (mode === 'user' && !assigneeUserID)) {
       fallar(mode === 'user'
-        ? `Completa área, equipo y persona en “${String(action.data.label)}”.`
-        : `Completa área y equipo en “${String(action.data.label)}”.`, action.id);
+        ? `Complete area, team, and person in “${String(action.data.label)}”.`
+        : `Complete area and team in “${String(action.data.label)}”.`, action.id);
       continue;
     }
     if ([departmentID, teamID, assigneeUserID].some((id) => id && id !== id.trim())) {
-      fallar(`La asignación “${String(action.data.label)}” contiene identificadores no normalizados.`, action.id);
+      fallar(`Assignment “${String(action.data.label)}” contains non-normalized identifiers.`, action.id);
       continue;
     }
     rules.push({
@@ -337,7 +365,7 @@ function actionFromRule(rule: WorkflowRule, position: { x: number; y: number }):
       catalogKey: `published.${rule.accion}`,
       label: rule.accion,
       title: rule.accion,
-      description: 'Acción publicada conservada por compatibilidad.',
+      description: 'Published action retained for compatibility.',
       supportStatus: 'operational',
       color: 'emerald',
     },

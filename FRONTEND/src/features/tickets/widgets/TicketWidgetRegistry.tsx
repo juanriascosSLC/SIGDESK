@@ -47,7 +47,7 @@ export type TicketWidgetDefinition = PageWidgetDefinition<TicketPageContext>;
 export const TICKET_WIDGETS: Record<TicketWidgetKey, TicketWidgetDefinition> = {
   ticketHeader: {
     key: 'ticketHeader',
-    label: 'Encabezado del ticket',
+    label: 'Ticket Header',
     icon: IdCard,
     ownerModule: 'Tickets',
     allowedRegions: ['header'],
@@ -59,7 +59,7 @@ export const TICKET_WIDGETS: Record<TicketWidgetKey, TicketWidgetDefinition> = {
   },
   ticketActions: {
     key: 'ticketActions',
-    label: 'Barra de acciones',
+    label: 'Action Bar',
     icon: SlidersHorizontal,
     ownerModule: 'Tickets',
     allowedRegions: ['actions'],
@@ -71,7 +71,7 @@ export const TICKET_WIDGETS: Record<TicketWidgetKey, TicketWidgetDefinition> = {
   },
   sla: {
     key: 'sla',
-    label: 'Acuerdo de nivel de servicio',
+    label: 'Service Level Agreement (SLA)',
     icon: Timer,
     ownerModule: 'SLA',
     allowedRegions: ['main', 'sidebar', 'footer'],
@@ -83,7 +83,7 @@ export const TICKET_WIDGETS: Record<TicketWidgetKey, TicketWidgetDefinition> = {
   },
   attachments: {
     key: 'attachments',
-    label: 'Adjuntos',
+    label: 'Attachments',
     icon: Paperclip,
     ownerModule: 'Tickets',
     allowedRegions: ['main', 'sidebar', 'footer'],
@@ -95,7 +95,7 @@ export const TICKET_WIDGETS: Record<TicketWidgetKey, TicketWidgetDefinition> = {
   },
   activity: {
     key: 'activity',
-    label: 'Actividad y comentarios',
+    label: 'Activity & Comments',
     icon: FileText,
     ownerModule: 'Tickets',
     allowedRegions: ['main', 'sidebar', 'footer'],
@@ -107,7 +107,7 @@ export const TICKET_WIDGETS: Record<TicketWidgetKey, TicketWidgetDefinition> = {
   },
   mergedTickets: {
     key: 'mergedTickets',
-    label: 'Tickets combinados',
+    label: 'Merged Tickets',
     icon: Merge,
     ownerModule: 'Tickets',
     allowedRegions: ['main', 'sidebar', 'footer'],
@@ -119,7 +119,7 @@ export const TICKET_WIDGETS: Record<TicketWidgetKey, TicketWidgetDefinition> = {
   },
   itsmRelations: {
     key: 'itsmRelations',
-    label: 'Relaciones ITSM',
+    label: 'Related Cases',
     icon: Link2,
     ownerModule: 'Tickets',
     allowedRegions: ['main', 'sidebar', 'footer'],
@@ -131,9 +131,9 @@ export const TICKET_WIDGETS: Record<TicketWidgetKey, TicketWidgetDefinition> = {
   },
   assetDetails: {
     key: 'assetDetails',
-    label: 'Detalles del activo',
+    label: 'Asset Details',
     icon: Server,
-    ownerModule: 'Tickets (proyección SIGInventory)',
+    ownerModule: 'Tickets (SIGInventory projection)',
     allowedRegions: ['main', 'sidebar', 'footer'],
     minColumnSpan: 4,
     allowMultiple: false,
@@ -143,9 +143,9 @@ export const TICKET_WIDGETS: Record<TicketWidgetKey, TicketWidgetDefinition> = {
   },
   description: {
     key: 'description',
-    label: 'Descripción',
+    label: 'Description',
     icon: FileText,
-    ownerModule: 'Catalog (campo)',
+    ownerModule: 'Catalog (field)',
     allowedRegions: ['main', 'footer'],
     minColumnSpan: 6,
     allowMultiple: false,
@@ -155,9 +155,9 @@ export const TICKET_WIDGETS: Record<TicketWidgetKey, TicketWidgetDefinition> = {
   },
   suggestedSolutions: {
     key: 'suggestedSolutions',
-    label: 'Soluciones sugeridas',
+    label: 'Suggested Solutions',
     icon: Lightbulb,
-    ownerModule: 'Tickets (vía relaciones PRB)',
+    ownerModule: 'Tickets (via PRB relations)',
     allowedRegions: ['main', 'sidebar', 'footer'],
     minColumnSpan: 4,
     allowMultiple: false,
@@ -167,7 +167,7 @@ export const TICKET_WIDGETS: Record<TicketWidgetKey, TicketWidgetDefinition> = {
   },
   requesterDetails: {
     key: 'requesterDetails',
-    label: 'Datos del solicitante',
+    label: 'Requester Details',
     icon: UserRound,
     ownerModule: 'Tickets',
     allowedRegions: ['main', 'sidebar'],
@@ -179,7 +179,7 @@ export const TICKET_WIDGETS: Record<TicketWidgetKey, TicketWidgetDefinition> = {
   },
   statusHistory: {
     key: 'statusHistory',
-    label: 'Historial de estado',
+    label: 'Status History',
     icon: History,
     ownerModule: 'Tickets',
     allowedRegions: ['main', 'sidebar', 'footer'],
@@ -191,7 +191,7 @@ export const TICKET_WIDGETS: Record<TicketWidgetKey, TicketWidgetDefinition> = {
   },
   changeTasks: {
     key: 'changeTasks',
-    label: 'Plan de trabajo',
+    label: 'Work Plan',
     icon: ListChecks,
     ownerModule: 'Change Management',
     allowedRegions: ['main', 'sidebar', 'footer'],
@@ -203,9 +203,9 @@ export const TICKET_WIDGETS: Record<TicketWidgetKey, TicketWidgetDefinition> = {
   },
   stakeholders: {
     key: 'stakeholders',
-    label: 'Personas y áreas interesadas',
+    label: 'Stakeholders and interested areas',
     icon: Users,
-    ownerModule: 'Organization / Notificaciones',
+    ownerModule: 'Organization / Notifications',
     allowedRegions: ['main', 'sidebar', 'footer'],
     minColumnSpan: 4,
     allowMultiple: false,

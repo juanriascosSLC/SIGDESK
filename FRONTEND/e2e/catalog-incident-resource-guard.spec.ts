@@ -41,8 +41,10 @@ test('un INC sin vínculo de recurso se detiene antes de enviar un 4xx al backen
 
   await page.goto('/app/catalog/INC');
   await expect(page.getByTestId('catalog-input-title')).toBeVisible();
-  await page.getByRole('button', { name: 'Crear INC', exact: true }).click();
+  // Selectors realigned on merge: this branch renders the catalog submit
+  // button and this guard's message in English.
+  await page.getByRole('button', { name: 'Create INC', exact: true }).click();
 
-  await expect(page.getByText('Esta definición de INC no tiene un campo de recurso o CMDB.', { exact: false })).toBeVisible();
+  await expect(page.getByText('This INC definition has no resource or CMDB field.', { exact: false })).toBeVisible();
   expect(attemptedCreate).toBe(false);
 });

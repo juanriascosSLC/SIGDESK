@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { DynamicField } from '@/features/catalog/DynamicField';
+import { Select } from '@/components/ui';
 import {
   isFieldRequired,
   isFieldVisible,
@@ -31,14 +32,14 @@ import {
 } from './presentation';
 
 const boardColumns = [
-  { key: 'draft', label: 'Borradores', states: ['draft'] },
-  { key: 'assessment', label: 'Evaluación', states: ['assessment'] },
+  { key: 'draft', label: 'Drafts', states: ['draft'] },
+  { key: 'assessment', label: 'Assessment', states: ['assessment'] },
   { key: 'cab', label: 'CAB', states: ['pending_approval'] },
-  { key: 'approved', label: 'Aprobados', states: ['approved', 'scheduled'] },
-  { key: 'execution', label: 'Ejecución', states: ['implementing'] },
+  { key: 'approved', label: 'Approved', states: ['approved', 'scheduled'] },
+  { key: 'execution', label: 'Execution', states: ['implementing'] },
   {
     key: 'closed',
-    label: 'Finalizados',
+    label: 'Closed',
     states: ['completed', 'failed', 'rolled_back', 'closed', 'rejected'],
   },
 ];
@@ -152,12 +153,12 @@ export default function ChangeBoard() {
           <div>
             <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.22em] text-primary">
               <ShieldCheck className="h-4 w-4" />
-              Gobierno de cambios
+              Change governance
             </div>
             <h1 className="text-3xl font-black text-on-surface">Change Management</h1>
             <p className="mt-2 max-w-3xl text-sm text-on-surface-variant">
-              Solicitudes RFC versionadas por Catalog Builder, con riesgo calculado,
-              aprobación CAB y ejecución controlada.
+              RFC requests versioned by Entity Builder, with calculated risk,
+              CAB approval and controlled execution.
             </p>
           </div>
           {can(PERMISSIONS.changesCreate) && (
@@ -167,7 +168,7 @@ export default function ChangeBoard() {
               className="primary-button disabled:opacity-40"
             >
               <Plus className="h-4 w-4" />
-              Nueva RFC
+              New RFC
             </button>
           )}
         </div>
@@ -176,9 +177,9 @@ export default function ChangeBoard() {
 
         <div className="mb-6 grid gap-4 sm:grid-cols-3">
           {[
-            { label: 'Cambios abiertos', value: openCount, Icon: ClipboardList, color: 'text-primary' },
-            { label: 'Esperando CAB', value: cabCount, Icon: ShieldCheck, color: 'text-amber-400' },
-            { label: 'Programados / activos', value: scheduledCount, Icon: CalendarClock, color: 'text-emerald-400' },
+            { label: 'Open changes', value: openCount, Icon: ClipboardList, color: 'text-primary' },
+            { label: 'Awaiting CAB', value: cabCount, Icon: ShieldCheck, color: 'text-amber-400' },
+            { label: 'Scheduled / active', value: scheduledCount, Icon: CalendarClock, color: 'text-emerald-400' },
           ].map(({ label, value, Icon, color }) => (
             <div
               key={label}
@@ -203,32 +204,33 @@ export default function ChangeBoard() {
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar por RFC, título, servicio o solicitante…"
+              placeholder="Search by RFC, title, service or requester…"
               className="w-full bg-transparent py-3 text-sm text-on-surface placeholder:text-on-surface-variant/50 outline-none"
             />
           </label>
-          <select
+          <Select
+            aria-label="Filter by risk"
             value={riskFilter}
             onChange={(event) => setRiskFilter(event.target.value)}
-            className="friendly-input max-w-[220px] rounded-2xl border-border/50 cursor-pointer bg-[#1d2026] text-[#e1e2eb]"
-            style={{ colorScheme: 'dark' }}
-          >
-            <option value="" className="bg-[#191c22] text-[#e1e2eb]">Todos los riesgos</option>
-            <option value="low" className="bg-[#191c22] text-[#e1e2eb]">Riesgo bajo</option>
-            <option value="medium" className="bg-[#191c22] text-[#e1e2eb]">Riesgo medio</option>
-            <option value="high" className="bg-[#191c22] text-[#e1e2eb]">Riesgo alto</option>
-            <option value="critical" className="bg-[#191c22] text-[#e1e2eb]">Riesgo crítico</option>
-          </select>
+            className="max-w-[220px]"
+            options={[
+              { value: '', label: 'All risk levels' },
+              { value: 'low', label: 'Low risk' },
+              { value: 'medium', label: 'Medium risk' },
+              { value: 'high', label: 'High risk' },
+              { value: 'critical', label: 'Critical risk' },
+            ]}
+          />
         </div>
 
         {changesQuery.isLoading && (
           <div className="rounded-2xl border border-border/40 bg-surface-container-low p-12 text-center text-on-surface-variant font-medium">
-            Cargando solicitudes de cambio…
+            Loading change requests…
           </div>
         )}
         {changesQuery.isError && (
           <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-red-300 font-medium">
-            No se pudieron cargar los cambios: {changesQuery.error.message}
+            Could not load change requests: {changesQuery.error.message}
           </div>
         )}
         {!changesQuery.isLoading && !changesQuery.isError && (
@@ -268,10 +270,10 @@ export default function ChangeBoard() {
                             </span>
                           </div>
                           <h3 className="line-clamp-2 text-sm font-bold text-on-surface leading-snug group-hover:text-primary transition-colors">
-                            {textData(change, 'title') || 'RFC sin título'}
+                            {textData(change, 'title') || 'Untitled RFC'}
                           </h3>
                           <p className="mt-2 line-clamp-1 text-xs text-on-surface-variant/80 font-medium">
-                            {textData(change, 'serviceAffected') || 'Sin servicio informado'}
+                            {textData(change, 'serviceAffected') || 'No service reported'}
                           </p>
                           <div className="mt-3.5 flex items-center justify-between gap-2 border-t border-border/30 pt-3">
                             <span className={`rounded-lg border px-2.5 py-0.5 text-[10px] font-extrabold uppercase ${changeStateStyles[change.state] ?? changeStateStyles.draft}`}>
@@ -286,7 +288,7 @@ export default function ChangeBoard() {
                     })}
                     {items.length === 0 && (
                       <div className="rounded-2xl border border-dashed border-border/30 p-8 text-center text-xs text-on-surface-variant/60 italic">
-                        Sin RFC en esta etapa
+                        No RFCs in this stage
                       </div>
                     )}
                   </div>
@@ -305,16 +307,16 @@ export default function ChangeBoard() {
           >
             <div className="sticky top-0 z-10 flex items-start justify-between border-b border-border/40 bg-surface-container-low/95 p-6 backdrop-blur-md">
               <div>
-                <h2 className="text-xl font-black text-on-surface">Crear solicitud de cambio</h2>
+                <h2 className="text-xl font-black text-on-surface">Create change request</h2>
                 <p className="mt-1 text-xs text-on-surface-variant">
-                  Formulario generado desde RFC v{definitionQuery.data?.version}. El riesgo se calcula en el módulo de Change Management.
+                  Form generated from RFC v{definitionQuery.data?.version}. Risk is calculated by the Change Management module.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowCreate(false)}
                 className="rounded-xl p-2 text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"
-                aria-label="Cerrar"
+                aria-label="Close"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -342,7 +344,7 @@ export default function ChangeBoard() {
                 <span>
                   {createMutation.error instanceof ApiError
                     ? createMutation.error.message
-                    : 'No se pudo crear la RFC.'}
+                    : 'Could not create the RFC.'}
                 </span>
               </div>
             )}
@@ -352,7 +354,7 @@ export default function ChangeBoard() {
                 onClick={() => setShowCreate(false)}
                 className="secondary-button"
               >
-                Cancelar
+                Cancel
               </button>
               <button
                 type="submit"
@@ -360,11 +362,11 @@ export default function ChangeBoard() {
                 className="primary-button disabled:opacity-50"
               >
                 {createMutation.isPending ? (
-                  'Creando…'
+                  'Creating…'
                 ) : (
                   <>
                     <CheckCircle2 className="h-4 w-4" />
-                    Crear RFC
+                    Create RFC
                   </>
                 )}
               </button>

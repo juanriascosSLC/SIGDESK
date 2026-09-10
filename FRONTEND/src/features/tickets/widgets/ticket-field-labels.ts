@@ -1,8 +1,10 @@
+import { REQUESTER_LABEL, ASSIGNED_TO_LABEL } from '../identity-labels';
+
 export const ticketFieldLabels: Record<string, string> = {
-  humanId: 'Número del ticket',
-  requester: 'Solicitante',
-  assignee: 'Asignado a',
-  createdAt: 'Fecha de creación',
-  status: 'Estado',
-  mergedCount: 'Tickets combinados',
+  humanId: 'Ticket number',
+  requester: REQUESTER_LABEL,
+  assignee: ASSIGNED_TO_LABEL,
+  createdAt: 'Created date',
+  status: 'Status',
+  mergedCount: 'Merged tickets',
 };

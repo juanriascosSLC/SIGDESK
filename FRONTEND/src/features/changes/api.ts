@@ -28,13 +28,14 @@ export function getChangeManifest(id: string) {
 export function createChange(
   data: Record<string, unknown>,
   idempotencyKey?: string,
+  assetContext?: AssetContextInput,
 ) {
   return apiRequest<EntityRecord>('/changes', {
     method: 'POST',
     headers: idempotencyKey
       ? { 'Idempotency-Key': idempotencyKey }
       : undefined,
-    body: JSON.stringify({ data }),
+    body: JSON.stringify({ data, assetContext }),
   });
 }
 

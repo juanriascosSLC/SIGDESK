@@ -21,35 +21,34 @@ export const fieldTypes: Array<{
   value: FieldType;
   label: string;
   description: string;
-  /** Agrupa el selector. Una lista plana de once tipos no se lee. */
-  group: 'Texto' | 'Opciones' | 'Números y fechas' | 'Contacto';
+  /** Groups the selector. A flat list of eleven types is unreadable. */
+  group: 'Text' | 'Options' | 'Numbers & Dates' | 'Contact';
 }> = [
-  { value: 'text', label: 'Texto corto', description: 'Nombres, asuntos o identificadores', group: 'Texto' },
-  { value: 'textarea', label: 'Texto largo', description: 'Descripciones y comentarios', group: 'Texto' },
-  { value: 'select', label: 'Lista desplegable', description: 'Una opción de una lista controlada', group: 'Opciones' },
-  { value: 'radio', label: 'Opciones visibles', description: 'Una opción, todas a la vista', group: 'Opciones' },
-  { value: 'multiselect', label: 'Selección múltiple', description: 'Varias opciones de una lista', group: 'Opciones' },
-  { value: 'boolean', label: 'Sí / No', description: 'Una confirmación o condición', group: 'Opciones' },
-  { value: 'number', label: 'Número', description: 'Cantidades y valores numéricos', group: 'Números y fechas' },
-  { value: 'date', label: 'Fecha', description: 'Una fecha seleccionable', group: 'Números y fechas' },
-  { value: 'datetime', label: 'Fecha y hora', description: 'Una ventana con fecha y hora', group: 'Números y fechas' },
-  { value: 'email', label: 'Correo electrónico', description: 'Se valida el formato en el servidor', group: 'Contacto' },
-  { value: 'phone', label: 'Teléfono', description: 'Dígitos, espacios y prefijo internacional', group: 'Contacto' },
-  { value: 'url', label: 'Enlace', description: 'Una dirección http o https', group: 'Contacto' },
+  { value: 'text', label: 'Short text', description: 'Names, subjects, or identifiers', group: 'Text' },
+  { value: 'textarea', label: 'Long text', description: 'Descriptions and comments', group: 'Text' },
+  { value: 'select', label: 'Dropdown list', description: 'One option from a controlled list', group: 'Options' },
+  { value: 'radio', label: 'Radio options', description: 'One option, all visible', group: 'Options' },
+  { value: 'multiselect', label: 'Multiple selection', description: 'Multiple options from a list', group: 'Options' },
+  { value: 'boolean', label: 'Yes / No', description: 'A confirmation or condition', group: 'Options' },
+  { value: 'number', label: 'Number', description: 'Quantities and numeric values', group: 'Numbers & Dates' },
+  { value: 'date', label: 'Date', description: 'A selectable date', group: 'Numbers & Dates' },
+  { value: 'datetime', label: 'Date and time', description: 'A date and time window', group: 'Numbers & Dates' },
+  { value: 'email', label: 'Email address', description: 'Format validated on server', group: 'Contact' },
+  { value: 'phone', label: 'Phone', description: 'Digits, spaces, and international prefix', group: 'Contact' },
+  { value: 'url', label: 'Link', description: 'An http or https address', group: 'Contact' },
 ];
 
-export const fieldTypeGroups = ['Texto', 'Opciones', 'Números y fechas', 'Contacto'] as const;
+export const fieldTypeGroups = ['Text', 'Options', 'Numbers & Dates', 'Contact'] as const;
 
-/** Los formatos que se pueden exigir sobre un campo de texto ya publicado,
- *  sin cambiarle el tipo. Los resuelve el servidor. */
+/** Formats that can be required on an already published text field without changing its type. */
 export const textFormatOptions: Array<{ value: '' | 'email' | 'phone' | 'url'; label: string }> = [
-  { value: '', label: 'Sin formato exigido' },
-  { value: 'email', label: 'Correo electrónico' },
-  { value: 'phone', label: 'Teléfono' },
-  { value: 'url', label: 'Enlace http/https' },
+  { value: '', label: 'No required format' },
+  { value: 'email', label: 'Email address' },
+  { value: 'phone', label: 'Phone' },
+  { value: 'url', label: 'HTTP/HTTPS link' },
 ];
 
-/** Etiqueta corta de un tipo, para el resumen de una tarjeta colapsada. */
+/** Short label for a type, for collapsed card summaries. */
 export function fieldTypeLabel(type: FieldType): string {
   return fieldTypes.find((candidate) => candidate.value === type)?.label ?? type;
 }
@@ -64,59 +63,59 @@ export const bindsToOptions: Array<{
   label: string;
   description: string;
 }> = [
-  { value: '', label: 'Ninguno', description: 'Un campo normal de la definición' },
+  { value: '', label: 'None', description: 'A standard definition field' },
   {
     value: 'recursoId',
-    label: 'Recurso legado',
-    description: 'Compatibilidad con recursos creados manualmente',
+    label: 'Legacy resource',
+    description: 'Compatibility with manually created resources',
   },
   {
     value: 'siteAssetId',
-    label: 'Sitio de Inventory',
-    description: 'Sitio real sincronizado desde Assets / CMDB',
+    label: 'Inventory site',
+    description: 'Real site synced from Assets / CMDB',
   },
   {
     value: 'assetId',
-    label: 'Dispositivo del sitio',
-    description: 'Cámara, NVR, switch, servidor u otro activo del sitio elegido',
+    label: 'Site device',
+    description: 'Camera, NVR, switch, server, or other asset from selected site',
   },
   {
     value: 'agenteItId',
-    label: 'Agente IT',
-    description: 'Referencia real a un agente de soporte registrado en organization_service',
+    label: 'IT Agent',
+    description: 'Real reference to a support agent registered in organization_service',
   },
 ];
 
 export const resourceTypeOptions: Array<{ value: ResourceTypeFilter | ''; label: string }> = [
-  { value: '', label: 'Cualquier tipo' },
+  { value: '', label: 'Any type' },
   { value: 'hardware', label: 'Hardware' },
-  { value: 'software_licencia', label: 'Licencia de software' },
-  { value: 'infraestructura_red', label: 'Infraestructura de red' },
-  { value: 'camera', label: 'Cámara' },
+  { value: 'software_licencia', label: 'Software license' },
+  { value: 'infraestructura_red', label: 'Network infrastructure' },
+  { value: 'camera', label: 'Camera' },
   { value: 'nvr', label: 'NVR' },
-  { value: 'server', label: 'Servidor' },
+  { value: 'server', label: 'Server' },
   { value: 'switch', label: 'Switch' },
   { value: 'router', label: 'Router' },
   { value: 'pdu', label: 'PDU' },
-  { value: 'access-point', label: 'Punto de acceso' },
-  { value: 'access-control', label: 'Control de acceso' },
+  { value: 'access-point', label: 'Access Point' },
+  { value: 'access-control', label: 'Access Control' },
   { value: 'radio', label: 'Radio' },
-  { value: 'speaker', label: 'Altavoz' },
-  { value: 'software', label: 'Software / sistema' },
-  { value: 'site', label: 'Sitio' },
+  { value: 'speaker', label: 'Speaker' },
+  { value: 'software', label: 'Software / system' },
+  { value: 'site', label: 'Site' },
 ];
 
 export const conditionOperators: Array<{ value: ConditionOperator; label: string }> = [
-  { value: 'equals', label: 'es igual a' },
-  { value: 'notEquals', label: 'es diferente de' },
-  { value: 'in', label: 'está dentro de' },
-  { value: 'notIn', label: 'no está dentro de' },
-  { value: 'exists', label: 'tiene un valor' },
-  { value: 'notExists', label: 'no tiene valor' },
-  { value: 'greaterThan', label: 'es mayor que' },
-  { value: 'greaterThanOrEqual', label: 'es mayor o igual que' },
-  { value: 'lessThan', label: 'es menor que' },
-  { value: 'lessThanOrEqual', label: 'es menor o igual que' },
+  { value: 'equals', label: 'equals' },
+  { value: 'notEquals', label: 'does not equal' },
+  { value: 'in', label: 'is in' },
+  { value: 'notIn', label: 'is not in' },
+  { value: 'exists', label: 'has a value' },
+  { value: 'notExists', label: 'has no value' },
+  { value: 'greaterThan', label: 'is greater than' },
+  { value: 'greaterThanOrEqual', label: 'is greater than or equal to' },
+  { value: 'lessThan', label: 'is less than' },
+  { value: 'lessThanOrEqual', label: 'is less than or equal to' },
 ];
 
 export function replaceConditionField(
@@ -157,12 +156,12 @@ export function parseConditionValue(field: FieldDefinition, value: string): unkn
 }
 
 export const bindingKinds = [
-  { module: 'iam', resourceType: 'policy', label: 'Política de permisos', owner: 'Identidad y acceso' },
-  { module: 'sla', resourceType: 'policy', label: 'Política de SLA', owner: 'Gestión de SLA' },
-  { module: 'automations', resourceType: 'workflow', label: 'Automatización', owner: 'Automatizaciones' },
-  { module: 'notifications', resourceType: 'template', label: 'Plantilla de notificación', owner: 'Notificaciones' },
-  { module: 'integrations', resourceType: 'connector', label: 'Integración', owner: 'Integraciones' },
-  { module: 'reports', resourceType: 'metric', label: 'Métrica de reporte', owner: 'Reportes' },
+  { module: 'iam', resourceType: 'policy', label: 'Permissions Policy', owner: 'Identity & Access' },
+  { module: 'sla', resourceType: 'policy', label: 'SLA Policy', owner: 'SLA Management' },
+  { module: 'automations', resourceType: 'workflow', label: 'Automation', owner: 'Automations' },
+  { module: 'notifications', resourceType: 'template', label: 'Notification Template', owner: 'Notifications' },
+  { module: 'integrations', resourceType: 'connector', label: 'Integration', owner: 'Integrations' },
+  { module: 'reports', resourceType: 'metric', label: 'Report Metric', owner: 'Reports' },
 ];
 
 export const sectionItems: Array<{
@@ -171,14 +170,14 @@ export const sectionItems: Array<{
   description: string;
   icon: typeof Info;
 }> = [
-  { id: 'general', label: 'Información general', description: 'Nombre, código y propósito', icon: Info },
-  { id: 'fields', label: 'Campos del formulario', description: 'Qué datos deben completar', icon: ListChecks },
-  { id: 'detail', label: 'Diseño visual', description: 'Dónde aparece cada elemento', icon: LayoutDashboard },
-  { id: 'workflow', label: 'Estados y transiciones', description: 'Ciclo de vida del registro', icon: GitBranch },
-  { id: 'relations', label: 'Relaciones ITSM', description: 'Vínculos INC, PRB y RFC', icon: GitBranch },
-  { id: 'resources', label: 'Módulos conectados', description: 'IAM, SLA y automatizaciones', icon: Link2 },
-  { id: 'review', label: 'Validar y publicar', description: 'Revisar antes de activar', icon: CheckCircle2 },
-  { id: 'advanced', label: 'Configuración avanzada', description: 'JSON para usuarios expertos', icon: Code2 },
+  { id: 'general', label: 'General Information', description: 'Name, code, and purpose', icon: Info },
+  { id: 'fields', label: 'Form Fields', description: 'Data that must be completed', icon: ListChecks },
+  { id: 'detail', label: 'Visual Design', description: 'Where each element appears', icon: LayoutDashboard },
+  { id: 'workflow', label: 'States & Transitions', description: 'Record lifecycle', icon: GitBranch },
+  { id: 'relations', label: 'Related Cases', description: 'INC, PRB, and RFC links', icon: GitBranch },
+  { id: 'resources', label: 'Connected Modules', description: 'IAM, SLA, and automations', icon: Link2 },
+  { id: 'review', label: 'Validate & Publish', description: 'Review before activating', icon: CheckCircle2 },
+  { id: 'advanced', label: 'Advanced Settings', description: 'JSON for expert users', icon: Code2 },
 ];
 
 export const guidedSteps = sectionItems.filter((item) => item.id !== 'advanced');
@@ -190,11 +189,11 @@ export const guidedSteps = sectionItems.filter((item) => item.id !== 'advanced')
 export { technicalKey } from '@/features/catalog/field-types';
 
 export function statusLabel(status?: string) {
-  if (status === 'published') return 'Publicada';
-  if (status === 'draft') return 'Borrador';
-  if (status === 'deprecated' || status === 'archived') return 'Anterior';
-  if (status === 'retired') return 'Retirada';
-  return 'Nueva';
+  if (status === 'published') return 'Published';
+  if (status === 'draft') return 'Draft';
+  if (status === 'deprecated' || status === 'archived') return 'Previous';
+  if (status === 'retired') return 'Retired';
+  return 'New';
 }
 
 export function statusClasses(status?: string) {

@@ -29,7 +29,7 @@ export function PropertiesPanel({
   if (!selected) {
     return (
       <aside className="w-full shrink-0 rounded-2xl border border-dashed border-border/40 p-6 text-center text-xs text-on-surface-variant lg:w-80">
-        Selecciona una sección o un campo para ver sus propiedades.
+        Select a section or field to view its properties.
       </aside>
     );
   }
@@ -42,21 +42,21 @@ export function PropertiesPanel({
         data-testid="template-designer-properties-section"
         className="w-full shrink-0 space-y-4 rounded-2xl border border-border/40 bg-surface-container p-4 lg:w-80"
       >
-        <Header title="Propiedades de la sección" onClose={onClose} />
+        <Header title="Section properties" onClose={onClose} />
         <LabeledInput
-          label="Título"
+          label="Title"
           value={section.title ?? ''}
           onChange={(value) => onUpdateSection(section.id, (current) => ({ ...current, title: value || undefined }))}
         />
         <LabeledTextarea
-          label="Descripción"
+          label="Description"
           value={section.description ?? ''}
           onChange={(value) =>
             onUpdateSection(section.id, (current) => ({ ...current, description: value || undefined }))
           }
         />
         <div>
-          <span className="mb-1 block text-xs font-bold text-on-surface-variant">Columnas</span>
+          <span className="mb-1 block text-xs font-bold text-on-surface-variant">Columns</span>
           <div className="flex gap-2">
             {[1, 2, 3].map((columns) => (
               <button
@@ -81,10 +81,10 @@ export function PropertiesPanel({
           onChange={(checked) =>
             onUpdateSection(section.id, (current) => ({ ...current, collapsible: checked || undefined }))
           }
-          label="Colapsable"
+          label="Collapsible"
         />
         <ConditionRule
-          label="Visible solo cuando…"
+          label="Visible only when…"
           compact
           condition={section.visibleWhen}
           sources={specification.fields}
@@ -115,18 +115,18 @@ export function PropertiesPanel({
       className="w-full shrink-0 space-y-4 rounded-2xl border border-border/40 bg-surface-container p-4 lg:w-80"
     >
       <Header
-        title={placement.kind === 'widget' ? widgetLabel ?? 'Propiedades del elemento' : 'Propiedades del campo'}
+        title={placement.kind === 'widget' ? widgetLabel ?? 'Element properties' : 'Field properties'}
         onClose={onClose}
       />
       {placement.kind === 'field' && (
         <LabeledInput
-          label="Etiqueta"
+          label="Label"
           value={placement.label ?? ''}
           onChange={(value) => onUpdatePlacement(placement.id, (current) => ({ ...current, label: value || undefined }))}
         />
       )}
       <div>
-        <span className="mb-1 block text-xs font-bold text-on-surface-variant">Ancho</span>
+        <span className="mb-1 block text-xs font-bold text-on-surface-variant">Width</span>
         <div className="flex gap-2">
           {[1, 2, 3].map((span) => (
             <button
@@ -153,10 +153,10 @@ export function PropertiesPanel({
             onChange={(checked) =>
               onUpdatePlacement(placement.id, (current) => ({ ...current, readOnly: checked || undefined }))
             }
-            label="Solo lectura (presentacional; aún no se aplica en el backend)"
+            label="Read-only (presentational; not enforced by backend yet)"
           />
           <ConditionRule
-            label="Visible solo cuando…"
+            label="Visible only when…"
             compact
             condition={placement.visibleWhen}
             sources={specification.fields}
@@ -166,14 +166,14 @@ export function PropertiesPanel({
           />
           {field?.required && (
             <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-2 text-[11px] text-amber-300">
-              Este campo es obligatorio en el esquema; esa regla no se puede relajar desde la colocación.
+              This field is required in the schema; that rule cannot be relaxed from placement.
             </p>
           )}
         </>
       )}
       {placement.kind === 'widget' && (
         <p className="rounded-lg border border-border/30 bg-surface-container-low p-2 text-[11px] text-on-surface-variant">
-          Este elemento lo administra su propio módulo; aquí solo controlas su posición y ancho.
+          This element is managed by its own module; here you only control its position and width.
         </p>
       )}
     </aside>
@@ -187,7 +187,7 @@ function Header({ title, onClose }: { title: string; onClose: () => void }) {
       <button
         type="button"
         onClick={onClose}
-        aria-label="Cerrar propiedades"
+        aria-label="Close properties"
         className="text-on-surface-variant hover:text-on-surface"
       >
         <X className="h-4 w-4" />

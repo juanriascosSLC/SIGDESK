@@ -18,14 +18,25 @@ import {
 } from 'lucide-react';
 import { BulkActionBar } from './components/BulkActionBar';
 import { MergeTicketsModal } from './components/MergeTicketsModal';
-import { useAssignTicket, useUpdateTicketStatus, useTickets } from './hooks';
+import { useAssignTicketOrganizational, useUpdateTicketStatus, useTickets } from './hooks';
+import { BulkAssignDialog } from './dialogs/TicketDialogs';
+import type { AssignmentTarget } from '@/features/organization/AssignmentPicker';
+import { useToast } from '@/components/ui';
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/states';
 import { useAuth } from '@/features/auth/useAuth';
 import {
   listSlaAssessments,
   type SlaAssessment,
 } from '@/features/sla/api';
+import {
+  assigneeText,
+  isTicketAssigned,
+  ASSIGNED_TO_LABEL,
+  REQUESTER_LABEL,
+  UNASSIGNED_LABEL,
+  USER_UNAVAILABLE_LABEL,
+} from './identity-labels';
 
 type QuickView = 'all' | 'unassigned' | 'sla' | 'resolved';
 
@@ -230,8 +241,10 @@ export default function TicketsList() {
       tickets,
     ],
   );
-  const assignTicket = useAssignTicket();
+  const assignTicketOrganizational = useAssignTicketOrganizational();
   const updateStatus = useUpdateTicketStatus();
+  const toast = useToast();
+  const [showBulkAssignDialog, setShowBulkAssignDialog] = useState(false);
 
   useEffect(() => {
     const interval = window.setInterval(() => setSlaNow(Date.now()), 60_000);
@@ -248,10 +261,19 @@ export default function TicketsList() {
     () => Array.from(new Set(tickets.map((t) => t.site).filter(Boolean) as string[])).sort(),
     [tickets],
   );
-  const assigneeOptions = useMemo(
-    () => Array.from(new Set(tickets.map((t) => t.assignee).filter(Boolean) as string[])).sort(),
-    [tickets],
-  );
+  // Filter VALUES stay ids (what the backend's ?assignee= expects); only the
+  // dropdown LABEL is a resolved display name — NEVER the raw id, even as a
+  // fallback. An unresolved name reads as "User unavailable", exactly like
+  // every other identity surface.
+  const assigneeOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const t of tickets) {
+      if (t.assigneeId) byId.set(t.assigneeId, t.assigneeDisplayName || USER_UNAVAILABLE_LABEL);
+    }
+    return Array.from(byId.entries())
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [tickets]);
 
   function goToNextPage() {
     if (ticketPage?.nextCursor) {
@@ -265,24 +287,42 @@ export default function TicketsList() {
     setCursorStack([]);
   }
 
-  async function handleBulkAssign() {
-    const name = window.prompt('Assign selected tickets to:', currentUserName);
-    if (!name) return;
-    await Promise.all(
-      Array.from(selected).map((id) =>
-        assignTicket.mutateAsync({ id, assigneeName: name, actorName: currentUserName }),
-      ),
-    );
-    setSelected(new Set());
+  function handleBulkAssign() {
+    setShowBulkAssignDialog(true);
+  }
+
+  async function confirmBulkAssign(target: AssignmentTarget) {
+    try {
+      await Promise.all(
+        Array.from(selected).map((id) => assignTicketOrganizational.mutateAsync({ id, target })),
+      );
+      setSelected(new Set());
+      setShowBulkAssignDialog(false);
+      toast.show({ tone: 'success', title: `Assigned ${selected.size} ticket${selected.size === 1 ? '' : 's'}` });
+    } catch (err) {
+      toast.show({
+        tone: 'error',
+        title: 'Bulk assignment failed',
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
   }
 
   async function handleBulkResolve() {
-    await Promise.all(
-      Array.from(selected).map((id) =>
-        updateStatus.mutateAsync({ id, status: 'Resolved', actorName: currentUserName }),
-      ),
-    );
-    setSelected(new Set());
+    try {
+      await Promise.all(
+        Array.from(selected).map((id) =>
+          updateStatus.mutateAsync({ id, status: 'Resolved', actorName: currentUserName }),
+        ),
+      );
+      setSelected(new Set());
+    } catch (err) {
+      toast.show({
+        tone: 'error',
+        title: 'Bulk resolve failed',
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
   }
 
   if (isLoading) {
@@ -290,32 +330,19 @@ export default function TicketsList() {
   }
 
   if (isError) {
-    return (
-      <EmptyState
-        title="Could not load tickets"
-        description={error.message}
-        action={
-          <button
-            onClick={() => void refetch()}
-            className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold"
-          >
-            Try again
-          </button>
-        }
-      />
-    );
+    return <ErrorState title="Could not load tickets" description={error.message} onRetry={() => void refetch()} />;
   }
 
   const views: { id: QuickView; label: string; count: number; accent?: string }[] = [
     { id: 'all', label: 'All Tickets', count: tickets.length },
-    { id: 'unassigned', label: 'Unassigned', count: tickets.filter(t => !t.assignee).length },
+    { id: 'unassigned', label: UNASSIGNED_LABEL, count: tickets.filter(t => !isTicketAssigned(t)).length },
     { id: 'sla', label: 'Breaching SLA', count: tickets.filter(t => slaByTicketID.get(t.id)?.isBreaching).length, accent: 'red' },
     { id: 'resolved', label: 'Resolved', count: tickets.filter(t => t.status === 'Resolved').length },
   ];
 
   const visibleTickets = tickets.filter(t => {
     switch (activeView) {
-      case 'unassigned': return !t.assignee;
+      case 'unassigned': return !isTicketAssigned(t);
       case 'sla': return slaByTicketID.get(t.id)?.isBreaching;
       case 'resolved': return t.status === 'Resolved';
       default: return true;
@@ -351,10 +378,17 @@ export default function TicketsList() {
 
   return (
     <div data-testid="tickets-list" className="flex flex-col flex-1 min-h-0 relative">
-      <MergeTicketsModal 
-        isOpen={isMergeModalOpen} 
-        onClose={() => { setIsMergeModalOpen(false); setSelected(new Set()); }} 
-        selectedTickets={Array.from(selected)} 
+      <MergeTicketsModal
+        isOpen={isMergeModalOpen}
+        onClose={() => { setIsMergeModalOpen(false); setSelected(new Set()); }}
+        selectedTickets={Array.from(selected)}
+      />
+      <BulkAssignDialog
+        open={showBulkAssignDialog}
+        onClose={() => setShowBulkAssignDialog(false)}
+        onConfirm={confirmBulkAssign}
+        count={selected.size}
+        loading={assignTicketOrganizational.isPending}
       />
       <BulkActionBar
         selectedCount={selected.size}
@@ -367,7 +401,7 @@ export default function TicketsList() {
       <div className="flex flex-wrap gap-3 items-center mb-4 bg-surface-container-low/90 backdrop-blur-md border border-border/40 p-3.5 rounded-2xl shadow-sm">
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-on-surface-variant shrink-0 px-1">
           <Filter className="w-4 h-4 text-primary" />
-          Filtros
+          Filters
         </div>
         <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant/70 pointer-events-none" />
@@ -375,7 +409,7 @@ export default function TicketsList() {
             data-testid="ticket-search"
             value={search}
             onChange={(e) => { setSearch(e.target.value); resetPage(); }}
-            placeholder="Buscar por título, descripción o ID…"
+            placeholder="Search by title, description or ID…"
             className="w-full bg-surface-container/80 border border-border/50 text-sm rounded-xl pl-9 pr-3.5 py-2 text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 transition-all"
           />
         </div>
@@ -385,7 +419,7 @@ export default function TicketsList() {
           className="bg-surface-container/80 border border-border/50 text-sm rounded-xl px-3.5 py-2 text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 transition-all cursor-pointer"
           style={{ colorScheme: 'dark' }}
         >
-          <option value="" className="bg-[#191c22] text-[#e1e2eb]">Todos los Sitios</option>
+          <option value="" className="bg-[#191c22] text-[#e1e2eb]">All Sites</option>
           {siteOptions.map((s) => <option key={s} value={s} className="bg-[#191c22] text-[#e1e2eb]">{s}</option>)}
         </select>
         <select
@@ -394,15 +428,15 @@ export default function TicketsList() {
           className="bg-surface-container/80 border border-border/50 text-sm rounded-xl px-3.5 py-2 text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 transition-all cursor-pointer"
           style={{ colorScheme: 'dark' }}
         >
-          <option value="" className="bg-[#191c22] text-[#e1e2eb]">Todos los Asignados</option>
-          {assigneeOptions.map((a) => <option key={a} value={a} className="bg-[#191c22] text-[#e1e2eb]">{a}</option>)}
+          <option value="" className="bg-[#191c22] text-[#e1e2eb]">All Assignees</option>
+          {assigneeOptions.map((a) => <option key={a.id} value={a.id} className="bg-[#191c22] text-[#e1e2eb]">{a.label}</option>)}
         </select>
         {(site || assignee || search) && (
           <button
             onClick={() => { setSite(''); setAssignee(''); setSearch(''); resetPage(); }}
             className="bg-surface-container border border-border/60 text-xs font-semibold rounded-xl px-3.5 py-2 text-on-surface-variant hover:text-on-surface hover:border-border hover:bg-surface-container-high transition-all"
           >
-            Limpiar Filtros
+            Clear Filters
           </button>
         )}
       </div>
@@ -459,24 +493,24 @@ export default function TicketsList() {
                 </th>
                 <th className="px-4 py-3.5 min-w-[300px]">
                   <span className="inline-flex items-center gap-1.5 cursor-pointer hover:text-on-surface transition-colors">
-                    Asunto <ChevronsUpDown className="w-3.5 h-3.5 opacity-50" />
+                    Subject <ChevronsUpDown className="w-3.5 h-3.5 opacity-50" />
                   </span>
                 </th>
-                <th className="px-4 py-3.5 text-center">Fusionado</th>
-                <th className="px-4 py-3.5">Solicitante</th>
-                <th className="px-4 py-3.5">Asignado</th>
-                <th className="px-4 py-3.5">Estado</th>
+                <th className="px-4 py-3.5 text-center">Merged</th>
+                <th className="px-4 py-3.5">{REQUESTER_LABEL}</th>
+                <th className="px-4 py-3.5">{ASSIGNED_TO_LABEL}</th>
+                <th className="px-4 py-3.5">Status</th>
                 <th className="px-4 py-3.5">SLA</th>
                 <th className="px-4 py-3.5">
                   <span className="inline-flex items-center gap-1.5 cursor-pointer text-primary transition-colors">
-                    Fecha Creación <ArrowDown className="w-3.5 h-3.5" />
+                    Created date <ArrowDown className="w-3.5 h-3.5" />
                   </span>
                 </th>
-                <th className="px-4 py-3.5">Sitio</th>
-                <th className="px-4 py-3.5">Activo</th>
+                <th className="px-4 py-3.5">Site</th>
+                <th className="px-4 py-3.5">Asset</th>
                 <th className="px-4 py-3.5">
                   <span className="inline-flex items-center gap-1.5 cursor-pointer hover:text-on-surface transition-colors">
-                    Prioridad <ChevronsUpDown className="w-3.5 h-3.5 opacity-50" />
+                    Priority <ChevronsUpDown className="w-3.5 h-3.5 opacity-50" />
                   </span>
                 </th>
               </tr>
@@ -532,15 +566,15 @@ export default function TicketsList() {
                         <span className="text-on-surface-variant/40">-</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-on-surface-variant font-medium text-xs">{ticket.requester}</td>
+                    <td className="px-4 py-3 text-on-surface-variant font-medium text-xs">{ticket.requesterDisplayName}</td>
                     <td className="px-4 py-3 text-xs">
-                      {ticket.assignee ? (
+                      {isTicketAssigned(ticket) ? (
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-surface-container-high border border-border/50 font-medium text-on-surface">
                           <span className="w-2 h-2 rounded-full bg-primary/70"></span>
-                          {ticket.assignee}
+                          {assigneeText(ticket)}
                         </span>
                       ) : (
-                        <span className="italic text-on-surface-variant/60">Sin asignar</span>
+                        <span className="italic text-on-surface-variant/60">{UNASSIGNED_LABEL}</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -580,7 +614,7 @@ export default function TicketsList() {
               {visibleTickets.length === 0 && (
                 <tr>
                   <td colSpan={12} className="px-4 py-12 text-center text-on-surface-variant italic font-medium">
-                    No se encontraron tickets con los criterios seleccionados.
+                    No tickets found matching the selected criteria.
                   </td>
                 </tr>
               )}
@@ -590,21 +624,21 @@ export default function TicketsList() {
 
         {/* Pagination Footer */}
         <div className="mt-auto p-4 border-t border-border/40 bg-surface-container/80 backdrop-blur-md flex items-center justify-between text-xs text-on-surface-variant font-medium">
-          <div>Mostrando <span className="font-bold text-on-surface">{visibleTickets.length}</span> tickets{ticketPage?.hasMore ? ' · más disponibles' : ''}</div>
+          <div>Showing <span className="font-bold text-on-surface">{visibleTickets.length}</span> tickets{ticketPage?.hasMore ? ' · more available' : ''}</div>
           <div className="flex items-center gap-2">
             <button
               onClick={goToPrevPage}
               disabled={cursorStack.length === 0}
               className="px-3.5 py-1.5 rounded-xl bg-surface-container border border-border/50 hover:text-on-surface hover:border-border hover:bg-surface-container-high transition-all disabled:opacity-40 disabled:pointer-events-none font-bold"
             >
-              Anterior
+              Previous
             </button>
             <button
               onClick={goToNextPage}
               disabled={!ticketPage?.hasMore}
               className="px-3.5 py-1.5 rounded-xl bg-surface-container border border-border/50 hover:text-on-surface hover:border-border hover:bg-surface-container-high transition-all disabled:opacity-40 disabled:pointer-events-none font-bold"
             >
-              Siguiente
+              Next
             </button>
           </div>
         </div>

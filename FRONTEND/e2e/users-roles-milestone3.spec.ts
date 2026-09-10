@@ -65,12 +65,12 @@ test('un admin con permisos reales sobre roles/usuarios entra a Users & Roles', 
   await page.goto('/app/admin/users', { waitUntil: 'domcontentloaded' });
 
   await expect(
-    page.getByRole('heading', { name: 'Usuarios, roles y organización', exact: true }),
+    page.getByRole('heading', { name: 'Users, roles and organization', exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Roles y permisos' }),
+    page.getByRole('button', { name: 'Roles and permissions' }),
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Usuarios' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Users' })).toBeVisible();
   // El guard real, no solo la ausencia de un error visible: si
   // canManageUsersAndRoles llegara a evaluar false para este fixture, el
   // router redirige antes de montar UsersManager (App.tsx) y esta
@@ -143,7 +143,7 @@ test('un usuario sin permiso sobre roles/usuarios ve exactamente eso: nada de Us
   // /app, nunca de vuelta en /login — la sesión es válida, el permiso no.
   await expect(page).toHaveURL(/\/app\/?$/);
   await expect(
-    page.getByRole('heading', { name: 'Usuarios, roles y organización', exact: true }),
+    page.getByRole('heading', { name: 'Users, roles and organization', exact: true }),
   ).not.toBeVisible();
 });
 
@@ -157,10 +157,11 @@ test('un requester permanece en el portal aunque pueda leer sus propios tickets'
 test('un supervisor ve operación y reportes pero no administración de roles ni catálogo', async ({ page }) => {
   await mockAuthenticatedSupervisor(page, { forwardUnmatched: false });
   await page.goto('/app', { waitUntil: 'domcontentloaded' });
-  await expect(page.getByRole('link', { name: 'Incidents' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Changes' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Problems' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Reports' })).toBeVisible();
+  const nav = page.locator('#app-nav');
+  await expect(nav.getByRole('link', { name: 'Incidents' })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Changes' })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Problems' })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Reports' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Users & Roles' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Entity Builder' })).toHaveCount(0);
 });

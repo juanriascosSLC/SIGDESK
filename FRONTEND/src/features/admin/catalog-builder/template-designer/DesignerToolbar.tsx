@@ -1,10 +1,10 @@
 import { Eye, Redo2, Trash2, Undo2 } from 'lucide-react';
 import type { AudienceKey, LayoutKind } from '@/features/catalog/metamodel';
 
-const KIND_LABELS: Record<LayoutKind, string> = { create: 'Crear', edit: 'Editar', detail: 'Detalle' };
+const KIND_LABELS: Record<LayoutKind, string> = { create: 'Create', edit: 'Edit', detail: 'Detail' };
 const AUDIENCE_LABELS: Record<AudienceKey, string> = {
-  requester: 'Solicitante',
-  agent: 'Técnico',
+  requester: 'Requester',
+  agent: 'Agent',
   supervisor: 'Supervisor',
 };
 const ALL_AUDIENCES: AudienceKey[] = ['requester', 'agent', 'supervisor'];
@@ -64,7 +64,7 @@ export function DesignerToolbar({
           style={{ colorScheme: 'dark' }}
         >
           <option value="" className="bg-[#191c22] text-[#e1e2eb]">
-            Predeterminado
+            Default
           </option>
           {availableVariantKeys.map((audience) => (
             <option key={audience} value={audience} className="bg-[#191c22] text-[#e1e2eb]">
@@ -83,7 +83,7 @@ export function DesignerToolbar({
             style={{ colorScheme: 'dark' }}
           >
             <option value="" className="bg-[#191c22] text-[#e1e2eb]">
-              + Variante de audiencia…
+              + Audience variant…
             </option>
             {creatableAudiences.map((audience) => (
               <option key={audience} value={audience} className="bg-[#191c22] text-[#e1e2eb]">
@@ -97,8 +97,8 @@ export function DesignerToolbar({
             type="button"
             onClick={() => onRemoveVariant(activeVariantKey)}
             data-testid="template-designer-remove-audience"
-            title={`Eliminar la variante ${AUDIENCE_LABELS[activeVariantKey]}`}
-            aria-label={`Eliminar la variante ${AUDIENCE_LABELS[activeVariantKey]}`}
+            title={`Delete ${AUDIENCE_LABELS[activeVariantKey]} variant`}
+            aria-label={`Delete ${AUDIENCE_LABELS[activeVariantKey]} variant`}
             className="rounded-lg border border-red-500/30 p-2 text-red-300 hover:bg-red-500/10"
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -110,7 +110,7 @@ export function DesignerToolbar({
           type="button"
           onClick={onUndo}
           disabled={!canUndo}
-          aria-label="Deshacer"
+          aria-label="Undo"
           className="rounded-lg p-2 text-on-surface-variant hover:bg-surface-container-low disabled:opacity-30"
         >
           <Undo2 className="h-4 w-4" />
@@ -119,7 +119,7 @@ export function DesignerToolbar({
           type="button"
           onClick={onRedo}
           disabled={!canRedo}
-          aria-label="Rehacer"
+          aria-label="Redo"
           className="rounded-lg p-2 text-on-surface-variant hover:bg-surface-container-low disabled:opacity-30"
         >
           <Redo2 className="h-4 w-4" />
@@ -130,7 +130,7 @@ export function DesignerToolbar({
           data-testid="template-designer-preview-button"
           className="ml-2 flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20"
         >
-          <Eye className="h-3.5 w-3.5" /> Vista previa
+          <Eye className="h-3.5 w-3.5" /> Preview
         </button>
       </div>
     </div>

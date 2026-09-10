@@ -9,6 +9,7 @@ import {
   listAvailableResources,
   type CatalogSpecification,
 } from '@/features/catalog/metamodel';
+import { AutomationsBindingsEditor } from './AutomationsBindingsEditor';
 import { bindingKinds } from './config';
 import {
   EmptyMessage,
@@ -26,15 +27,29 @@ export function ResourcesEditor({
   updateSpecification: (updater: (current: CatalogSpecification) => CatalogSpecification) => void;
   guided?: boolean;
 }) {
-  const bindings = specification.bindings ?? [];
+  // Las automatizaciones tienen su propia sección (ADR-0039): su referencia
+  // apunta a una versión publicada exacta, admiten varias a la vez y pueden
+  // quedar apagadas sin quitarse. Editarlas también aquí dejaría dos sitios que
+  // escriben el mismo binding con reglas distintas.
+  const bindings = (specification.bindings ?? [])
+    .map((binding, index) => ({ binding, index }))
+    .filter(({ binding }) => !(binding.module === 'automations' && binding.resourceType === 'workflow'));
   const resourcesQuery = useQuery({
     queryKey: ['catalog-resources'],
     queryFn: listAvailableResources,
   });
   const availableResources = resourcesQuery.data ?? [];
 
+  // La clase «Automatización» se excluye del selector genérico: su vinculación
+  // vive en AutomationsBindingsEditor.
+  const clasesGenericas = bindingKinds.filter(
+    (kind) => !(kind.module === 'automations' && kind.resourceType === 'workflow'),
+  );
+
   function addBinding() {
-    const first = availableResources[0];
+    const first = availableResources.find(
+      (resource) => resource.reference.module !== 'automations',
+    );
     if (!first) return;
     updateSpecification((current) => {
       current.bindings = [
@@ -53,12 +68,14 @@ export function ResourcesEditor({
   }
 
   return (
+    <div className="space-y-6">
+    <AutomationsBindingsEditor specification={specification} updateSpecification={updateSpecification} />
     <section className="panel-card p-6 lg:p-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <SectionHeading
           icon={<Link2 className="w-5 h-5" />}
-          title="Recursos conectados"
-          description="Conecta políticas y capacidades administradas por otros módulos."
+          title="Connected resources"
+          description="Connect policies and capabilities managed by other modules."
         />
         <button
           onClick={addBinding}
@@ -67,18 +84,18 @@ export function ResourcesEditor({
         >
           <Plus className="w-4 h-4" />
           {resourcesQuery.isLoading
-            ? 'Cargando capacidades…'
+            ? 'Loading capabilities…'
             : guided
-              ? 'Agregar capacidad'
-              : 'Conectar recurso'}
+              ? 'Add capability'
+              : 'Connect resource'}
         </button>
       </div>
 
       <div className="mt-6 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4 flex gap-3 text-sm">
         <Check className="w-5 h-5 text-cyan-300 shrink-0" />
         <p className="text-on-surface-variant">
-          El Catalog Builder decide qué recurso utiliza esta entidad. El módulo especializado continúa
-          siendo el dueño de su configuración.
+          The Entity Builder determines which resource this entity uses. The specialized module remains
+          the owner of its configuration.
         </p>
       </div>
 
@@ -86,15 +103,15 @@ export function ResourcesEditor({
         <EmptyMessage
           text={
             resourcesQuery.isError
-              ? 'No fue posible consultar las capacidades de los módulos.'
+              ? 'Unable to fetch module capabilities.'
               : guided
-              ? 'Este paso es opcional. Puedes continuar y conectar permisos, SLA o automatizaciones después.'
-              : 'Esta entidad todavía no utiliza políticas, SLA, automatizaciones ni integraciones.'
+              ? 'This step is optional. You can continue and connect permissions, SLA, or automations later.'
+              : 'This entity does not use policies, SLA, automations, or integrations yet.'
           }
         />
       ) : (
         <div className="space-y-3 mt-6">
-          {bindings.map((binding, index) => {
+          {bindings.map(({ binding, index }) => {
             const selectedKind = bindingKinds.find(
               (item) =>
                 item.module === binding.module && item.resourceType === binding.resourceType,
@@ -116,7 +133,7 @@ export function ResourcesEditor({
                       : 'lg:grid-cols-[220px_minmax(0,1fr)_130px_110px_40px]'
                   }`}
                 >
-                  <FriendlyField label="Tipo de recurso">
+                  <FriendlyField label="Resource type">
                     <select
                       value={`${binding.module}:${binding.resourceType}`}
                       onChange={(event) =>
@@ -141,7 +158,7 @@ export function ResourcesEditor({
                       className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
                       style={{ colorScheme: 'dark' }}
                     >
-                      {bindingKinds.map((kind) => (
+                      {clasesGenericas.map((kind) => (
                         <option
                           key={`${kind.module}:${kind.resourceType}`}
                           value={`${kind.module}:${kind.resourceType}`}
@@ -153,8 +170,8 @@ export function ResourcesEditor({
                     </select>
                   </FriendlyField>
                   <FriendlyField
-                    label="Capacidad disponible"
-                    help={`Seleccionado desde ${selectedKind?.owner ?? 'el módulo correspondiente'}.`}
+                    label="Available capability"
+                    help={`Selected from ${selectedKind?.owner ?? 'the corresponding module'}.`}
                   >
                     <select
                       value={binding.resourceId}
@@ -177,7 +194,7 @@ export function ResourcesEditor({
                       style={{ colorScheme: 'dark' }}
                     >
                       {compatibleResources.length === 0 && (
-                        <option value="" className="bg-[#191c22] text-[#e1e2eb]">No hay recursos publicados</option>
+                        <option value="" className="bg-[#191c22] text-[#e1e2eb]">No published resources</option>
                       )}
                       {compatibleResources.map((resource) => (
                         <option
@@ -190,7 +207,7 @@ export function ResourcesEditor({
                       ))}
                     </select>
                   </FriendlyField>
-                  {!guided && <FriendlyField label="Versión">
+                  {!guided && <FriendlyField label="Version">
                     <input
                       value={binding.resourceVersion ?? ''}
                       onChange={(event) =>
@@ -200,11 +217,11 @@ export function ResourcesEditor({
                           return current;
                         })
                       }
-                      placeholder="Se resolverá al publicar"
+                      placeholder="Will resolve upon publishing"
                       className="friendly-input"
                     />
                   </FriendlyField>}
-                  {!guided && <FriendlyField label="Contrato">
+                  {!guided && <FriendlyField label="Contract">
                     <input
                       value={binding.contractVersion ?? '1'}
                       onChange={(event) =>
@@ -219,7 +236,7 @@ export function ResourcesEditor({
                     />
                   </FriendlyField>}
                   <IconButton
-                    label="Desconectar recurso"
+                    label="Disconnect resource"
                     danger
                     onClick={() =>
                       updateSpecification((current) => {
@@ -237,5 +254,6 @@ export function ResourcesEditor({
         </div>
       )}
     </section>
+    </div>
   );
 }

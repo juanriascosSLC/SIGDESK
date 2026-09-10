@@ -81,11 +81,10 @@ export async function apiRequest<T>(
       window.dispatchEvent(new CustomEvent(AUTH_FAILURE_EVENT));
     }
 
-    const endpoint = `${new URL(API_BASE_URL).pathname}${path}`;
     throw new ApiError(
       payload.message ||
         payload.error ||
-        `La API respondió ${response.status} en ${endpoint}. Verifica que el backend esté actualizado.`,
+        `The server returned an unexpected response (${response.status}).`,
       response.status,
       payload.issues,
     );

@@ -423,7 +423,7 @@ export function placementLabel(
     return rules.systemFieldLabels[placement.fieldKey ?? ''] ?? placement.fieldKey ?? '';
   }
   if (placement.kind === 'content') {
-    if (placement.contentKind === 'section') return placement.title || 'Título de sección';
+    if (placement.contentKind === 'section') return placement.title || 'Section title';
     return contentKindLabel(placement.contentKind);
   }
   return placement.id;

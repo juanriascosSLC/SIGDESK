@@ -19,6 +19,11 @@ export interface TicketPageContext {
   preview: boolean;
   ticket: Ticket;
   currentUserName: string;
+  /** The signed-in actor's own id (organization_service usuario_id) — for
+   *  identity COMPARISONS only (e.g. "is this ticket assigned to me?"),
+   *  never rendered directly. `null` when unavailable (e.g. a preview
+   *  context with no real session). */
+  currentUserId: string | null;
   can: (permission: string) => boolean;
   onNavigate: (path: string) => void;
 

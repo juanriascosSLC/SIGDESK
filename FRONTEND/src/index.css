@@ -51,6 +51,20 @@
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.4);
+
+  /* Services department skin — parallel token axis to the base palette
+     above, scoped by [data-department="services"] instead of a global
+     class (services-department-frontend.md, Premise 2). See the
+     :root/.dark-analogous blocks below for the actual values. */
+  --color-services-background: var(--services-background);
+  --color-services-surface: var(--services-surface);
+  --color-services-surface-container: var(--services-surface-container);
+  --color-services-surface-container-low: var(--services-surface-container-low);
+  --color-services-on-surface: var(--services-on-surface);
+  --color-services-on-surface-variant: var(--services-on-surface-variant);
+  --color-services-border: var(--services-border);
+  --color-services-accent: var(--services-accent);
+  --color-services-accent-foreground: var(--services-accent-foreground);
 }
 
 /* ─── Light palette (default) ──────────────────────────────────────────── */
@@ -127,9 +141,51 @@
   --outline-variant: #3c494e;
 }
 
-/* ─── Global Fix for Native Select Dropdowns & Options in Dark Mode ────── */
-html, body, select, option, input, textarea {
-  color-scheme: dark;
+/* ─── Services department skin (data-department="services") ─────────────
+   Independent axis from .dark: [data-department="services"] carries its
+   OWN light values below, and `.dark [data-department="services"]` (a
+   DESCENDANT combinator, not a compound selector — .dark lives on <html>,
+   data-department lives on a nested page wrapper, never the same element)
+   carries its own dark values. The two compose instead of colliding
+   because they define entirely different custom properties (--services-*
+   vs. --background/--surface/etc. above) — see DepartmentScope.tsx for the
+   component that actually stamps this attribute. Values reuse the same
+   cyan/blue accent already used by Brand (AgentLayout.tsx:41,
+   `from-cyan-500 to-blue-500`), not a new brand color (Design Review
+   Pass 5). */
+[data-department="services"] {
+  --services-background: #eef7fb;
+  --services-surface: #ffffff;
+  --services-surface-container: #e0f2fa;
+  --services-surface-container-low: #f2fafd;
+  --services-on-surface: #0f172a;
+  --services-on-surface-variant: #475569;
+  --services-border: rgba(14, 116, 144, 0.16);
+  --services-accent: #0e7490;
+  --services-accent-foreground: #ffffff;
+}
+
+.dark [data-department="services"] {
+  --services-background: #061019;
+  --services-surface: #0b1a22;
+  --services-surface-container: #0f232c;
+  --services-surface-container-low: #0d1c24;
+  --services-on-surface: #e1e2eb;
+  --services-on-surface-variant: #9fb4bc;
+  --services-border: rgba(6, 182, 212, 0.18);
+  --services-accent: #06b6d4;
+  --services-accent-foreground: #020617;
+}
+
+/* ─── Native form-control color-scheme, theme-aware ──────────────────────
+   Was unconditionally `dark` (forced even in light mode) — the browser's own
+   chrome for selects/scrollbars/date pickers stayed dark-styled regardless of
+   the active theme. `.dark { color-scheme: dark }` above already covers dark
+   mode; this just gives light mode its own native rendering instead of
+   inheriting dark's. The option background/color rules below are independent
+   (class-selector based, not color-scheme) and unaffected. */
+:root:not(.dark) {
+  color-scheme: light;
 }
 
 select option,

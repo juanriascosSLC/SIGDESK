@@ -12,7 +12,26 @@ import { resolvePageLayout } from '@/features/catalog/runtime/page-layout-normal
 import type { Ticket } from './types';
 import { TicketPageLayout } from './TicketPageLayout';
 import type { TicketPageContext } from './widgets/context';
+import { USER_UNAVAILABLE_LABEL } from './identity-labels';
 
+// PRB (problem_service) and RFC (change_service) each now expose their own
+// trusted requester identity server-side (createdBy/createdByName on
+// EntityRecord — problem_service's problemDTO / change_service's
+// changeDTO), resolved the same way as tickets_service's
+// creadorId/creadorNombre: a JWT snapshot at creation, with a local
+// identity-projection fallback for historical records. NEVER a generic
+// catalog `data` field an admin happened to name "requester" — that value
+// is arbitrary free text, not a governed identity, and using it as both an
+// id and a display name (as this used to) was exactly the bug this fixes.
+//
+// Neither PRB nor RFC has an aggregate-root ASSIGNEE concept — the only
+// real organizational assignment in either service lives on RFC's Task
+// sub-entity (ChangeTasksBoard/MyChangeTasks already read that directly).
+// Fabricating one from a catalog field would be exactly the raw-value
+// leak this pass eliminates, so the synthetic ticket's assignee stays
+// genuinely empty here — a page layout that places an "assignee" ticket
+// field on a PRB/RFC page (unusual, but not impossible) reads "Unassigned"
+// honestly instead of showing free text pretending to be an identity.
 function recordAsTicket(record: EntityRecord): Ticket {
   const value = (key: string) => {
     const current = record.data[key];
@@ -26,9 +45,23 @@ function recordAsTicket(record: EntityRecord): Ticket {
     description: value('description'),
     status: record.state,
     priority: value('priority') || value('riskLevel'),
-    category: value('category'),
-    requester: value('requester') || value('requestedBy') || 'Sin solicitante',
-    assignee: value('assignee') || null,
+    // `category` carries this record's OWN entityKey, not the catalog field
+    // that happens to share the name. The Ticket contract is `category <-
+    // entityKey` (features/tickets/api.ts), and RelationsWidget relies on it
+    // to tell "this record is the relation's source" apart from "this
+    // record's id merely equals the source's id" — ids are unique only
+    // within one entity type. Reading data['category'] here left it empty for
+    // PRB/RFC (neither defines such a field), which flipped every relation on
+    // those pages to the wrong side. The catalog field, where a definition
+    // declares one, still renders through its own placement
+    // (`context.entityData[fieldKey]`), so nothing is lost by not duplicating
+    // it here.
+    category: record.entityKey,
+    requesterId: record.createdBy ?? '',
+    requesterDisplayName: record.createdByName || USER_UNAVAILABLE_LABEL,
+    assigneeId: null,
+    assigneeDisplayName: null,
+    assigneeTeamName: null,
     createdAt: record.createdAt,
     assetId: value('assetId') || undefined,
     site: value('site') || undefined,
@@ -39,6 +72,8 @@ export interface ConfiguredRecordDetailProps {
   record: EntityRecord;
   specification: CatalogSpecification;
   currentUserName: string;
+  /** The signed-in actor's own id — see TicketPageContext.currentUserId. */
+  currentUserId: string | null;
   relations: EntityRelation[];
   transitions: TransitionDefinition[];
   onTransition: (transition: TransitionDefinition) => void;
@@ -64,6 +99,7 @@ export function ConfiguredRecordDetail({
   record,
   specification,
   currentUserName,
+  currentUserId,
   relations,
   transitions,
   onTransition,
@@ -101,6 +137,7 @@ export function ConfiguredRecordDetail({
     preview: false,
     ticket,
     currentUserName,
+    currentUserId,
     can: () => false,
     onNavigate,
     fields: specification.fields,
@@ -161,7 +198,7 @@ export function ConfiguredRecordDetail({
     <div className="min-h-screen bg-surface-container-lowest p-6 lg:p-8">
       <div className="w-full space-y-6">
         <button onClick={onBack} className="secondary-button">
-          <ArrowLeft className="h-4 w-4" /> Volver
+          <ArrowLeft className="h-4 w-4" /> Back
         </button>
         {notice && <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-300">{notice}</div>}
         {error && <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{error}</div>}
@@ -172,7 +209,7 @@ export function ConfiguredRecordDetail({
           onAssignClick={() => {}}
         />
         <div className="rounded-2xl border border-border/30 bg-surface-container-low p-4 text-xs text-on-surface-variant">
-          Definición ejecutable {record.entityKey} v{record.definitionVersion} · checksum{' '}
+          Executable definition {record.entityKey} v{record.definitionVersion} · checksum{' '}
           <span className="font-mono">{record.manifestChecksum}</span>
         </div>
       </div>

@@ -20,7 +20,7 @@ export function FormAttachmentsWidget({ context }: { context: FormPageContext })
     <section className="rounded-2xl border border-border/50 bg-surface-container p-5" data-testid="form-attachments-widget">
       <div className="mb-3 flex items-center gap-2">
         <Paperclip className="h-4 w-4 text-primary" />
-        <h3 className="font-black text-on-surface">Archivos adjuntos</h3>
+        <h3 className="font-black text-on-surface">Attachments</h3>
         <span className="ml-auto text-xs text-on-surface-variant">{attachments.items.length}/{attachments.maxFiles}</span>
       </div>
       <div
@@ -29,10 +29,10 @@ export function FormAttachmentsWidget({ context }: { context: FormPageContext })
         className="rounded-xl border border-dashed border-primary/40 bg-primary/5 p-5 text-center"
       >
         <UploadCloud className="mx-auto mb-2 h-6 w-6 text-primary" />
-        <p className="text-sm font-semibold text-on-surface">Arrastra archivos aquí</p>
-        <p className="mt-1 text-xs text-on-surface-variant">Máximo {formatBytes(attachments.maxBytesPerFile)} por archivo</p>
+        <p className="text-sm font-semibold text-on-surface">Drag files here</p>
+        <p className="mt-1 text-xs text-on-surface-variant">Maximum {formatBytes(attachments.maxBytesPerFile)} per file</p>
         <label className="mt-3 inline-flex cursor-pointer rounded-lg border border-primary/40 px-3 py-2 text-xs font-bold text-primary">
-          Elegir archivos
+          Choose files
           <input
             type="file"
             multiple
@@ -55,7 +55,7 @@ export function FormAttachmentsWidget({ context }: { context: FormPageContext })
               <span className="text-xs text-on-surface-variant">{formatBytes(item.size)}</span>
               <button
                 type="button"
-                aria-label={`Quitar ${item.name}`}
+                aria-label={`Remove ${item.name}`}
                 disabled={context.preview || attachments.canRemove === false}
                 onClick={() => attachments.onRemove(item.id)}
                 className="rounded-md p-1 text-on-surface-variant hover:text-red-300 disabled:opacity-40"

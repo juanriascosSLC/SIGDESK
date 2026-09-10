@@ -42,9 +42,14 @@ test('SIG Assistant responde el último INC de un sitio con consulta estructurad
   });
 
   await page.goto('/app');
-  await page.getByRole('button', { name: 'Abrir asistente RAG' }).click();
-  await page.getByPlaceholder(/Escribe tu consulta/).fill('cual es el ultimo ticket del AS 3281 storage lot');
-  await page.getByRole('button', { name: 'Enviar consulta' }).click();
+  // Selectors realigned on merge: this branch localized the assistant's
+  // chrome to English (asserted by agent-nav-responsive.spec.ts and
+  // requester-nav-responsive.spec.ts). The assertions below still check
+  // this feature's own Spanish answer text, which site-ticket-lookup.ts
+  // still produces.
+  await page.getByRole('button', { name: 'Open SIG Assistant' }).click();
+  await page.getByPlaceholder(/Type your question/).fill('cual es el ultimo ticket del AS 3281 storage lot');
+  await page.getByRole('button', { name: 'Send question' }).click();
 
   await expect(page.getByText(/INC-000042: «Cámara sin señal»/)).toBeVisible();
   await expect(page.getByText(/Estado: In Progress/)).toBeVisible();

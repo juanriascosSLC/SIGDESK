@@ -59,14 +59,14 @@ test('el panel de estado ofrece las transiciones publicadas y guarda su clave', 
   await page.goto('/app/automations/new');
   await expect(page.getByTestId('workflow-visual-editor')).toBeVisible();
 
-  await page.getByRole('button', { name: /Cambiar estado/ }).click();
-  const nodoEstado = page.locator('.react-flow__node').filter({ hasText: 'Cambiar estado' }).first();
+  await page.getByRole('button', { name: /Change Status/ }).click();
+  const nodoEstado = page.locator('.react-flow__node').filter({ hasText: 'Change Status' }).first();
   await nodoEstado.click();
 
   const selector = page.getByTestId('status-transition');
   await expect(selector).toBeVisible();
   await expect(selector.locator('option')).toContainText([
-    'Selecciona una transición',
+    'Select a transition…',
     'Empezar a trabajar · open → in_progress',
     'Resolver · in_progress → resolved',
     'Cerrar · resolved → closed',
@@ -104,12 +104,12 @@ test('una transición que exige datos adicionales avisa antes de publicarse', as
 
   await page.goto('/app/automations/new');
   await expect(page.getByTestId('workflow-visual-editor')).toBeVisible();
-  await page.getByRole('button', { name: /Cambiar estado/ }).click();
-  await page.locator('.react-flow__node').filter({ hasText: 'Cambiar estado' }).first().click();
+  await page.getByRole('button', { name: /Change Status/ }).click();
+  await page.locator('.react-flow__node').filter({ hasText: 'Change Status' }).first().click();
 
   await page.getByTestId('status-transition').selectOption('close');
   await expect(page.getByTestId('status-requires-input')).toBeVisible();
-  await expect(page.getByTestId('status-requires-input')).toContainText('no puede aportar');
+  await expect(page.getByTestId('status-requires-input')).toContainText('cannot provide');
 
   // Con `start-work` no hay aviso: esa transición no pide nada.
   await page.getByTestId('status-transition').selectOption('start-work');
@@ -139,7 +139,7 @@ test('si no se pueden leer las transiciones, la configuración guardada no se bo
           {
             id: 'state-1', type: 'action', position: { x: 300, y: 0 },
             data: {
-              catalogKey: 'action.change_status', label: 'Cambiar estado', supportStatus: 'operational',
+              catalogKey: 'action.change_status', label: 'Change Status', supportStatus: 'operational',
               color: 'emerald', transitionKey: 'start-work', transitionFrom: 'open', transitionTo: 'in_progress',
             },
           },
@@ -151,7 +151,7 @@ test('si no se pueden leer las transiciones, la configuración guardada no se bo
 
   await page.goto('/app/automations/draft-con-estado');
   await expect(page.getByTestId('workflow-visual-editor')).toBeVisible();
-  await page.locator('.react-flow__node').filter({ hasText: 'Cambiar estado' }).first().click();
+  await page.locator('.react-flow__node').filter({ hasText: 'Change Status' }).first().click();
 
   await expect(page.getByTestId('status-transitions-error')).toBeVisible();
   // La clave sigue ahí: un fallo de lectura no puede borrar configuración, y

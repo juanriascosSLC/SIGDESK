@@ -54,7 +54,7 @@ export function PlacementCard({
             event.stopPropagation();
             onRemove();
           }}
-          aria-label={`Quitar ${label}`}
+          aria-label={`Remove ${label}`}
           className="shrink-0 text-on-surface-variant opacity-0 group-hover:opacity-100 hover:text-red-400"
         >
           <X className="h-3.5 w-3.5" />

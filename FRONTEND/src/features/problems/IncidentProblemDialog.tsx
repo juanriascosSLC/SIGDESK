@@ -37,13 +37,13 @@ function initialProblemData(
   const priority = ticket.priority.toLowerCase();
   return {
     ...data,
-    title: `Problema recurrente: ${ticket.title}`,
-    description: `Investigación de causa raíz iniciada desde ${ticket.id}. ${ticket.description}`,
+    title: `Recurring problem: ${ticket.title}`,
+    description: `Root-cause investigation started from ${ticket.id}. ${ticket.description}`,
     impact: ['low', 'medium', 'high', 'critical'].includes(priority)
       ? priority
       : 'medium',
     serviceAffected:
-      ticket.site || ticket.assetId || ticket.category || 'Servicio por determinar',
+      ticket.site || ticket.assetId || ticket.category || 'Service to be determined',
     owner: currentUserName,
   };
 }
@@ -101,11 +101,11 @@ export function IncidentProblemDialog({
 
   const workflowMutation = useMutation({
     mutationFn: async (existing?: EntityRecord) => {
-      if (!ticket.entityId) throw new Error('El ticket no está vinculado a una entidad INC.');
+      if (!ticket.entityId) throw new Error('This ticket is not linked to an INC entity.');
       let problem = existing;
       if (!problem) {
         const specification = definitionQuery.data?.specification;
-        if (!specification) throw new Error('La definición PRB no está disponible.');
+        if (!specification) throw new Error('The PRB definition is not available.');
         const data: Record<string, unknown> = {};
         for (const field of specification.fields) {
           if (!isFieldVisible(field, formData)) continue;
@@ -113,7 +113,25 @@ export function IncidentProblemDialog({
           if (!isFieldRequired(field, formData) && (value === '' || value == null)) continue;
           data[field.key] = value;
         }
-        problem = await createEntity('PRB', data, idempotencyKey.current);
+        // Propagates the INC's own validated asset snapshot to the new PRB
+        // (Asset/CMDB operational-history correction — future-record
+        // correctness): mirrors exactly how IncidentChangeDialog already
+        // forwards ticket.assetContext for INC -> RFC. Without this, a PRB
+        // created through this normal workflow would never populate
+        // problem_asset_links — the only way to still find it from the
+        // asset would be relation traversal (via_incident), which is real
+        // but never a substitute for the PRB having its own snapshot when
+        // one is available at creation time.
+        problem = await createEntity('PRB', data, idempotencyKey.current, {
+          assetContext: ticket.assetContext
+            ? {
+                siteAssetId: ticket.assetContext.siteAssetId,
+                links: ticket.assetContext.links
+                  .filter((link) => link.assetId !== ticket.assetContext?.siteAssetId)
+                  .map((link) => ({ assetId: link.assetId, role: link.role })),
+              }
+            : undefined,
+        });
       }
       await createEntityRelation(
         'PRB',
@@ -128,7 +146,10 @@ export function IncidentProblemDialog({
       void queryClient.invalidateQueries({ queryKey: ['problems'] });
       onLinked();
       onClose();
-      navigate(`/app/problems/${encodeURIComponent(problem.humanId)}`);
+      // Bug found 2026-09-09: navigated with problem.humanId; /app/problems/:id
+      // expects the internal id (line 138 already uses problem.id correctly
+      // for the relation call above -- this navigate() was the outlier).
+      navigate(`/app/problems/${encodeURIComponent(problem.id)}`);
     },
   });
 
@@ -147,12 +168,12 @@ export function IncidentProblemDialog({
             <div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-primary">
               <GitBranch className="h-4 w-4" /> INC → PRB
             </div>
-            <h2 className="text-xl font-black text-on-surface">Gestionar problema asociado</h2>
+            <h2 className="text-xl font-black text-on-surface">Manage Linked Problem</h2>
             <p className="mt-1 text-xs text-on-surface-variant">
-              El incidente permanece en Tickets; la investigación de causa raíz se administra como PRB.
+              The incident stays in Tickets; the root-cause investigation is managed as a PRB.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-xl p-2 text-on-surface-variant hover:bg-surface-container" aria-label="Cerrar">
+          <button type="button" onClick={onClose} className="rounded-xl p-2 text-on-surface-variant hover:bg-surface-container" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -172,7 +193,7 @@ export function IncidentProblemDialog({
                   : 'border-transparent text-on-surface-variant'
               }`}
             >
-              {tab === 'create' ? 'Crear nuevo PRB' : 'Vincular PRB existente'}
+              {tab === 'create' ? 'Create new PRB' : 'Link existing PRB'}
             </button>
           ))}
         </div>
@@ -194,17 +215,17 @@ export function IncidentProblemDialog({
               ))}
             </div>
             <div className="sticky bottom-0 flex justify-end gap-3 border-t border-border/40 bg-surface-container-low/95 p-6">
-              <button type="button" onClick={onClose} className="secondary-button">Cancelar</button>
+              <button type="button" onClick={onClose} className="secondary-button">Cancel</button>
               <button type="submit" disabled={workflowMutation.isPending || !definitionQuery.data} className="primary-button disabled:opacity-50">
                 <CheckCircle2 className="h-4 w-4" />
-                {workflowMutation.isPending ? 'Creando y vinculando…' : 'Crear PRB y vincular'}
+                {workflowMutation.isPending ? 'Creating and linking…' : 'Create PRB and link'}
               </button>
             </div>
           </form>
         ) : (
           <div className="p-6">
             <SearchableEntityPicker
-              label="Selecciona el problema que investiga este incidente"
+              label="Select the problem investigating this incident"
               entityKey="PRB"
               items={problemsQuery.data ?? []}
               excludedIds={linkedProblemIds}
@@ -224,7 +245,7 @@ export function IncidentProblemDialog({
         {mode === 'link' && !workflowMutation.isPending && (
           <div className="flex justify-end border-t border-border/40 p-6">
             <button type="button" onClick={onClose} className="secondary-button">
-              <Link2 className="h-4 w-4" /> Cerrar
+              <Link2 className="h-4 w-4" /> Close
             </button>
           </div>
         )}

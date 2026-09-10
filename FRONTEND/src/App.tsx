@@ -24,6 +24,9 @@ const ChangeDetail = React.lazy(() => import('./features/changes/ChangeDetail'))
 const MyChangeTasks = React.lazy(() => import('./features/changes/MyChangeTasks'));
 const AutomationsList = React.lazy(() => import('./features/automations/AutomationsList'));
 const WorkflowBuilder = React.lazy(() => import('./features/automations/WorkflowBuilder'));
+const ServicesDashboard = React.lazy(() => import('./features/services/ServicesDashboard'));
+const DealershipView = React.lazy(() => import('./features/services/DealershipView'));
+const SrvDetail = React.lazy(() => import('./features/services/SrvDetail'));
 const KnowledgeBase = React.lazy(() => import('./features/knowledge/KnowledgeBase'));
 const ArticleDetail = React.lazy(() => import('./features/knowledge/ArticleDetail'));
 const KnowledgeEditor = React.lazy(() => import('./features/knowledge/KnowledgeEditor'));
@@ -50,7 +53,7 @@ function FullScreenLoader() {
       <div className="flex flex-col items-center gap-4">
         <div className="w-10 h-10 rounded-full border-2 border-cyan-500/30 border-t-cyan-400 animate-spin" />
         <p className="text-xs font-mono uppercase tracking-[0.3em] text-cyan-500/70">
-          Verificando sesión
+          Verifying session
         </p>
       </div>
     </div>
@@ -156,6 +159,7 @@ function AppRoutes() {
           <EndUserLayout>
             <Routes>
               <Route path="/" element={<EndUserDashboard />} />
+              <Route path="/catalog" element={<ServiceCatalog />} />
               <Route path="/catalog/:categoryId" element={<CatalogForm />} />
               <Route path="/knowledge" element={<KnowledgeBase />} />
               <Route path="/knowledge/:id" element={<ArticleDetail />} />
@@ -281,6 +285,29 @@ function AppRoutes() {
                   <ProblemDetail />
                 </ProtectedRoute>
               } />
+              {/* Services department slice (PR1) — mock-only, gated on the
+                  already-real sigdesk.changes.view until sigdesk.services.view
+                  exists in SIGTools (services-department-frontend.md,
+                  Constraints). */}
+              {/* fallbackTo="/app" is deliberate: ProtectedRoute's default is
+                  "/portal", the END-USER portal, so a staff agent who lacks
+                  the permission would be ejected from the agent workspace
+                  entirely rather than sent somewhere useful inside it. */}
+              <Route path="/services" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.changesView} fallbackTo="/app">
+                  <ServicesDashboard />
+                </ProtectedRoute>
+              } />
+              <Route path="/services/dealerships/:dealershipId" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.changesView} fallbackTo="/app">
+                  <DealershipView />
+                </ProtectedRoute>
+              } />
+              <Route path="/services/tickets/:id" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.changesView} fallbackTo="/app">
+                  <SrvDetail />
+                </ProtectedRoute>
+              } />
               <Route path="/automations" element={
                 <ProtectedRoute requiredPermission={PERMISSIONS.automationsView}>
                   <AutomationsList />
@@ -304,7 +331,7 @@ function AppRoutes() {
                 </ProtectedRoute>
               } />
               <Route path="/admin/assistant-feedback" element={
-                <ProtectedRoute requireCondition={canManageUsersAndRoles} fallbackTo="/app">
+                <ProtectedRoute requiredPermission={PERMISSIONS.assistantFeedbackView} fallbackTo="/app">
                   <AssistantFeedback />
                 </ProtectedRoute>
               } />
@@ -325,8 +352,23 @@ function AppRoutes() {
                   <SlaPolicies />
                 </ProtectedRoute>
               } />
-              <Route path="/settings/chatops" element={<ChatOps />} />
-              <Route path="/settings/api-keys" element={<ApiKeys />} />
+              {/* Neither route has a canonical chatops or apikeys permission on
+                  the backend — both screens are also fully non-functional
+                  placeholders (see ChatOps.tsx / ApiKeys.tsx) with no data to
+                  protect yet. Gated on canManageUsersAndRoles, the same
+                  capability the sidebar already nav-gates them behind, so
+                  this is consistency, not a new restriction. Replace with a
+                  real capability check once one exists on the backend. */}
+              <Route path="/settings/chatops" element={
+                <ProtectedRoute requireCondition={canManageUsersAndRoles} fallbackTo="/app">
+                  <ChatOps />
+                </ProtectedRoute>
+              } />
+              <Route path="/settings/api-keys" element={
+                <ProtectedRoute requireCondition={canManageUsersAndRoles} fallbackTo="/app">
+                  <ApiKeys />
+                </ProtectedRoute>
+              } />
 
               <Route path="*" element={<div className="p-8 text-on-surface-variant">Module in development...</div>} />
             </Routes>

@@ -12,9 +12,9 @@ export function ServiceCatalog() {
     queryFn: () => listDefinitions(true),
   });
   const definitions = useMemo(() => {
-    // Defensa para despliegues graduales: el backend nuevo ya responde solo
-    // activas, pero una instancia anterior puede ignorar `active=true` y
-    // devolver el historial. Nunca mostramos más de una opción por entidad.
+    // Defensive for gradual rollouts: the new backend already responds with
+    // only active definitions, but an older instance may ignore `active=true`
+    // and return the full history. Never show more than one option per entity.
     const byEntityKey = new Map<string, CatalogDefinition>();
     for (const definition of definitionsQuery.data ?? []) {
       const current = byEntityKey.get(definition.entityKey);
@@ -35,23 +35,23 @@ export function ServiceCatalog() {
   return (
     <div className="p-6 lg:p-8 w-full space-y-8">
       <div className="text-center space-y-4 mb-12">
-        <h1 className="text-4xl font-black text-on-surface tracking-tight">¿Qué necesitas crear?</h1>
+        <h1 className="text-4xl font-black text-on-surface tracking-tight">What do you need to create?</h1>
         <p className="text-on-surface-variant max-w-xl mx-auto">
-          Esta lista se genera directamente desde las definiciones publicadas del Entity Builder.
+          This list is generated directly from the definitions published in the Entity Builder.
         </p>
         <div className="relative max-w-2xl mx-auto mt-6">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-cyan-400" />
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar una definición publicada…"
+            placeholder="Search a published definition…"
             className="w-full bg-surface-container-low border border-cyan-500/30 text-on-surface text-lg rounded-2xl pl-12 pr-6 py-4 focus:outline-none focus:border-cyan-400"
           />
         </div>
       </div>
 
       {definitionsQuery.isLoading && (
-        <p className="text-center text-on-surface-variant">Cargando metamodelo…</p>
+        <p className="text-center text-on-surface-variant">Loading metamodel…</p>
       )}
       {definitionsQuery.isError && (
         <p className="text-center text-red-400">{definitionsQuery.error.message}</p>
@@ -76,7 +76,7 @@ export function ServiceCatalog() {
               {definition.specification.description}
             </p>
             <span className="mt-5 flex items-center gap-2 text-sm font-bold text-primary">
-              Crear registro <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              Create record <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </span>
           </button>
         ))}

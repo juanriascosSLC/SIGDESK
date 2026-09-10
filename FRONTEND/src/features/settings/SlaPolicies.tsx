@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { formatDateTime } from '@/i18n/format';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CalendarClock,
@@ -23,13 +24,13 @@ import {
 
 const priorities = ['critical', 'high', 'medium', 'low'];
 const weekdays = [
-  { value: 1, label: 'Lun' },
-  { value: 2, label: 'Mar' },
-  { value: 3, label: 'Mié' },
-  { value: 4, label: 'Jue' },
-  { value: 5, label: 'Vie' },
-  { value: 6, label: 'Sáb' },
-  { value: 7, label: 'Dom' },
+  { value: 1, label: 'Mon' },
+  { value: 2, label: 'Tue' },
+  { value: 3, label: 'Wed' },
+  { value: 4, label: 'Thu' },
+  { value: 5, label: 'Fri' },
+  { value: 6, label: 'Sat' },
+  { value: 7, label: 'Sun' },
 ];
 
 function emptyPolicy(): SlaPolicy {
@@ -97,7 +98,7 @@ export default function SlaPolicies() {
       await queryClient.invalidateQueries({ queryKey: ['sla-policies'] });
       setSelected(structuredClone(policy));
       setIsCreatingNew(false);
-      setNotice(`${policy.name} v${policy.version} quedó guardada como borrador.`);
+      setNotice(`${policy.name} v${policy.version} was saved as a draft.`);
     },
   });
   const publishMutation = useMutation({
@@ -108,7 +109,7 @@ export default function SlaPolicies() {
       await queryClient.invalidateQueries({ queryKey: ['catalog-definitions'] });
       await queryClient.invalidateQueries({ queryKey: ['catalog-resources'] });
       setSelected(structuredClone(policy));
-      setNotice(`${policy.name} v${policy.version} está activa y disponible en Catalog Builder.`);
+      setNotice(`${policy.name} v${policy.version} is active and available in Entity Builder.`);
     },
   });
   const previewMutation = useMutation({
@@ -156,15 +157,15 @@ export default function SlaPolicies() {
         <div>
           <h1 className="text-3xl font-black text-on-surface flex items-center gap-3">
             <Timer className="w-7 h-7 text-primary" />
-            Políticas de SLA
+            SLA Policies
           </h1>
           <p className="text-sm text-on-surface-variant mt-1">
-            Calendarios, objetivos y vencimientos calculados por el módulo propietario.
+            Calendars, targets, and due dates calculated by the owning module.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
           <button onClick={startNew} className="secondary-button">
-            <Plus className="w-4 h-4" /> Nueva política
+            <Plus className="w-4 h-4" /> New policy
           </button>
           <button
             onClick={saveDraft}
@@ -173,10 +174,10 @@ export default function SlaPolicies() {
           >
             <Save className="w-4 h-4" />
             {saveMutation.isPending
-              ? 'Guardando…'
+              ? 'Saving…'
               : selected.status === 'draft'
-                ? 'Guardar cambios'
-                : 'Crear borrador'}
+                ? 'Save changes'
+                : 'Create draft'}
           </button>
           <button
             onClick={() =>
@@ -190,7 +191,7 @@ export default function SlaPolicies() {
             className="px-4 py-2.5 rounded-xl bg-emerald-500 text-slate-950 text-sm font-black flex items-center gap-2 disabled:opacity-30"
           >
             <Rocket className="w-4 h-4" />
-            {publishMutation.isPending ? 'Publicando…' : 'Publicar'}
+            {publishMutation.isPending ? 'Publishing…' : 'Publish'}
           </button>
         </div>
       </header>
@@ -198,11 +199,11 @@ export default function SlaPolicies() {
       <div className="grid xl:grid-cols-[300px_minmax(0,1fr)] gap-6">
         <aside className="panel-card p-4.5 h-fit shadow-md">
           <div className="flex items-center justify-between px-2 mb-4">
-            <span className="section-eyebrow font-bold text-xs uppercase tracking-wider text-on-surface-variant">Políticas versionadas</span>
+            <span className="section-eyebrow font-bold text-xs uppercase tracking-wider text-on-surface-variant">Versioned policies</span>
             <span className="rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-xs font-black text-primary">{groupedPolicies.length}</span>
           </div>
           {policiesQuery.isLoading && (
-            <p className="p-3 text-sm text-on-surface-variant italic">Cargando políticas…</p>
+            <p className="p-3 text-sm text-on-surface-variant italic">Loading policies…</p>
           )}
           <div className="space-y-4">
             {groupedPolicies.map(([resourceId, versions]) => (
@@ -224,7 +225,7 @@ export default function SlaPolicies() {
                           : 'border-transparent hover:bg-surface-container text-on-surface'
                       }`}
                     >
-                      <span>Versión {policy.version}</span>
+                      <span>Version {policy.version}</span>
                       <Status value={policy.status} />
                     </button>
                   ))}
@@ -236,17 +237,17 @@ export default function SlaPolicies() {
 
         <main className="space-y-6 min-w-0">
           <section className="panel-card p-6 grid md:grid-cols-2 gap-5 shadow-md">
-            <Field label="Nombre de la política">
+            <Field label="Policy name">
               <input
                 className="friendly-input rounded-xl border-border/50 focus:border-primary/50 focus:ring-primary/30"
                 value={selected.name}
                 onChange={(event) =>
                   setSelected((current) => ({ ...current, name: event.target.value }))
                 }
-                placeholder="Ej. Atención de solicitudes comerciales"
+                placeholder="e.g. Commercial request handling"
               />
             </Field>
-            <Field label="Identificador estable">
+            <Field label="Stable identifier">
               <input
                 className="friendly-input font-mono rounded-xl border-border/50 focus:border-primary/50 focus:ring-primary/30"
                 value={selected.resourceId}
@@ -254,10 +255,10 @@ export default function SlaPolicies() {
                 onChange={(event) =>
                   setSelected((current) => ({ ...current, resourceId: event.target.value }))
                 }
-                placeholder="sla:policy:nombre"
+                placeholder="sla:policy:name"
               />
             </Field>
-            <Field label="Zona horaria">
+            <Field label="Timezone">
               <select
                 className="friendly-input rounded-xl border-border/50 focus:border-primary/50 cursor-pointer bg-[#1d2026] text-[#e1e2eb]"
                 style={{ colorScheme: 'dark' }}
@@ -275,9 +276,9 @@ export default function SlaPolicies() {
                 <option value="UTC" className="bg-[#191c22] text-[#e1e2eb]">UTC</option>
               </select>
             </Field>
-            <Field label="Calendario">
+            <Field label="Calendar">
               <label className="friendly-input rounded-xl border-border/50 flex items-center justify-between cursor-pointer hover:border-primary/40 transition-colors">
-                <span className="font-semibold">{selected.calendar.alwaysOn ? '24 horas × 7 días' : 'Horario laboral'}</span>
+                <span className="font-semibold">{selected.calendar.alwaysOn ? '24 hours × 7 days' : 'Business hours'}</span>
                 <input
                   type="checkbox"
                   checked={selected.calendar.alwaysOn}
@@ -296,7 +297,7 @@ export default function SlaPolicies() {
           {!selected.calendar.alwaysOn && (
             <section className="panel-card p-6 shadow-md">
               <h2 className="font-black text-on-surface flex items-center gap-2">
-                <CalendarClock className="w-5 h-5 text-primary" /> Horario de atención
+                <CalendarClock className="w-5 h-5 text-primary" /> Operating hours
               </h2>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
                 {(selected.calendar.windows ?? []).map((window, index) => (
@@ -335,15 +336,15 @@ export default function SlaPolicies() {
 
           <section className="panel-card p-6 overflow-x-auto shadow-md">
             <h2 className="font-black text-on-surface flex items-center gap-2 mb-4">
-              <Clock3 className="w-5 h-5 text-primary" /> Objetivos por prioridad
+              <Clock3 className="w-5 h-5 text-primary" /> Targets by priority
             </h2>
             <table className="w-full text-sm whitespace-nowrap">
               <thead className="text-left text-xs uppercase tracking-wider text-on-surface-variant border-b border-border/30">
                 <tr>
-                  <th className="py-3 px-3">Prioridad</th>
-                  <th className="py-3 px-3">Primera respuesta</th>
-                  <th className="py-3 px-3">Resolución</th>
-                  <th className="py-3 px-3 text-right">Validar ahora</th>
+                  <th className="py-3 px-3">Priority</th>
+                  <th className="py-3 px-3">First response</th>
+                  <th className="py-3 px-3">Resolution</th>
+                  <th className="py-3 px-3 text-right">Validate now</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/20">
@@ -381,7 +382,7 @@ export default function SlaPolicies() {
                           disabled={!selected.version || previewMutation.isPending}
                           onClick={() => previewMutation.mutate({ priority })}
                         >
-                          Calcular
+                          Calculate
                         </button>
                       </td>
                     </tr>
@@ -392,7 +393,7 @@ export default function SlaPolicies() {
           </section>
 
           <section className="panel-card p-6 grid md:grid-cols-3 gap-5 shadow-md">
-            <Field label="Estados que pausan el reloj">
+            <Field label="States that pause clock">
               <input
                 className="friendly-input font-mono rounded-xl border-border/50 text-xs"
                 value={(selected.pauseStates ?? []).join(', ')}
@@ -407,7 +408,7 @@ export default function SlaPolicies() {
                 }
               />
             </Field>
-            <Field label="Estados que cumplen respuesta">
+            <Field label="States that satisfy response">
               <input
                 className="friendly-input font-mono rounded-xl border-border/50 text-xs"
                 value={(selected.responseStates ?? []).join(', ')}
@@ -422,7 +423,7 @@ export default function SlaPolicies() {
                 }
               />
             </Field>
-            <Field label="Estados que cumplen resolución">
+            <Field label="States that satisfy resolution">
               <input
                 className="friendly-input font-mono rounded-xl border-border/50 text-xs"
                 value={(selected.resolutionStates ?? []).join(', ')}
@@ -439,19 +440,19 @@ export default function SlaPolicies() {
             </Field>
             <div className="md:col-span-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
               <p className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4" /> Escalamiento operativo
+                <ShieldAlert className="w-4 h-4" /> Operational escalation
               </p>
               <p className="text-xs text-on-surface-variant mt-1.5">
-                Se emite aviso automático al 75% del tiempo y notificación de incumplimiento grave al 100% del objetivo.
+                Automatic alert at 75% of target time and breach notice at 100%.
               </p>
             </div>
           </section>
 
           {previewMutation.data && (
             <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-4 text-sm text-cyan-200 shadow-sm">
-              <strong>Cálculo real ({previewMutation.data.priority}):</strong> respuesta antes de{' '}
-              <span className="underline decoration-cyan-400 font-bold">{formatDate(previewMutation.data.responseDueAt)}</span> y resolución antes de{' '}
-              <span className="underline decoration-cyan-400 font-bold">{formatDate(previewMutation.data.resolutionDueAt)}</span>.
+              <strong>Live calculation ({previewMutation.data.priority}):</strong> response before{' '}
+              <span className="underline decoration-cyan-400 font-bold">{formatDateTime(previewMutation.data.responseDueAt)}</span> and resolution before{' '}
+              <span className="underline decoration-cyan-400 font-bold">{formatDateTime(previewMutation.data.resolutionDueAt)}</span>.
             </div>
           )}
           {mutationError && (
@@ -459,7 +460,7 @@ export default function SlaPolicies() {
               <p>{mutationError.message}</p>
               {policiesQuery.isError && (
                 <button type="button" onClick={() => void policiesQuery.refetch()} className="secondary-button mt-3" data-testid="sla-policies-retry">
-                  <RefreshCw className="h-4 w-4" /> Reintentar
+                  <RefreshCw className="h-4 w-4" /> Retry
                 </button>
               )}
             </div>
@@ -508,13 +509,7 @@ function Status({ value }: { value?: string }) {
       : value === 'draft'
         ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
         : 'bg-surface-container-high text-on-surface-variant border-border/40';
-  const label = value === 'published' ? 'Activa' : value === 'draft' ? 'Borrador' : 'Anterior';
+  const label = value === 'published' ? 'Active' : value === 'draft' ? 'Draft' : 'Previous';
   return <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${classes}`}>{label}</span>;
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('es-CO', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
-}

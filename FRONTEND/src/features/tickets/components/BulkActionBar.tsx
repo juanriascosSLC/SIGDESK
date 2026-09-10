@@ -17,7 +17,7 @@ export function BulkActionBar({ selectedCount, onClear, onAssign, onMerge, onRes
           initial={{ y: 100, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 100, opacity: 0 }}
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center bg-surface-container-high/90 backdrop-blur-xl border border-border/50 rounded-2xl p-2 pr-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
+          className="fixed bottom-[calc(56px+env(safe-area-inset-bottom)+1rem)] sm:bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center bg-surface-container-high/90 backdrop-blur-xl border border-border/50 rounded-2xl p-2 pr-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
         >
           <div className="flex items-center gap-3 px-4 border-r border-border/50">
             <span className="flex items-center justify-center w-6 h-6 rounded-full bg-cyan-500 text-slate-950 font-black text-xs">

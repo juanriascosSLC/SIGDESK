@@ -10,7 +10,7 @@ export function MergedTicketsWidget({ context }: { context: TicketPageContext })
       <div className="flex items-center justify-between mb-3 pb-2 border-b border-border/40">
         <h4 className="text-xs font-bold text-on-surface-variant uppercase tracking-wider flex items-center gap-2">
           <Merge className="w-3.5 h-3.5 text-primary" />
-          Tickets combinados en {ticket.id}
+          Tickets merged into {ticket.id}
         </h4>
         <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[10px] font-black text-primary">
           {ticket.mergedCount}
@@ -31,21 +31,21 @@ export function MergedTicketsWidget({ context }: { context: TicketPageContext })
               >
                 <span className="font-mono text-xs text-primary shrink-0">{merged.id}</span>
                 <span className="text-sm text-on-surface truncate flex-1">{merged.title}</span>
-                <span className="text-xs text-on-surface-variant shrink-0">{merged.requester}</span>
+                <span className="text-xs text-on-surface-variant shrink-0">{merged.requesterDisplayName}</span>
               </button>
               {mergedTickets.canUnmerge && (
                 <button
                   onClick={() => mergedTickets.onUnmerge(merged.id)}
                   className="px-3 py-1 rounded-lg border border-border/50 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider opacity-0 group-hover:opacity-100 hover:text-red-400 hover:border-red-500/30 transition-all shrink-0"
                 >
-                  Separar
+                  Unmerge
                 </button>
               )}
             </div>
           ))}
           {mergedTickets.items.length === 0 && (
             <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-300">
-              El contador indica tickets combinados, pero la relación no devolvió registros.
+              The counter shows merged tickets, but the relation didn't return any records.
             </div>
           )}
         </div>

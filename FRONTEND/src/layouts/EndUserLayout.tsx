@@ -1,71 +1,60 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, BookOpen, Ticket as TicketIcon } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
 import UserProfilePopover from '../components/layout/UserProfilePopover';
 import RagChatbot from '../features/assistant/RagChatbot';
-
-function NavItem({ to, icon: Icon, label, active }: { to: string, icon: LucideIcon, label: string, active: boolean }) {
-  return (
-    <Link 
-      to={to} 
-      className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 font-bold text-sm ${
-        active 
-          ? 'bg-cyan-500/20 text-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.2)] border border-cyan-500/30' 
-          : 'text-on-surface-variant hover:text-on-surface hover:bg-on-surface/5 border border-transparent'
-      }`}
-    >
-      <Icon size={16} />
-      {label}
-    </Link>
-  );
-}
+import { PortalTopNav, PortalBottomNav } from '../components/layout/PortalNav';
 
 export default function EndUserLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-  const currentPath = location.pathname;
+  const pathname = location.pathname;
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans flex flex-col">
-      {/* Top Navigation */}
-      <header className="h-16 border-b border-border/40 bg-surface-container-lowest/80 backdrop-blur-xl flex items-center px-8 justify-between sticky top-0 z-50">
-        
-        <div className="flex items-center gap-12">
-          {/* Brand */}
-          <Link to="/portal" className="flex items-center gap-3 group">
+      {/* Top bar — brand and profile control show at every width. The
+          inline nav links (desktop/tablet only) and the mobile bottom bar
+          below both read from the same PORTAL_NAV_ITEMS config, so a label
+          or route never has to be kept in sync between two places. */}
+      <header className="h-16 border-b border-border/40 bg-surface-container-lowest/80 backdrop-blur-xl flex items-center px-4 sm:px-8 justify-between sticky top-0 z-50 gap-3">
+        <div className="flex items-center gap-4 sm:gap-12 min-w-0">
+          <Link to="/portal" className="flex items-center gap-3 group shrink-0" aria-label="SIG-DESK Home">
             <div className="relative p-1.5 rounded-lg bg-surface-container-low border border-cyan-500/30 flex items-center justify-center">
-              <img src="/logo.png" alt="SIG-DESK Logo" className="w-5 h-5 object-contain drop-shadow-[0_0_10px_rgba(34,211,238,0.5)]" />
+              <img src="/logo.png" alt="" className="w-5 h-5 object-contain drop-shadow-[0_0_10px_rgba(34,211,238,0.5)]" />
             </div>
-            <div>
+            <div className="hidden md:block">
               <div className="text-sm font-black tracking-[0.25em] text-on-surface uppercase">SIG-DESK</div>
             </div>
           </Link>
 
-          {/* Nav Links */}
-          <nav className="flex items-center gap-2">
-            {/* /portal es la home del portal (búsqueda + tickets recientes +
-                artículos), no un catálogo: el catálogo real del portal vive
-                en /portal/catalog/:categoryId. */}
-            <NavItem active={currentPath === '/portal'} to="/portal" icon={Home} label="Home" />
-            <NavItem active={currentPath.startsWith('/portal/knowledge')} to="/portal/knowledge" icon={BookOpen} label="Knowledge Base" />
-            <NavItem active={currentPath.startsWith('/portal/tickets')} to="/portal/tickets" icon={TicketIcon} label="My Tickets" />
-          </nav>
+          {/* >= md only. The inline row (brand + 3 full labels + profile,
+              with their gaps/padding) needs real room — 640-767px isn't
+              enough of it (measured: ~688px minimum for the row as built),
+              so the switch to the top nav waits for `md` (768px) instead
+              of `sm` (640px). Below `md`, the bottom bar covers the same
+              three destinations with room for a readable label each. */}
+          <div className="hidden md:block">
+            <PortalTopNav pathname={pathname} />
+          </div>
         </div>
 
-        <div className="flex items-center gap-4">
-           <UserProfilePopover />
+        <div className="flex items-center gap-4 shrink-0">
+          <UserProfilePopover />
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 bg-surface">
+      {/* Main Content — bottom padding clears the mobile/tablet bottom bar
+          (+ safe area) below `md`; no bottom bar exists at `md` and up, so
+          no padding is needed there either. */}
+      <main className="flex-1 bg-surface pb-[calc(56px+env(safe-area-inset-bottom))] md:pb-0">
         {children}
       </main>
-      
-      {/* Footer */}
-      <footer className="py-6 text-center border-t border-border/20 bg-surface-container-lowest text-xs text-on-surface-variant font-mono">
+
+      {/* Footer — hidden below `md` so it doesn't sit between the content
+          and the fixed bottom bar, competing for the same strip. */}
+      <footer className="hidden md:block py-6 text-center border-t border-border/20 bg-surface-container-lowest text-xs text-on-surface-variant font-mono">
         © 2026 SIG Systems, Inc. · IT Service Desk
       </footer>
+
+      <PortalBottomNav pathname={pathname} />
       <RagChatbot />
     </div>
   );

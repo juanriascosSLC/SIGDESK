@@ -9,7 +9,7 @@ export function DescriptionWidget({ context }: { context: TicketPageContext }) {
   return (
     <div className="rounded-3xl border border-border/40 bg-surface-container-low p-6">
       <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-on-surface-variant">
-        {field?.label ?? 'Descripción'}
+        {field?.label ?? 'Description'}
       </h3>
       <p className="whitespace-pre-wrap text-sm leading-relaxed text-on-surface">
         {typeof value === 'string' && value.trim() ? value : '—'}

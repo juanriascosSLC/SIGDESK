@@ -18,13 +18,12 @@ export function FieldPreview({ field }: { field: FieldDefinition }) {
         <div className="rounded-xl border border-border/40 bg-surface-container/60 p-4 text-xs text-on-surface-variant leading-relaxed">
           <div className="flex items-center gap-2 text-primary font-semibold mb-1.5">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Selector Dinámico de {field.bindsTo === 'agenteItId' ? 'Agente IT' : 'Activo CMDB'}</span>
+            <span>Dynamic Selector for {field.bindsTo === 'agenteItId' ? 'IT Agent' : 'CMDB Asset'}</span>
           </div>
-          Este campo se dibuja con el selector de {field.bindsTo === 'agenteItId' ? 'agente IT' : 'activo'},
-          que consulta datos reales
-          {bindingIsMultiple(field) ? ' y acepta varios dispositivos, con uno marcado como principal' : ''}.
-          La vista previa no los pide para no mostrar resultados que dependan
-          de este entorno.
+          This field renders with the {field.bindsTo === 'agenteItId' ? 'IT agent' : 'asset'} picker,
+          querying live data
+          {bindingIsMultiple(field) ? ' and accepting multiple devices, with one marked as primary' : ''}.
+          The preview does not query them to avoid environment-dependent results.
         </div>
       </PreviewFrame>
     );
@@ -55,15 +54,15 @@ function PreviewFrame({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-on-surface">Vista previa</span>
+              <span className="text-sm font-bold text-on-surface">Preview</span>
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-500/20">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> En vivo
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live
               </span>
             </div>
-            <p className="text-[11px] text-on-surface-variant">Como lo verá quien complete el formulario.</p>
+            <p className="text-[11px] text-on-surface-variant">How it will appear to users completing the form.</p>
           </div>
         </div>
-        <IconButton label="Reiniciar la vista previa" onClick={onReset}>
+        <IconButton label="Reset preview" onClick={onReset}>
           <RotateCcw className="w-4 h-4" />
         </IconButton>
       </div>

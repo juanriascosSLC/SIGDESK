@@ -8,10 +8,10 @@ import { FriendlyField, Toggle } from '../ui';
 const selectClasses = 'friendly-input bg-[#1d2026] text-[#e1e2eb]';
 
 const PATTERN_PRESETS = [
-  { label: 'Código (ABC-123)', pattern: '^[A-Z]{3}-[0-9]{3}$', message: 'Usa el formato ABC-123' },
-  { label: 'Alfanumérico', pattern: '^[a-zA-Z0-9_-]+$', message: 'Solo letras, números, guiones y subguiones' },
-  { label: 'Solo letras', pattern: '^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]+$', message: 'Solo caracteres alfabéticos y espacios' },
-  { label: 'Solo dígitos', pattern: '^[0-9]+$', message: 'Solo números' },
+  { label: 'Code (ABC-123)', pattern: '^[A-Z]{3}-[0-9]{3}$', message: 'Use the ABC-123 format' },
+  { label: 'Alphanumeric', pattern: '^[a-zA-Z0-9_-]+$', message: 'Only letters, numbers, hyphens and underscores' },
+  { label: 'Letters only', pattern: '^[a-zA-Z ]+$', message: 'Only alphabetic characters and spaces' },
+  { label: 'Digits only', pattern: '^[0-9]+$', message: 'Only numbers' },
 ];
 
 function NumberInput({
@@ -73,7 +73,7 @@ function DateLimitInput({
               : 'text-on-surface-variant border border-border/50 hover:bg-surface-container-high hover:text-on-surface'
           }`}
         >
-          Hoy
+          Today
         </button>
       </div>
     </FriendlyField>
@@ -99,9 +99,9 @@ export function FieldRulesEditor({
             <ShieldCheck className="w-3.5 h-3.5" />
           </div>
           <div>
-            <span className="text-sm font-bold text-on-surface">Reglas y validaciones</span>
+            <span className="text-sm font-bold text-on-surface">Rules & Validations</span>
             <p className="text-[11px] text-on-surface-variant">
-              Se comprueban en el servidor, no solo en el navegador.
+              Enforced on the server, not just in the browser.
             </p>
           </div>
         </div>
@@ -110,45 +110,45 @@ export function FieldRulesEditor({
       <div className="grid sm:grid-cols-2 gap-3 p-3 rounded-xl bg-surface-container/60 border border-border/30">
         <div className="flex items-center justify-between p-2 rounded-lg bg-surface-container-low border border-border/40">
           <div>
-            <span className="text-xs font-bold text-on-surface block">Campo Obligatorio</span>
-            <span className="text-[11px] text-on-surface-variant">Exigido antes de guardar o avanzar</span>
+            <span className="text-xs font-bold text-on-surface block">Required Field</span>
+            <span className="text-[11px] text-on-surface-variant">Required before saving or proceeding</span>
           </div>
           <Toggle
             checked={field.required}
             onChange={(checked) => onChange({ required: checked })}
-            label="Obligatorio"
+            label="Required"
           />
         </div>
 
         <div className="flex items-center justify-between p-2 rounded-lg bg-surface-container-low border border-border/40">
           <div>
-            <span className="text-xs font-bold text-on-surface block">Solo Lectura</span>
-            <span className="text-[11px] text-on-surface-variant">Visible pero no modificable por el usuario</span>
+            <span className="text-xs font-bold text-on-surface block">Read-Only</span>
+            <span className="text-[11px] text-on-surface-variant">Visible but cannot be edited by users</span>
           </div>
           <Toggle
             checked={Boolean(field.readOnly)}
             onChange={(checked) => onChange({ readOnly: checked || undefined })}
-            label="Solo lectura"
+            label="Read-only"
           />
         </div>
       </div>
 
       {field.readOnly && (
         <p className="mt-2 text-[11px] text-on-surface-variant px-1">
-          Se muestra pero no se puede editar. Es presentación: no impide que el valor llegue por API.
+          Displayed but cannot be edited. This is presentational: it does not prevent values sent via API.
         </p>
       )}
 
       {isText && (
         <div className="grid sm:grid-cols-2 gap-4 mt-4">
           <NumberInput
-            label="Mínimo de caracteres"
+            label="Minimum characters"
             value={field.minLength}
             min={0}
             onChange={(value) => onChange({ minLength: value })}
           />
           <NumberInput
-            label="Máximo de caracteres"
+            label="Maximum characters"
             value={field.maxLength}
             min={1}
             onChange={(value) => onChange({ maxLength: value })}
@@ -159,8 +159,8 @@ export function FieldRulesEditor({
       {isText && !namedFormat && (
         <div className="grid sm:grid-cols-2 gap-4 mt-4">
           <FriendlyField
-            label="Formato exigido"
-            help="Para exigirlo sobre un campo de texto que ya está publicado, sin cambiarle el tipo."
+            label="Required format"
+            help="To enforce on an already published text field without changing its type."
           >
             <select
               data-testid={`catalog-field-format-${field.key}`}
@@ -184,20 +184,20 @@ export function FieldRulesEditor({
       {namedFormat && (
         <p className="mt-4 rounded-xl border border-border/40 bg-surface-container p-3 text-[11px] text-on-surface-variant flex items-center gap-2">
           <HelpCircle className="w-3.5 h-3.5 text-primary shrink-0" />
-          El tipo ya exige su formato: no hace falta declararlo aparte.
+          The type already implies its format: no need to specify it separately.
         </p>
       )}
 
       {isText && (
         <div className="mt-4 p-3 rounded-xl bg-surface-container/60 border border-border/30">
           <div className="flex items-center justify-between gap-2 mb-2">
-            <span className="text-xs font-bold text-on-surface">Validación por Expresión Regular</span>
+            <span className="text-xs font-bold text-on-surface">Regular Expression Validation</span>
             <button
               type="button"
               onClick={() => setShowPatternPresets((current) => !current)}
               className="text-[11px] font-semibold text-primary hover:text-primary-foreground hover:bg-primary px-2 py-1 rounded-md border border-primary/30 bg-primary/5 transition-colors flex items-center gap-1"
             >
-              <Sparkles className="w-3 h-3" /> Patrones comunes
+              <Sparkles className="w-3 h-3" /> Common patterns
             </button>
           </div>
 
@@ -221,8 +221,8 @@ export function FieldRulesEditor({
 
           <div className="grid sm:grid-cols-2 gap-4">
             <FriendlyField
-              label="Patrón propio"
-              help="Expresión regular. Si no compila, el servidor la ignora en vez de bloquear el registro."
+              label="Custom pattern"
+              help="Regular expression. If invalid, the server ignores it instead of blocking the record."
             >
               <input
                 data-testid={`catalog-field-pattern-${field.key}`}
@@ -233,13 +233,13 @@ export function FieldRulesEditor({
               />
             </FriendlyField>
             <FriendlyField
-              label="Mensaje si no coincide"
-              help="Sin esto, el navegador dice «coincide con el formato solicitado», que no explica nada."
+              label="Mismatch message"
+              help="Without this, the browser shows a generic error message that provides no explanation."
             >
               <input
                 value={field.patternMessage ?? ''}
                 onChange={(event) => onChange({ patternMessage: event.target.value || undefined })}
-                placeholder="Usa el formato ABC-123"
+                placeholder="Use the ABC-123 format"
                 className="friendly-input bg-surface-container-low disabled:opacity-50"
                 disabled={!field.pattern}
               />
@@ -251,18 +251,18 @@ export function FieldRulesEditor({
       {field.type === 'number' && (
         <div className="grid sm:grid-cols-3 gap-4 mt-4">
           <NumberInput
-            label="Valor mínimo"
+            label="Minimum value"
             value={field.min}
             onChange={(value) => onChange({ min: value })}
           />
           <NumberInput
-            label="Valor máximo"
+            label="Maximum value"
             value={field.max}
             onChange={(value) => onChange({ max: value })}
           />
           <NumberInput
-            label="Incremento"
-            help="Con un paso entero el servidor rechaza fracciones."
+            label="Step"
+            help="With an integer step, the server rejects decimal values."
             value={field.step}
             min={0}
             onChange={(value) => onChange({ step: value })}
@@ -273,13 +273,13 @@ export function FieldRulesEditor({
       {(field.type === 'date' || field.type === 'datetime') && (
         <div className="grid sm:grid-cols-2 gap-4 mt-4">
           <DateLimitInput
-            label="No antes de"
-            help="«Hoy» no caduca; una fecha fija sí."
+            label="Not before"
+            help="«Today» does not expire; a fixed date does."
             value={field.minDate}
             onChange={(value) => onChange({ minDate: value })}
           />
           <DateLimitInput
-            label="No después de"
+            label="Not after"
             value={field.maxDate}
             onChange={(value) => onChange({ maxDate: value })}
           />
@@ -289,13 +289,13 @@ export function FieldRulesEditor({
       {(field.type === 'multiselect' || bindingIsMultiple(field)) && (
         <div className="grid sm:grid-cols-2 gap-4 mt-4">
           <NumberInput
-            label={bindingIsMultiple(field) ? 'Mínimo de dispositivos' : 'Mínimo de opciones'}
+            label={bindingIsMultiple(field) ? 'Minimum devices' : 'Minimum options'}
             value={field.minItems}
             min={0}
             onChange={(value) => onChange({ minItems: value })}
           />
           <NumberInput
-            label={bindingIsMultiple(field) ? 'Máximo de dispositivos' : 'Máximo de opciones'}
+            label={bindingIsMultiple(field) ? 'Maximum devices' : 'Maximum options'}
             value={field.maxItems}
             min={bindingIsMultiple(field) ? 2 : 1}
             onChange={(value) => onChange({ maxItems: value })}

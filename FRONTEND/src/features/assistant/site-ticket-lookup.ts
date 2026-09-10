@@ -1,5 +1,6 @@
 import { listAssetSites, type AssetProjection } from '@/features/assets/api';
 import { getTicket, listTickets } from '@/features/tickets/api';
+import { assigneeText, isTicketAssigned } from '@/features/tickets/identity-labels';
 import type { Ticket } from '@/features/tickets/types';
 
 export type AssistantSource = { type: string; id: string; score: number };
@@ -68,7 +69,11 @@ function ticketSummary(ticket: Ticket): string {
     `Estado actual: **${ticket.status || 'sin estado'}**.`,
     ticket.priority ? `Prioridad: **${ticket.priority}**.` : '',
     `Creado: ${createdAt}.`,
-    ticket.assignee ? `Responsable: ${ticket.assignee}.` : '',
+    // `Ticket.assignee` (a flat string) no longer exists on this branch:
+    // assignment is now assigneeDisplayName / assigneeTeamName, and
+    // identity-labels.ts is the one place allowed to render it — a
+    // team-only assignment must never read as unassigned.
+    isTicketAssigned(ticket) ? `Responsable: ${assigneeText(ticket)}.` : '',
   ].filter(Boolean).join('\n');
 }
 
@@ -110,7 +115,7 @@ export async function answerTicketFollowUp(message: string, ticketId: string): P
   }
   if (asksForStatus) return { answer: `El estado actual de **${ticket.humanId ?? `INC-${ticket.id}`}** es **${ticket.status || 'sin estado'}**.`, sources: source, focusedTicketId: ticket.id };
   if (asksForPriority) return { answer: `La prioridad de **${ticket.humanId ?? `INC-${ticket.id}`}** es **${ticket.priority || 'sin prioridad'}**.`, sources: source, focusedTicketId: ticket.id };
-  if (asksForOwner) return { answer: ticket.assignee ? `El responsable actual de **${ticket.humanId ?? `INC-${ticket.id}`}** es **${ticket.assignee}**.` : `**${ticket.humanId ?? `INC-${ticket.id}`}** no tiene un responsable asignado.`, sources: source, focusedTicketId: ticket.id };
+  if (asksForOwner) return { answer: isTicketAssigned(ticket) ? `El responsable actual de **${ticket.humanId ?? `INC-${ticket.id}`}** es **${assigneeText(ticket)}**.` : `**${ticket.humanId ?? `INC-${ticket.id}`}** no tiene un responsable asignado.`, sources: source, focusedTicketId: ticket.id };
   return { answer: ticketSummary(ticket), sources: source, focusedTicketId: ticket.id };
 }
 

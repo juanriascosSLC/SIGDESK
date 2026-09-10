@@ -76,10 +76,10 @@ type ActiveDragInfo =
   | { source: 'palette'; item: PageLibraryItem; span: DesignerSpan; label: string; widgetKey?: WidgetKey }
   | { source: 'existing'; cellId: string; span: DesignerSpan; label: string; widgetKey?: WidgetKey };
 
-const KIND_LABELS: Record<LayoutKind, string> = { create: 'Crear', edit: 'Editar', detail: 'Detalle' };
+const KIND_LABELS: Record<LayoutKind, string> = { create: 'Create', edit: 'Edit', detail: 'Detail' };
 const AUDIENCE_LABELS: Record<AudienceKey, string> = {
-  requester: 'Solicitante',
-  agent: 'Técnico',
+  requester: 'Requester',
+  agent: 'Agent',
   supervisor: 'Supervisor',
 };
 const ALL_AUDIENCES: AudienceKey[] = ['requester', 'agent', 'supervisor'];
@@ -188,7 +188,7 @@ export function PageDesigner({
   const [activeDrag, setActiveDrag] = useState<ActiveDragInfo | null>(null);
   // Three columns need roughly 1000px of CONTAINER width, and this designer
   // lives at the bottom of a stack that eats most of it: the app nav (256px),
-  // then Catalog Builder's own entity/section rail (280px, which only appears
+  // then Entity Builder's own entity/section rail (280px, which only appears
   // at xl and above). On a 1600px screen that leaves the canvas about 360px —
   // narrower than the sidebar region it is supposed to be previewing. Rather
   // than fight the shell from inside it, the designer can hide either side
@@ -486,10 +486,10 @@ export function PageDesigner({
           </span>
           {meta.fixed && (
             <span
-              title="Zona fija: siempre muestra su componente estructural"
+              title="Fixed region: always displays its structural component"
               className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-on-surface-variant/60"
             >
-              <Lock className="h-2.5 w-2.5" /> Fija
+              <Lock className="h-2.5 w-2.5" /> Fixed
             </span>
           )}
         </header>
@@ -544,7 +544,7 @@ export function PageDesigner({
         <div className="flex items-center gap-2">
           <label className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-on-surface-variant">
             <Users className="h-3.5 w-3.5" />
-            Audiencia
+            Audience
             <select
               value={activeVariantKey ?? ''}
               onChange={(event) => {
@@ -556,7 +556,7 @@ export function PageDesigner({
               style={{ colorScheme: 'dark' }}
             >
               <option value="" className="bg-[#191c22] text-[#e1e2eb]">
-                Predeterminada
+                Default
               </option>
               {availableVariantKeys.map((audience) => (
                 <option key={audience} value={audience} className="bg-[#191c22] text-[#e1e2eb]">
@@ -572,12 +572,12 @@ export function PageDesigner({
                 if (event.target.value) handleAddVariant(event.target.value as AudienceKey);
               }}
               data-testid="page-designer-add-audience"
-              aria-label="Agregar variante de audiencia"
+              aria-label="Add audience variant"
               className="rounded-lg border border-dashed border-primary/40 bg-primary/5 px-2 py-1.5 text-xs font-bold text-primary"
               style={{ colorScheme: 'dark' }}
             >
               <option value="" className="bg-[#191c22] text-[#e1e2eb]">
-                + Variante…
+                + Variant…
               </option>
               {creatableAudiences.map((audience) => (
                 <option key={audience} value={audience} className="bg-[#191c22] text-[#e1e2eb]">
@@ -591,8 +591,8 @@ export function PageDesigner({
               type="button"
               onClick={() => handleRemoveVariant(activeVariantKey)}
               data-testid="page-designer-remove-audience"
-              title={`Eliminar la variante ${AUDIENCE_LABELS[activeVariantKey]}`}
-              aria-label={`Eliminar la variante ${AUDIENCE_LABELS[activeVariantKey]}`}
+              title={`Delete ${AUDIENCE_LABELS[activeVariantKey]} variant`}
+              aria-label={`Delete ${AUDIENCE_LABELS[activeVariantKey]} variant`}
               className="rounded-lg border border-red-500/30 p-2 text-red-300 hover:bg-red-500/10"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -604,7 +604,7 @@ export function PageDesigner({
           <ToolbarToggle
             active={paletteOpen}
             onClick={() => setPaletteOpen((current) => !current)}
-            label={paletteOpen ? 'Ocultar la biblioteca' : 'Mostrar la biblioteca'}
+            label={paletteOpen ? 'Hide library' : 'Show library'}
             testId="page-designer-toggle-palette"
           >
             {paletteOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
@@ -612,7 +612,7 @@ export function PageDesigner({
           <ToolbarToggle
             active={propertiesOpen}
             onClick={() => setPropertiesOpen((current) => !current)}
-            label={propertiesOpen ? 'Ocultar propiedades' : 'Mostrar propiedades'}
+            label={propertiesOpen ? 'Hide properties' : 'Show properties'}
             testId="page-designer-toggle-properties"
           >
             {propertiesOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
@@ -620,7 +620,7 @@ export function PageDesigner({
           <ToolbarToggle
             active={expanded}
             onClick={() => setExpanded((current) => !current)}
-            label={expanded ? 'Salir de pantalla completa (Esc)' : 'Ampliar a pantalla completa'}
+            label={expanded ? 'Exit full screen (Esc)' : 'Expand to full screen'}
             testId="page-designer-toggle-expand"
           >
             {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
@@ -632,8 +632,8 @@ export function PageDesigner({
             type="button"
             onClick={history.undo}
             disabled={!history.canUndo}
-            aria-label="Deshacer"
-            title="Deshacer (Ctrl+Z)"
+            aria-label="Undo"
+            title="Undo (Ctrl+Z)"
             className="rounded-lg p-2 text-on-surface-variant hover:bg-surface-container-low disabled:opacity-30"
           >
             <Undo2 className="h-4 w-4" />
@@ -642,8 +642,8 @@ export function PageDesigner({
             type="button"
             onClick={history.redo}
             disabled={!history.canRedo}
-            aria-label="Rehacer"
-            title="Rehacer (Ctrl+Shift+Z)"
+            aria-label="Redo"
+            title="Redo (Ctrl+Shift+Z)"
             className="rounded-lg p-2 text-on-surface-variant hover:bg-surface-container-low disabled:opacity-30"
           >
             <Redo2 className="h-4 w-4" />
@@ -654,16 +654,15 @@ export function PageDesigner({
             data-testid="page-designer-preview-button"
             className="ml-2 flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20"
           >
-            <Eye className="h-3.5 w-3.5" /> Vista previa
+            <Eye className="h-3.5 w-3.5" /> Preview
           </button>
         </div>
       </div>
 
         {activeVariantKey && (
           <p className="rounded-xl border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-[11px] leading-4 text-amber-200">
-            Estás editando la variante <span className="font-bold">{AUDIENCE_LABELS[activeVariantKey]}</span>. Los
-            cambios no afectan la página predeterminada. La audiencia decide qué se muestra, nunca a qué datos se puede
-            acceder.
+            You are editing the <span className="font-bold">{AUDIENCE_LABELS[activeVariantKey]}</span> variant. Changes
+            do not affect the default page. Audience determines what is displayed, never which data can be accessed.
           </p>
         )}
       </div>
@@ -683,7 +682,7 @@ export function PageDesigner({
         onDragCancel={() => setActiveDrag(null)}
       >
         {/* @container, not the viewport breakpoints: how much room the three
-            columns actually have depends on Catalog Builder's own rail, which
+            columns actually have depends on Entity Builder's own rail, which
             appears at xl — so a WIDER viewport can leave this area NARROWER.
             Measuring the element itself is the only reading that holds. */}
         <div className="@container">

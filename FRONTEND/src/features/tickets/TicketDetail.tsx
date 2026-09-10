@@ -5,7 +5,7 @@ import { ArrowLeft, CheckCircle2, X } from 'lucide-react';
 import {
   useTicket,
   useUpdateTicketStatus,
-  useAssignTicket,
+  useAssignTicketOrganizational,
   useMergeTickets,
   useUnmergeTicket,
   useComments,
@@ -18,11 +18,15 @@ import {
   useActivity,
   ticketKeys,
 } from './hooks';
+import { AssignTicketDialog, ReopenTicketDialog, ResolveWithSlaBreachDialog, MergeIntoTicketDialog, WatchToggleDialog } from './dialogs/TicketDialogs';
+import { useToast } from '@/components/ui';
+import type { AssignmentTarget } from '@/features/organization/AssignmentPicker';
 import { canonicalTicketState, listTickets, statusFromApi, statusToApi, ticketStatesMatch } from './api';
 import type { TicketStatus } from './types';
 import { KNOWN_TICKET_STATUSES } from './types';
+import { assigneeText, isTicketAssigned } from './identity-labels';
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/states';
 import { useAuth } from '@/features/auth/useAuth';
 import { getSlaAssessment } from '@/features/sla/api';
 import {
@@ -66,9 +70,10 @@ export default function TicketDetail() {
     refetch,
   } = useTicket(id);
   const updateStatus = useUpdateTicketStatus();
-  const assignTicket = useAssignTicket();
+  const assignTicketOrganizational = useAssignTicketOrganizational();
   const mergeTickets = useMergeTickets();
   const unmergeTicket = useUnmergeTicket();
+  const toast = useToast();
   const [activityTab, setActivityTab] = useState<'all' | 'comments' | 'history'>('all');
   const [commentBody, setCommentBody] = useState('');
   const [isEditingFields, setIsEditingFields] = useState(false);
@@ -76,6 +81,18 @@ export default function TicketDetail() {
   const [editNotice, setEditNotice] = useState('');
   const [showProblemDialog, setShowProblemDialog] = useState(false);
   const [showChangeDialog, setShowChangeDialog] = useState(false);
+  const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [showReopenDialog, setShowReopenDialog] = useState(false);
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [showWatchDialog, setShowWatchDialog] = useState(false);
+  const [pendingResolveTransitionKey, setPendingResolveTransitionKey] = useState<string | undefined>(undefined);
+  // Bug found 2026-09-09: justificacionIncumplimientoSla was typed and
+  // threaded through api.ts/hooks.ts but no dialog ever collected it. Mirrors
+  // showReopenDialog/pendingResolveTransitionKey below, kept separate so the
+  // two confirmation flows (reopen vs. resolve-with-breached-SLA) never share
+  // state.
+  const [showSlaJustificationDialog, setShowSlaJustificationDialog] = useState(false);
+  const [pendingSlaTransition, setPendingSlaTransition] = useState<{ key: string; status: TicketStatus } | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const comments = useComments(ticket?.id);
@@ -160,7 +177,7 @@ export default function TicketDetail() {
       );
       setEditData(structuredClone(updated.data));
       setIsEditingFields(false);
-      setEditNotice('Los datos se guardaron. Tickets y SLA se están sincronizando.');
+      setEditNotice('Changes saved. Tickets and SLA are syncing.');
       void queryClient.invalidateQueries({ queryKey: ticketKeys.all });
       window.setTimeout(() => {
         void queryClient.invalidateQueries({ queryKey: ticketKeys.all });
@@ -299,6 +316,22 @@ export default function TicketDetail() {
       (candidate) => candidate.key === placement.fieldKey,
     );
     if (!field) return null;
+    // Fixed 2026-09-06: a `bindsTo` field (site/device/IT-agent) was being
+    // handed to `DynamicField`, which has no notion of `bindsTo` at all and
+    // falls through to a plain, empty, `required` text input — since its
+    // real value lives in `ticket.assetContext`, never in `editData`. That
+    // silently failed HTML5 constraint validation on every submit
+    // (`form.checkValidity()` false with zero visibly-`:invalid` elements
+    // inside the form, because none of this ever surfaced an error to the
+    // user), so "Edit fields" -> "Save changes" could never succeed for any
+    // ticket whose edit layout includes a binding field — this path had no
+    // existing test coverage. This inline editor has no UI for changing an
+    // asset binding at all (that happens through dedicated flows, e.g.
+    // reassignment), so a bindsTo field is simply not editable here, same
+    // as it was never functionally editable before this fix either — the
+    // only change is that its placement now renders nothing instead of an
+    // input that can never be filled in and always blocks the whole form.
+    if (field.bindsTo) return null;
     return (
       <DynamicField
         field={placement.label ? { ...field, label: placement.label } : field}
@@ -315,85 +348,137 @@ export default function TicketDetail() {
 
   if (isError || !ticket) {
     return (
-      <EmptyState
+      <ErrorState
         title="Ticket not available"
         description={error?.message || 'The requested ticket could not be found.'}
-        action={
-          <button
-            onClick={() => void refetch()}
-            className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold"
-          >
-            Try again
-          </button>
-        }
+        onRetry={() => void refetch()}
       />
     );
   }
+
+  // Every one of these used to be a window.alert/prompt/confirm — see
+  // dialogs/TicketDialogs.tsx for the real dialogs that replaced them.
 
   function handleAssign() {
     const transition = lifecycleTransitions?.find(
       (candidate) => canonicalTicketState(candidate.to) === 'en_progreso',
     );
     if (!transition) {
-      window.alert('La definición histórica no permite asignar este ticket desde su estado actual.');
+      toast.show({
+        tone: 'warning',
+        title: "Can't assign this ticket",
+        description: 'The historical definition has no transition into "In Progress" from the current state.',
+      });
       return;
     }
-    const name = window.prompt('ID del agente que recibirá el ticket:', ticket!.assignee || '');
-    if (name === null) return;
-    assignTicket.mutate(
-      { id: ticket!.id, assigneeName: name.trim() || null, actorName: currentUserName, transitionKey: transition.key },
-      { onError: (err) => window.alert(err.message) },
+    setShowAssignDialog(true);
+  }
+
+  function confirmAssign(target: AssignmentTarget, overwriteExisting: boolean) {
+    assignTicketOrganizational.mutate(
+      { id: ticket!.id, target },
+      {
+        onSuccess: () => {
+          setShowAssignDialog(false);
+          toast.show({ tone: 'success', title: overwriteExisting ? 'Ticket reassigned' : 'Ticket assigned' });
+        },
+        onError: (err) => toast.show({ tone: 'error', title: 'Assignment failed', description: err.message }),
+      },
     );
   }
 
   function handleStatusChange(status: TicketStatus) {
     const transition = lifecycleTransitions?.find((candidate) => ticketStatesMatch(candidate.to, status));
     if (!transition) {
-      window.alert('La definición histórica no contiene esa transición para el estado actual.');
+      toast.show({
+        tone: 'warning',
+        title: "Can't change status",
+        description: "The historical definition doesn't contain that transition from the current state.",
+      });
       return;
     }
     const target = canonicalTicketState(transition.to);
     const source = canonicalTicketState(transition.from);
-    // Solo open -> in_progress es la asignación inicial. Reanudar desde
-    // espera también termina en progreso, pero no debe pedir otro agente.
-    if (source === 'abierto' && target === 'en_progreso') {
-      handleAssign();
+    // A definition may model reopen as closed -> in_progress. The intent is
+    // recognized by the closed ORIGIN, not just the destination state's name.
+    if (source === 'cerrado' || target === 'abierto' || target === 'reabierto') {
+      setPendingResolveTransitionKey(transition.key);
+      setShowReopenDialog(true);
       return;
     }
-    let motivo: string | undefined;
-    // Una definición puede modelar reopen como closed -> in_progress. La
-    // intención se reconoce por el origen cerrado, no únicamente por el
-    // nombre del estado destino.
-    if (source === 'cerrado' || target === 'abierto' || target === 'reabierto') {
-      const value = window.prompt('Motivo de la reapertura:');
-      if (value === null) return;
-      motivo = value.trim();
-      if (!motivo) {
-        window.alert('El motivo de reapertura es obligatorio.');
-        return;
-      }
+    // Bug found 2026-09-09: resolving with a breached SLA had no UI path to
+    // provide justificacionIncumplimientoSla at all. resolutionBreached is
+    // the same real, already-fetched signal the SLA chip uses elsewhere
+    // (features/sla's SlaAssessment) — not a guess, and not re-derived from
+    // dates here, so it can't drift from what the chip already shows.
+    if (target === 'resuelto' && slaAssessment.data?.resolutionBreached) {
+      setPendingSlaTransition({ key: transition.key, status });
+      setShowSlaJustificationDialog(true);
+      return;
     }
     updateStatus.mutate(
-      { id: ticket!.id, status, actorName: currentUserName, transitionKey: transition.key, motivo },
-      { onError: (err) => window.alert(err.message) },
+      { id: ticket!.id, status, actorName: currentUserName, transitionKey: transition.key },
+      { onError: (err) => toast.show({ tone: 'error', title: "Couldn't update status", description: err.message }) },
+    );
+  }
+
+  function confirmSlaJustification(justification: string) {
+    if (!pendingSlaTransition) return;
+    updateStatus.mutate(
+      {
+        id: ticket!.id,
+        status: pendingSlaTransition.status,
+        actorName: currentUserName,
+        transitionKey: pendingSlaTransition.key,
+        justificacionIncumplimientoSla: justification,
+      },
+      {
+        onSuccess: () => {
+          setShowSlaJustificationDialog(false);
+          setPendingSlaTransition(undefined);
+          toast.show({ tone: 'success', title: 'Ticket resolved' });
+        },
+        onError: (err) => toast.show({ tone: 'error', title: "Couldn't resolve ticket", description: err.message }),
+      },
+    );
+  }
+
+  function confirmReopen(reason: string) {
+    if (!pendingResolveTransitionKey) return;
+    updateStatus.mutate(
+      { id: ticket!.id, status: 'Open', transitionKey: pendingResolveTransitionKey, motivo: reason },
+      {
+        onSuccess: () => {
+          setShowReopenDialog(false);
+          setPendingResolveTransitionKey(undefined);
+          toast.show({ tone: 'success', title: 'Ticket reopened' });
+        },
+        onError: (err) => toast.show({ tone: 'error', title: "Couldn't reopen ticket", description: err.message }),
+      },
     );
   }
 
   function handleMerge() {
-    const raw = window.prompt('Ticket IDs to merge into this one (comma separated):');
-    if (!raw) return;
-    const mergedIds = raw.split(',').map((s) => s.trim()).filter(Boolean);
-    if (mergedIds.length === 0) return;
+    setShowMergeDialog(true);
+  }
+
+  function confirmMerge(mergedIds: string[]) {
     mergeTickets.mutate(
       { primaryId: ticket!.id, mergedIds, actorName: currentUserName },
-      { onError: (err) => window.alert(err.message) },
+      {
+        onSuccess: () => {
+          setShowMergeDialog(false);
+          toast.show({ tone: 'success', title: `Merged ${mergedIds.length} ticket${mergedIds.length === 1 ? '' : 's'}` });
+        },
+        onError: (err) => toast.show({ tone: 'error', title: 'Merge failed', description: err.message }),
+      },
     );
   }
 
   function handleUnmerge(mergedId: string) {
     unmergeTicket.mutate(
       { primaryId: ticket!.id, mergedId, actorName: currentUserName },
-      { onError: (err) => window.alert(err.message) },
+      { onError: (err) => toast.show({ tone: 'error', title: "Couldn't unmerge ticket", description: err.message }) },
     );
   }
 
@@ -402,7 +487,7 @@ export default function TicketDetail() {
     if (!file) return;
     uploadAttachment.mutate(
       { file, uploaderName: currentUserName },
-      { onError: (err) => window.alert(err.message) },
+      { onError: (err) => toast.show({ tone: 'error', title: 'Upload failed', description: err.message }) },
     );
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
@@ -414,17 +499,26 @@ export default function TicketDetail() {
       { authorName: currentUserName, body, isInternal },
       {
         onSuccess: () => setCommentBody(''),
-        onError: (err) => window.alert(err.message),
+        onError: (err) => toast.show({ tone: 'error', title: "Couldn't add comment", description: err.message }),
       },
     );
   }
 
   function toggleWatch() {
-    if (isWatching) {
-      removeWatcher.mutate(currentUserName, { onError: (err) => window.alert(err.message) });
-    } else {
-      addWatcher.mutate(currentUserName, { onError: (err) => window.alert(err.message) });
-    }
+    setShowWatchDialog(true);
+  }
+
+  function confirmToggleWatch() {
+    const mutation = isWatching ? removeWatcher : addWatcher;
+    mutation.mutate(currentUserName, {
+      onSuccess: () => setShowWatchDialog(false),
+      onError: (err) =>
+        toast.show({
+          tone: 'error',
+          title: isWatching ? "Couldn't stop watching" : "Couldn't watch ticket",
+          description: err.message,
+        }),
+    });
   }
 
   function triggerFilePicker() {
@@ -454,7 +548,12 @@ export default function TicketDetail() {
       .map((placement) => placement.fieldKey);
     for (const key of visibleCatalogKeys) {
       const field = specification.fields.find((candidate) => candidate.key === key);
-      if (!field) continue;
+      // Same reason as `renderEditField`'s `bindsTo` guard: this inline
+      // editor never collects a real value for an asset binding, so it
+      // must never touch it in the submitted payload either — leaving
+      // whatever `record.data` already had untouched, not overwriting it
+      // with `undefined`.
+      if (!field || field.bindsTo) continue;
       const value = editData[key];
       const required = isFieldRequired(field, editData);
       if (!required && (value === undefined || value === null || value === '')) {
@@ -479,16 +578,16 @@ export default function TicketDetail() {
   }
 
   // The edit form is the same surface as the create form — same context type,
-  // same renderer, same widgets — so a redesign in the Catalog Builder shows
+  // same renderer, same widgets — so a redesign in the Entity Builder shows
   // up identically in both places.
   const editContext: FormPageContext | null = specification
     ? {
         entityKey: 'INC',
         kind: 'edit',
         preview: false,
-        definitionName: 'Editar datos del incidente',
+        definitionName: 'Edit Incident Details',
         definitionVersion: entityRecord.data?.definitionVersion,
-        description: 'Formulario interpretado desde la definición con la que se creó este ticket.',
+        description: 'Form interpreted from the definition this ticket was created with.',
         humanId: ticket?.humanId ?? ticket?.id,
         fields: specification.fields,
         data: editData,
@@ -505,7 +604,7 @@ export default function TicketDetail() {
         // A record that already exists has a real SLA assessment; the widget
         // that estimates one for a record that does not exist yet has nothing
         // to say here.
-        sla: { state: 'unavailable', message: 'El SLA de un ticket existente se muestra en su propia tarjeta.', onRetry: () => {} },
+        sla: { state: 'unavailable', message: 'The SLA of an existing ticket is displayed on its own card.', onRetry: () => {} },
         attachments: {
           items: (attachments.data ?? []).map((item) => ({
             id: item.id,
@@ -523,12 +622,12 @@ export default function TicketDetail() {
           onRemove: () => {},
         },
         submit: {
-          submitLabel: 'Guardar cambios',
-          cancelLabel: 'Cancelar',
+          submitLabel: 'Save changes',
+          cancelLabel: 'Cancel',
           pending: updateEntityMutation.isPending,
           errorMessage: updateEntityMutation.isError
             ? updateEntityMutation.error instanceof ApiError && updateEntityMutation.error.status === 409
-              ? 'El ticket cambió mientras lo editabas. Recarga sus datos antes de volver a guardar.'
+              ? 'This ticket changed while you were editing it. Reload its data before saving again.'
               : updateEntityMutation.error.message
             : undefined,
           onCancel: closeEditor,
@@ -542,6 +641,7 @@ export default function TicketDetail() {
         preview: false,
         ticket,
         currentUserName,
+        currentUserId: deskUserId,
         can,
         onNavigate: navigate,
         fields: specification.fields,
@@ -646,14 +746,14 @@ export default function TicketDetail() {
         <div className="mb-8 rounded-3xl border border-primary/40 bg-surface-container-low/95 backdrop-blur-md p-6 sm:p-8 shadow-[0_10px_35px_rgba(0,0,0,0.3)] transition-all">
           <div className="flex items-start justify-between gap-4 border-b border-border/40 pb-4">
             <div>
-              <h2 className="text-lg font-black text-on-surface">Editar datos del incidente</h2>
+              <h2 className="text-lg font-black text-on-surface">Edit Incident Details</h2>
               <p className="mt-1 text-xs text-on-surface-variant font-medium">
-                Formulario interpretado desde INC v{entityRecord.data?.definitionVersion}.
+                Form interpreted from INC v{entityRecord.data?.definitionVersion}.
               </p>
             </div>
             <button
               type="button"
-              aria-label="Cancelar edición"
+              aria-label="Cancel editing"
               onClick={closeEditor}
               className="rounded-xl p-2 text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors cursor-pointer"
             >
@@ -684,13 +784,13 @@ export default function TicketDetail() {
           and then swapped in a moment later. */}
       {entityRecord.isLoading || definitionManifest.isLoading || resolvedDefinition.isLoading ? (
         <div className="rounded-2xl border border-border/40 bg-surface-container-low p-5 text-sm text-on-surface-variant">
-          Cargando la vista definida en Catalog Builder…
+          Loading view defined in Entity Builder…
         </div>
       ) : entityRecord.isError || definitionManifest.isError ? (
         <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-5">
-          <p className="text-sm font-bold text-amber-300">No se pudo cargar la definición del ticket</p>
+          <p className="text-sm font-bold text-amber-300">We couldn't load the ticket's definition</p>
           <p className="mt-1 text-xs text-on-surface-variant">
-            El ticket sigue disponible, pero sus campos dinámicos no pueden mostrarse en este momento.
+            The ticket is still available, but its dynamic fields can't be shown right now.
           </p>
         </div>
       ) : (
@@ -705,14 +805,14 @@ export default function TicketDetail() {
               <div
                 data-testid="definition-provenance"
                 className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium mb-3 bg-gray-100 text-gray-600"
-                title={`Resolución de layout: ${layoutResolution}`}
+                title={`Layout resolution: ${layoutResolution}`}
               >
                 {
                   // These are the exact three strings the resolved-definition
                   // contract produces — never "active".
-                  layoutResolution === 'latest-compatible' ? 'Layout activo' :
-                  layoutResolution === 'previous-compatible' ? 'Versión anterior compatible' :
-                  layoutResolution === 'legacy-synthesized' ? 'Generado (sin layout)' :
+                  layoutResolution === 'latest-compatible' ? 'Active layout' :
+                  layoutResolution === 'previous-compatible' ? 'Previous compatible version' :
+                  layoutResolution === 'legacy-synthesized' ? 'Generated (no layout)' :
                   layoutResolution
                 }
               </div>
@@ -749,6 +849,51 @@ export default function TicketDetail() {
           />
         </>
       )}
+
+      <AssignTicketDialog
+        open={showAssignDialog}
+        onClose={() => setShowAssignDialog(false)}
+        onConfirm={confirmAssign}
+        currentAssignee={isTicketAssigned(ticket) ? assigneeText(ticket) : null}
+        loading={assignTicketOrganizational.isPending}
+        error={assignTicketOrganizational.error?.message}
+      />
+      <ReopenTicketDialog
+        open={showReopenDialog}
+        onClose={() => {
+          setShowReopenDialog(false);
+          setPendingResolveTransitionKey(undefined);
+        }}
+        onConfirm={confirmReopen}
+        loading={updateStatus.isPending}
+        error={updateStatus.error?.message}
+      />
+      <ResolveWithSlaBreachDialog
+        open={showSlaJustificationDialog}
+        onClose={() => {
+          setShowSlaJustificationDialog(false);
+          setPendingSlaTransition(undefined);
+        }}
+        onConfirm={confirmSlaJustification}
+        loading={updateStatus.isPending}
+        error={updateStatus.error?.message}
+      />
+      <MergeIntoTicketDialog
+        open={showMergeDialog}
+        onClose={() => setShowMergeDialog(false)}
+        onConfirm={confirmMerge}
+        currentTicketId={ticket.id}
+        loading={mergeTickets.isPending}
+        error={mergeTickets.error?.message}
+      />
+      <WatchToggleDialog
+        open={showWatchDialog}
+        onClose={() => setShowWatchDialog(false)}
+        onConfirm={confirmToggleWatch}
+        isWatching={isWatching}
+        loading={addWatcher.isPending || removeWatcher.isPending}
+        error={addWatcher.error?.message || removeWatcher.error?.message}
+      />
     </div>
   );
 }

@@ -145,7 +145,7 @@ test('cambiar estado sin transición no se publica', () => {
   const resultado = compileVisualWorkflow(sinTransicion, edges, 1);
 
   expect(resultado.payload).toBeUndefined();
-  expect(resultado.errors.join(' ')).toContain('Elige la transición');
+  expect(resultado.errors.join(' ')).toContain('Select a transition');
   expect(resultado.issues.some((issue) => issue.nodeId === 'state-1')).toBe(true);
 });
 
@@ -160,7 +160,7 @@ test('una transición que ya no existe bloquea la publicación y se conserva', (
   const resultado = compileVisualWorkflow(conFantasma, edges, 1);
 
   expect(resultado.payload).toBeUndefined();
-  expect(resultado.errors.join(' ')).toContain('Catalog Builder ya no publica');
+  expect(resultado.errors.join(' ')).toContain('Entity Builder no longer publishes');
   // La configuración sigue en el nodo: el compilador no la toca.
   const nodo = conFantasma.find((candidato) => candidato.id === 'state-1');
   expect(nodo?.data.transitionKey).toBe('transicion-borrada');
@@ -200,7 +200,7 @@ test('un bloque en preparación suelto no entra en el plan', () => {
   const resultado = compileVisualWorkflow([...nodes, futuro], edges, 1);
 
   expect(resultado.errors).toEqual([]);
-  expect(resultado.warnings.join(' ')).toContain('diseño futuro');
+  expect(resultado.warnings.join(' ')).toContain('future design');
   const ids = (resultado.payload?.execution_plan?.nodes ?? []).map((nodo) => nodo.id);
   expect(ids).not.toContain('webhook-futuro');
 });

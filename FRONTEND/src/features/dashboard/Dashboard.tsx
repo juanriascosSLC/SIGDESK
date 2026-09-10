@@ -1,156 +1,123 @@
-import { Ticket as TicketIcon, AlertTriangle, CalendarClock, Star } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import type { LucideIcon } from 'lucide-react';
+import {
+  Ticket as TicketIcon,
+  BarChart3,
+  Network,
+  ListChecks,
+  SearchCode,
+  Server,
+  FilePlus2,
+  Boxes,
+  BookOpen,
+  Workflow,
+  Timer,
+  Users,
+} from 'lucide-react';
+import { useAuth } from '../auth/useAuth';
+import { PERMISSIONS } from '../auth/permissions';
+import { Card } from '@/components/ui/Card';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { ErrorState } from '@/components/ui/states';
 
-function Gauge({ value, max, label, colorClass, highlightClass }: { value: number, max: number, label: string, colorClass: string, highlightClass: string }) {
-  const percentage = Math.min((value / max) * 100, 100);
-  const rotation = (percentage / 100) * 180 - 90;
-  
+interface ModuleLink {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  visible: boolean;
+}
+
+/**
+ * Home used to carry a "Ticket status snapshot" card here — one
+ * `useTickets({status, limit: 50})` call per status (4 parallel list
+ * requests on every load, just to render 4 numbers). That was real data,
+ * not invented, but it was also exactly the kind of cost this screen
+ * shouldn't pay: the backend has no aggregate/summary endpoint (a single
+ * "counts by status" response), so getting real numbers meant fetching and
+ * counting whole pages of tickets — and even then `hasMore` only proves a
+ * lower bound, never an exact total. Per "if there's no efficient summary
+ * endpoint, show quick access without computing costly figures, and
+ * document the need for the endpoint": the counts are gone, the quick
+ * links below cost nothing (they're permission checks, not queries), and
+ * this comment is that documentation — add a real ticket-summary endpoint
+ * (e.g. `GET /entities/INC/summary` returning counts per status, scoped
+ * the same way list already is) before reintroducing any number here.
+ */
+function ModuleLinksCard({ links }: { links: ModuleLink[] }) {
+  const visible = links.filter((link) => link.visible);
+  if (visible.length === 0) {
+    return (
+      <Card>
+        <ErrorState
+          title="No modules available"
+          description="Your account doesn't have permission to view any module yet. Ask an administrator to grant you access."
+          compact
+        />
+      </Card>
+    );
+  }
   return (
-    <div className="flex flex-col items-center justify-center relative pt-4">
-      <div className="relative w-48 h-24 overflow-hidden">
-        <div className="absolute top-0 left-0 w-48 h-48 rounded-full border-[20px] border-surface-container" />
-        <div 
-          className={`absolute top-0 left-0 w-48 h-48 rounded-full border-[20px] ${colorClass} border-b-transparent border-r-transparent transition-transform duration-1000 ease-out`}
-          style={{ transform: `rotate(${rotation}deg)` }}
-        />
-        <div 
-          className="absolute bottom-0 left-1/2 w-1 h-16 bg-on-surface-variant origin-bottom transition-transform duration-1000 ease-out z-10 rounded-full"
-          style={{ transform: `translateX(-50%) rotate(${rotation}deg)` }}
-        />
-        <div className="absolute bottom-[-6px] left-1/2 w-4 h-4 bg-surface rounded-full border-4 border-on-surface-variant -translate-x-1/2 z-20" />
-      </div>
-      <div className="mt-4 text-center">
-        <p className={`text-3xl font-black ${highlightClass}`}>{value}</p>
-        <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">{label}</p>
-      </div>
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+      {visible.map(({ to, label, icon: Icon }) => (
+        <Link key={to} to={to}>
+          <Card interactive className="flex h-full flex-col items-start gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <Icon className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <span className="text-sm font-bold text-on-surface">{label}</span>
+          </Card>
+        </Link>
+      ))}
     </div>
   );
 }
 
 export function Dashboard() {
+  const {
+    displayName,
+    canViewTickets,
+    canManageUsersAndRoles,
+    can,
+  } = useAuth();
+
+  const canViewChanges = can(PERMISSIONS.changesView);
+  const canViewChangeTasks = can(PERMISSIONS.changeTasksView);
+  const canViewProblems = can(PERMISSIONS.problemsView);
+  const canViewAssets = can(PERMISSIONS.assetsView);
+  const canViewReports = can(PERMISSIONS.reportsView);
+  const canViewCatalog = can(PERMISSIONS.catalogView);
+  const canViewKnowledge = can(PERMISSIONS.knowledgeView);
+  const canAuthorCatalog = can(PERMISSIONS.catalogAuthor);
+  const canViewAutomations = can(PERMISSIONS.automationsView);
+  const canViewSla = can(PERMISSIONS.slaView);
+
+  const moduleLinks: ModuleLink[] = [
+    // Same labels and icons as config/navigation.ts — these tiles are a
+    // second door to the very same destinations, so a rename that lands
+    // in only one of the two lists is the drift this comment exists to
+    // prevent.
+    { to: '/app/tickets', label: 'Incidents', icon: TicketIcon, visible: canViewTickets },
+    { to: '/app/reports', label: 'Reports', icon: BarChart3, visible: canViewReports },
+    { to: '/app/changes', label: 'Changes', icon: Network, visible: canViewChanges },
+    { to: '/app/changes/my-tasks', label: 'My Tasks', icon: ListChecks, visible: canViewChangeTasks },
+    { to: '/app/problems', label: 'Problems', icon: SearchCode, visible: canViewProblems },
+    { to: '/app/assets', label: 'Assets / CMDB', icon: Server, visible: canViewAssets },
+    { to: '/app/catalog', label: 'New Case', icon: FilePlus2, visible: canViewCatalog },
+    { to: '/app/knowledge', label: 'Knowledge Base', icon: BookOpen, visible: canViewKnowledge },
+    { to: '/app/admin/users', label: 'Users & Roles', icon: Users, visible: canManageUsersAndRoles },
+    { to: '/app/admin/catalog-builder', label: 'Entity Builder', icon: Boxes, visible: canAuthorCatalog },
+    { to: '/app/automations', label: 'Automations', icon: Workflow, visible: canViewAutomations },
+    { to: '/app/settings/sla', label: 'SLA Policies', icon: Timer, visible: canViewSla },
+  ];
+
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex items-center justify-between mb-4">
-         <h1 className="text-2xl font-black text-on-surface tracking-wide">Helpdesk Dashboard</h1>
-         <div className="flex gap-2">
-            <select className="bg-surface-container border border-border/50 text-sm rounded-lg px-4 py-2 text-on-surface outline-none focus:border-cyan-500/50">
-              <option>All Sites</option>
-              <option>Site #401</option>
-            </select>
-            <select className="bg-surface-container border border-border/50 text-sm rounded-lg px-4 py-2 text-on-surface outline-none focus:border-cyan-500/50">
-              <option>Support Groups</option>
-              <option>Hardware Team</option>
-            </select>
-         </div>
-      </div>
+    <div className="p-6 lg:p-8 w-full space-y-6">
+      <PageHeader
+        title={displayName ? `Welcome back, ${displayName}` : 'Welcome back'}
+        description="Jump into a module below."
+      />
 
-      {/* KPI Tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-surface-container-low border border-border/40 rounded-3xl p-6 flex items-center gap-4 hover:border-cyan-500/30 transition-colors">
-          <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
-            <TicketIcon className="w-6 h-6 text-cyan-500" />
-          </div>
-          <div>
-            <p className="text-3xl font-black text-on-surface">728</p>
-            <p className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Open Requests</p>
-          </div>
-        </div>
-        <div className="bg-surface-container-low border border-border/40 rounded-3xl p-6 flex items-center gap-4 hover:border-red-500/30 transition-colors">
-          <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
-            <AlertTriangle className="w-6 h-6 text-red-500" />
-          </div>
-          <div>
-            <p className="text-3xl font-black text-red-500">396</p>
-            <p className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Overdue</p>
-          </div>
-        </div>
-        <div className="bg-surface-container-low border border-border/40 rounded-3xl p-6 flex items-center gap-4 hover:border-amber-500/30 transition-colors">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-            <CalendarClock className="w-6 h-6 text-amber-500" />
-          </div>
-          <div>
-            <p className="text-3xl font-black text-amber-500">42</p>
-            <p className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Due Today</p>
-          </div>
-        </div>
-        <div className="bg-surface-container-low border border-border/40 rounded-3xl p-6 flex items-center gap-4 hover:border-emerald-500/30 transition-colors">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-            <Star className="w-6 h-6 text-emerald-500" />
-          </div>
-          <div>
-            <div className="flex items-baseline gap-2">
-              <p className="text-3xl font-black text-emerald-500">4.6</p>
-              <div className="flex gap-0.5">
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <Star key={s} className={`w-3 h-3 ${s <= 4 ? 'text-amber-500 fill-amber-500' : 'text-on-surface-variant'}`} />
-                ))}
-              </div>
-            </div>
-            <p className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Avg CSAT</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-surface-container-low border border-border/40 rounded-3xl p-6">
-          <h3 className="text-sm font-bold text-on-surface-variant uppercase tracking-wider mb-6">Requests by Category</h3>
-          <table className="w-full text-sm text-left">
-            <thead className="text-on-surface-variant border-b border-border/40">
-              <tr>
-                <th className="pb-3 font-medium">Category</th>
-                <th className="pb-3 font-medium text-center">Onhold</th>
-                <th className="pb-3 font-medium text-center">Open</th>
-                <th className="pb-3 font-medium text-center">Overdue</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/20">
-              <tr className="hover:bg-surface-container/50 transition-colors">
-                <td className="py-3 text-on-surface">Desktop/Hardware</td>
-                <td className="py-3 text-center text-on-surface-variant">2</td>
-                <td className="py-3 text-center text-cyan-500 font-bold">1</td>
-                <td className="py-3 text-center text-red-500 font-bold">5</td>
-              </tr>
-              <tr className="hover:bg-surface-container/50 transition-colors">
-                <td className="py-3 text-on-surface">Software</td>
-                <td className="py-3 text-center text-on-surface-variant">1</td>
-                <td className="py-3 text-center text-cyan-500 font-bold">8</td>
-                <td className="py-3 text-center text-on-surface-variant">0</td>
-              </tr>
-              <tr className="hover:bg-surface-container/50 transition-colors">
-                <td className="py-3 text-on-surface">Others</td>
-                <td className="py-3 text-center text-on-surface-variant">2</td>
-                <td className="py-3 text-center text-cyan-500 font-bold">15</td>
-                <td className="py-3 text-center text-red-500 font-bold">37</td>
-              </tr>
-              <tr className="hover:bg-surface-container/50 transition-colors">
-                <td className="py-3 text-on-surface">Unassigned</td>
-                <td className="py-3 text-center text-on-surface-variant">104</td>
-                <td className="py-3 text-center text-cyan-500 font-bold">704</td>
-                <td className="py-3 text-center text-red-500 font-bold">354</td>
-              </tr>
-            </tbody>
-            <tfoot className="border-t border-border/40 font-bold">
-              <tr>
-                <td className="py-3 text-on-surface">Total</td>
-                <td className="py-3 text-center text-on-surface">109</td>
-                <td className="py-3 text-center text-cyan-500">728</td>
-                <td className="py-3 text-center text-red-500">396</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-
-        <div className="grid grid-cols-2 gap-6">
-          <div className="bg-surface-container-low border border-border/40 rounded-3xl p-6 flex flex-col items-center justify-center">
-            <h3 className="text-sm font-bold text-on-surface-variant uppercase tracking-wider mb-2 self-start">Unassigned / Open</h3>
-            <Gauge value={704} max={1000} label="Unassigned" colorClass="border-amber-500" highlightClass="text-amber-500" />
-          </div>
-          <div className="bg-surface-container-low border border-border/40 rounded-3xl p-6 flex flex-col items-center justify-center relative overflow-hidden group">
-            <div className="absolute inset-0 bg-red-500/5 group-hover:bg-red-500/10 transition-colors pointer-events-none" />
-            <h3 className="text-sm font-bold text-on-surface-variant uppercase tracking-wider mb-2 self-start">SLA Violated</h3>
-            <Gauge value={396} max={500} label="Violated" colorClass="border-red-500" highlightClass="text-red-500" />
-          </div>
-        </div>
-      </div>
+      <ModuleLinksCard links={moduleLinks} />
     </div>
   );
 }

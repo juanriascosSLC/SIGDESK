@@ -12,6 +12,11 @@ FRONTEND/dist/
 FRONTEND/playwright-report/
 FRONTEND/test-results/
 
+# Exploración visual descartable del pipeline de frontendengineer (specs,
+# HTML de variantes, capturas, boards de comparación) — vive fuera de
+# src/, se borra al cerrar cada ciclo, nunca se comitea.
+.design-scratch/
+
 # Backend del equipo: repositorio Git independiente, clonado localmente
 # junto al frontend para integración sin mezclar historiales.
 BACKEND/
@@ -22,6 +27,9 @@ graphify-out/
 .claude/
 .run/
 
+# Isolated worktrees for plan execution (superpowers)
+.worktrees/
+
 # OS and editors
 .DS_Store
 desktop.ini
@@ -30,6 +38,8 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 !.vscode/launch.json
-
-
+.run
 .tmp
+.test-cache
+# Exploracion de diseno desechable (fase 4 de frontendengineer)
+.design-scratch/

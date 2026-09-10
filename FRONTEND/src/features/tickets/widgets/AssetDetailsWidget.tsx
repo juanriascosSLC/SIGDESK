@@ -12,10 +12,10 @@ export function AssetDetailsWidget({ context }: { context: TicketPageContext }) 
     <div className="overflow-hidden rounded-3xl border border-border/40 bg-surface-container-low">
       <div className="border-b border-border/40 p-6">
         <h2 className="flex items-center gap-2 font-black tracking-wide text-on-surface">
-          <Server className="h-5 w-5 text-primary" /> Activos relacionados
+          <Server className="h-5 w-5 text-primary" /> Related Assets
         </h2>
         <p className="mt-1 text-xs text-on-surface-variant">
-          Snapshot histórico capturado desde Assets / CMDB al crear el registro
+          Historical snapshot captured from Assets / CMDB when the record was created
         </p>
       </div>
       {links.length ? (
@@ -42,8 +42,8 @@ export function AssetDetailsWidget({ context }: { context: TicketPageContext }) 
                   {status && <span className="inline-flex items-center gap-1 text-xs text-emerald-300"><CircleDot className="h-3 w-3" />{status}</span>}
                 </div>
                 <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                  {text(snapshot, 'manufacturer') && <div><dt className="text-on-surface-variant">Fabricante</dt><dd className="font-semibold text-on-surface">{text(snapshot, 'manufacturer')}</dd></div>}
-                  {text(snapshot, 'model') && <div><dt className="text-on-surface-variant">Modelo</dt><dd className="font-semibold text-on-surface">{text(snapshot, 'model')}</dd></div>}
+                  {text(snapshot, 'manufacturer') && <div><dt className="text-on-surface-variant">Manufacturer</dt><dd className="font-semibold text-on-surface">{text(snapshot, 'manufacturer')}</dd></div>}
+                  {text(snapshot, 'model') && <div><dt className="text-on-surface-variant">Model</dt><dd className="font-semibold text-on-surface">{text(snapshot, 'model')}</dd></div>}
                   {text(snapshot, 'serial') && <div><dt className="text-on-surface-variant">Serial</dt><dd className="font-mono text-on-surface">{text(snapshot, 'serial')}</dd></div>}
                   {text(snapshot, 'ipAddress') && <div><dt className="flex items-center gap-1 text-on-surface-variant"><Network className="h-3 w-3" />IP</dt><dd className="font-mono text-on-surface">{text(snapshot, 'ipAddress')}</dd></div>}
                 </dl>
@@ -52,7 +52,7 @@ export function AssetDetailsWidget({ context }: { context: TicketPageContext }) 
           })}
         </div>
       ) : (
-        <div className="p-6 text-center text-sm italic text-on-surface-variant">No hay activos vinculados a este registro.</div>
+        <div className="p-6 text-center text-sm italic text-on-surface-variant">No assets linked to this record.</div>
       )}
     </div>
   );

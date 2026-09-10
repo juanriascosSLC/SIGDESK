@@ -11,7 +11,7 @@ export interface WorkflowAssignmentConfig {
 /** Configuración de `cambiar_estado_ticket`.
  *
  *  Lleva la TRANSICIÓN y no el estado destino: el estado al que se llega lo
- *  decide la definición de Catalog Builder con la que nació cada ticket, y una
+ *  decide la definición de Entity Builder con la que nació cada ticket, y una
  *  automatización no interpreta el lifecycle de otro módulo. */
 export interface WorkflowStatusConfig {
   transition_key: string;
@@ -219,7 +219,7 @@ export function deactivateWorkflow(id: string): Promise<WorkflowDefinition> {
   });
 }
 
-/** Una transición publicada del lifecycle de Catalog Builder. */
+/** Una transición publicada del lifecycle de Entity Builder. */
 export interface CatalogTransition {
   key: string;
   from: string;
@@ -234,7 +234,7 @@ const ESTADOS_QUE_EXIGEN_DATOS = ['closed', 'cerrado', 'reopened', 'reabierto'];
 
 /** Transiciones publicadas de una entidad, leídas de su definición ACTIVA.
  *
- *  Se leen de Catalog Builder, que es su dueño, en vez de mantener una lista
+ *  Se leen de Entity Builder, que es su dueño, en vez de mantener una lista
  *  propia en Automations: una copia se desincroniza en el primer cambio de
  *  lifecycle y el diseñador ofrecería transiciones que ya no existen.
  *

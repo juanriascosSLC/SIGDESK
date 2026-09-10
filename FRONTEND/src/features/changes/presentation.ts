@@ -2,17 +2,17 @@ import type { EntityRecord } from '@/features/catalog/metamodel';
 import type { ChangeTaskStatus } from './api';
 
 export const changeStateLabels: Record<string, string> = {
-  draft: 'Borrador',
-  assessment: 'Evaluación',
-  pending_approval: 'Pendiente de CAB',
-  approved: 'Aprobado',
-  rejected: 'Rechazado',
-  scheduled: 'Programado',
-  implementing: 'En implementación',
-  completed: 'Implementado',
-  failed: 'Fallido',
-  rolled_back: 'Revertido',
-  closed: 'Cerrado',
+  draft: 'Draft',
+  assessment: 'Assessment',
+  pending_approval: 'Pending CAB',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  scheduled: 'Scheduled',
+  implementing: 'Implementing',
+  completed: 'Implemented',
+  failed: 'Failed',
+  rolled_back: 'Rolled back',
+  closed: 'Closed',
 };
 
 export const changeStateStyles: Record<string, string> = {
@@ -36,12 +36,12 @@ export const changeStateStyles: Record<string, string> = {
  * copia por vista, la misma tarea acabaría llamándose distinto en cada una.
  */
 export const taskStatusMeta: Record<ChangeTaskStatus, { label: string; style: string }> = {
-  pending: { label: 'Esperando dependencias', style: 'border-slate-500/30 bg-slate-500/10 text-slate-300' },
-  ready: { label: 'Lista', style: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300' },
-  in_progress: { label: 'En progreso', style: 'border-blue-500/30 bg-blue-500/10 text-blue-300' },
-  blocked: { label: 'Bloqueada', style: 'border-amber-500/30 bg-amber-500/10 text-amber-300' },
-  completed: { label: 'Completada', style: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' },
-  canceled: { label: 'Cancelada', style: 'border-red-500/30 bg-red-500/10 text-red-300' },
+  pending: { label: 'Awaiting dependencies', style: 'border-slate-500/30 bg-slate-500/10 text-slate-300' },
+  ready: { label: 'Ready', style: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300' },
+  in_progress: { label: 'In progress', style: 'border-blue-500/30 bg-blue-500/10 text-blue-300' },
+  blocked: { label: 'Blocked', style: 'border-amber-500/30 bg-amber-500/10 text-amber-300' },
+  completed: { label: 'Completed', style: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' },
+  canceled: { label: 'Canceled', style: 'border-red-500/30 bg-red-500/10 text-red-300' },
 };
 
 export const riskStyles: Record<string, string> = {
@@ -57,7 +57,7 @@ export function textData(change: EntityRecord, key: string): string {
 }
 
 export function formatDateTime(value: unknown): string {
-  if (!value) return 'Sin programar';
+  if (!value) return 'Not scheduled';
   const date = new Date(String(value));
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
 }

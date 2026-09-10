@@ -6,9 +6,9 @@ import type { FormPageContext } from './context';
 // and offering a picker would suggest otherwise.
 //
 // Deliberately NOT the ticket page's `requesterDetails` under a shared key:
-// that one reads `context.ticket.requester` from a record that exists. Sharing
-// the key would make the two registries look interchangeable when their
-// runtime components read different data.
+// that one reads `context.ticket.requesterDisplayName` from a record that
+// exists. Sharing the key would make the two registries look interchangeable
+// when their runtime components read different data.
 export function FormRequesterDetailsWidget({ context }: { context: FormPageContext }) {
   return (
     <div
@@ -17,7 +17,7 @@ export function FormRequesterDetailsWidget({ context }: { context: FormPageConte
     >
       <h3 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-on-surface-variant">
         <UserRound className="h-4 w-4 text-primary" />
-        Solicitante
+        Requester
       </h3>
       <p className="text-sm font-medium text-on-surface">{context.requester.displayName}</p>
       {context.requester.email && (

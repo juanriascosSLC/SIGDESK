@@ -20,7 +20,8 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react';
-import { getAssetOperationalHistory, listAssetSites, listSiteAssets, setAssetOrganizationUnits, setAssetOrganizationUnitsBulk, type AssetProjection } from './api';
+import { getAssetOperationalHistory, listAssetSites, listSiteAssets, setAssetOrganizationUnits, setAssetOrganizationUnitsBulk, type AssetProjection, type AssociatedEntityRecord } from './api';
+import { formatOperationalIssue } from './operational-history-presentation';
 import { rbacService, type Company } from '@/features/admin/rbac.service';
 import { useAuth } from '@/features/auth/useAuth';
 
@@ -36,6 +37,46 @@ const kindIcon: Record<string, typeof Box> = {
   'access-control': Network,
   site: MapPin,
 };
+
+/**
+ * Small provenance badge for a PRB/RFC in operational history — the
+ * explicit distinction between "this record's own immutable snapshot named
+ * this asset" (Direct asset) and "this record is shown because it relates
+ * to an INC/PRB that does" (Via INC-000582 / Via PRB-000098). Never omitted:
+ * a result without this badge would read as if every record personally
+ * stores the asset, which is exactly the claim this correction removes.
+ */
+function ProvenanceBadge({ record }: { record: AssociatedEntityRecord }) {
+  const label = record.associationPath === 'direct_asset'
+    ? 'Direct asset'
+    : `Via ${record.viaHumanId ?? record.viaEntityKey ?? '—'}`;
+  return (
+    <span className="mt-1 inline-block rounded-full border border-border/40 bg-surface-container px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-on-surface-variant">
+      {label}
+    </span>
+  );
+}
+
+
+/**
+ * The mandatory adjacent warning for a domain whose `items` may be missing
+ * entries — a partial PRB/RFC list must NEVER render as an indistinguishable
+ * "PRB · N" the way a genuinely complete result does. `issues` is empty
+ * exactly when the domain is complete, so this renders nothing then.
+ */
+function DomainIncompleteWarning({ issues }: { issues: string[] }) {
+  if (issues.length === 0) return null;
+  const translatedTitle = issues.map(formatOperationalIssue).join(' ');
+  return (
+    <span
+      data-testid="domain-incomplete-warning"
+      title={translatedTitle}
+      className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-amber-300"
+    >
+      <AlertTriangle className="h-3 w-3" />Partial
+    </span>
+  );
+}
 
 function AssetCard({ asset, selected, onSelect }: { asset: AssetProjection; selected: boolean; onSelect: () => void }) {
   const Icon = kindIcon[asset.assetType.toLowerCase()] ?? kindIcon[asset.kind] ?? Box;
@@ -54,10 +95,10 @@ function AssetCard({ asset, selected, onSelect }: { asset: AssetProjection; sele
         </span>
       </div>
       <dl className="mt-4 grid grid-cols-2 gap-3 text-[11px]">
-        <div><dt className="text-on-surface-variant">Tipo</dt><dd className="font-bold capitalize text-on-surface">{asset.assetType || asset.kind}</dd></div>
+        <div><dt className="text-on-surface-variant">Type</dt><dd className="font-bold capitalize text-on-surface">{asset.assetType || asset.kind}</dd></div>
         <div><dt className="text-on-surface-variant">IP</dt><dd className="font-mono text-on-surface">{asset.ipAddress || '—'}</dd></div>
-        <div><dt className="text-on-surface-variant">Fabricante</dt><dd className="font-bold text-on-surface">{asset.manufacturer || '—'}</dd></div>
-        <div><dt className="text-on-surface-variant">Modelo / serial</dt><dd className="truncate font-bold text-on-surface">{asset.model || asset.serial || '—'}</dd></div>
+        <div><dt className="text-on-surface-variant">Manufacturer</dt><dd className="font-bold text-on-surface">{asset.manufacturer || '—'}</dd></div>
+        <div><dt className="text-on-surface-variant">Model / serial</dt><dd className="truncate font-bold text-on-surface">{asset.model || asset.serial || '—'}</dd></div>
       </dl>
     </button>
   );
@@ -70,9 +111,7 @@ export default function AssetsCMDB() {
   const [assetType, setAssetType] = useState('');
   const [selectedAssetId, setSelectedAssetId] = useState('');
   const [accessSiteId, setAccessSiteId] = useState('');
-  // Selección para la asignación masiva: vive aparte del sitio "abierto" en el
-  // panel derecho, porque son dos gestos distintos (mirar uno vs. configurar
-  // muchos).
+  // Selection for bulk assignment: separate from the site open in the right panel.
   const [bulkSelection, setBulkSelection] = useState<string[]>([]);
   const [bulkOpen, setBulkOpen] = useState(false);
   const deferredSearch = useDeferredValue(search);
@@ -110,8 +149,8 @@ export default function AssetsCMDB() {
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="text-xs font-black uppercase tracking-[0.2em] text-primary">Assets / CMDB</div>
-          <h1 className="mt-2 text-3xl font-black text-on-surface">Inventario operativo</h1>
-          <p className="mt-2 max-w-3xl text-sm text-on-surface-variant">Vista de solo lectura sincronizada desde SIGInventory. SIG-DESK conserva referencias estables y snapshots históricos; la información maestra continúa perteneciendo a Inventory.</p>
+          <h1 className="mt-2 text-3xl font-black text-on-surface">Operational Inventory</h1>
+          <p className="mt-2 max-w-3xl text-sm text-on-surface-variant">Read-only view synchronized from SIGInventory. SIG-DESK maintains stable references and historical snapshots; master information continues to belong to Inventory.</p>
         </div>
         <button
           type="button"
@@ -126,25 +165,25 @@ export default function AssetsCMDB() {
             }
           }}
           className="secondary-button"
-        ><RefreshCw className="h-4 w-4" />Sincronizar</button>
+        ><RefreshCw className="h-4 w-4" />Sync</button>
       </header>
 
       {stale && (
         <div className="mt-6 flex gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />Mostrando la última proyección disponible porque SIGInventory no respondió o no tiene credencial configurada.
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />Showing the latest available projection because SIGInventory did not respond or has no configured credential.
         </div>
       )}
-      {sitesQuery.isError && <div className="mt-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300" role="alert"><p>{sitesQuery.error.message}</p><button type="button" onClick={() => void sitesQuery.refetch()} className="secondary-button mt-3" data-testid="assets-sites-retry"><RefreshCw className="h-4 w-4" />Reintentar</button></div>}
+      {sitesQuery.isError && <div className="mt-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300" role="alert"><p>{sitesQuery.error.message}</p><button type="button" onClick={() => void sitesQuery.refetch()} className="secondary-button mt-3" data-testid="assets-sites-retry"><RefreshCw className="h-4 w-4" />Retry</button></div>}
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
         <aside className="rounded-3xl border border-border/40 bg-surface-container-low p-4">
           <div className="mb-3 flex items-center justify-between px-1 text-xs text-on-surface-variant">
-            <span>Sitios disponibles</span>
+            <span>Available sites</span>
             <span data-testid="asset-site-count" className="font-black text-primary">{sites.length}</span>
           </div>
           <label className="relative block">
             <Search className="absolute left-3 top-3 h-4 w-4 text-on-surface-variant" />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar sitio…" className="input-field w-full pl-10" />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search site…" className="input-field w-full pl-10" />
           </label>
           {can('assets:update') && sites.length > 0 && (
             <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-border/30 bg-surface-container px-2 py-2 text-[11px]">
@@ -153,40 +192,37 @@ export default function AssetsCMDB() {
                 data-testid="assets-select-all-filtered"
                 onClick={() =>
                   setBulkSelection((current) =>
-                    // Selecciona lo que el filtro muestra AHORA, no todo el
-                    // inventario: es la diferencia entre "asignar mis 12 sitios
-                    // de Bogotá" y tocar los 248 sin querer.
                     current.length === sites.length ? [] : sites.map((site) => site.id),
                   )
                 }
                 className="font-bold text-primary"
               >
-                {bulkSelection.length === sites.length ? 'Quitar selección' : `Seleccionar los ${sites.length} del filtro`}
+                {bulkSelection.length === sites.length ? 'Clear selection' : `Select all ${sites.length} filtered sites`}
               </button>
               {bulkSelection.length > 0 && (
                 <>
-                  <span className="text-on-surface-variant">{bulkSelection.length} seleccionados</span>
+                  <span className="text-on-surface-variant">{bulkSelection.length} selected</span>
                   <button
                     type="button"
                     data-testid="assets-bulk-open"
                     onClick={() => setBulkOpen(true)}
                     className="ml-auto font-bold text-primary"
                   >
-                    Asignar área…
+                    Assign organizational unit…
                   </button>
                 </>
               )}
             </div>
           )}
           <div className="mt-4 max-h-[65vh] space-y-2 overflow-y-auto">
-            {sitesQuery.isLoading && <p className="p-3 text-sm text-on-surface-variant">Sincronizando sitios…</p>}
-            {!sitesQuery.isLoading && sites.length === 0 && <div className="rounded-2xl border border-dashed border-border/50 p-5 text-sm text-on-surface-variant">No hay sitios disponibles. Resources no pudo consultar SIGInventory y todavía no tiene una proyección local. Verifica <code>INVENTORY_API_URL</code>, la conectividad y una credencial Bearer válida; después reinicia Resources.</div>}
+            {sitesQuery.isLoading && <p className="p-3 text-sm text-on-surface-variant">Synchronizing sites…</p>}
+            {!sitesQuery.isLoading && sites.length === 0 && <div className="rounded-2xl border border-dashed border-border/50 p-5 text-sm text-on-surface-variant">No sites available. Resources could not query SIGInventory and does not yet have a local projection. Check <code>INVENTORY_API_URL</code>, connectivity, and a valid Bearer credential; then restart Resources.</div>}
             {sites.map((site) => (
               <div key={site.id} className={`flex items-center gap-2 rounded-2xl border p-3 transition ${site.id === effectiveSite ? 'border-primary/50 bg-primary/10' : 'border-border/30 bg-surface-container hover:border-primary/30'}`}>
                 {can('assets:update') && (
                   <input
                     type="checkbox"
-                    aria-label={`Seleccionar ${site.displayName}`}
+                    aria-label={`Select ${site.displayName}`}
                     data-testid={`assets-bulk-check-${site.id}`}
                     checked={bulkSelection.includes(site.id)}
                     onChange={() =>
@@ -210,14 +246,14 @@ export default function AssetsCMDB() {
 
         <main className="min-w-0 rounded-3xl border border-border/40 bg-surface-container-low p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div><h2 className="text-lg font-black text-on-surface">{selectedSiteAsset?.displayName || 'Selecciona un sitio'}</h2><p className="mt-1 text-xs text-on-surface-variant">{assetsQuery.data?.items.length ?? 0} activos sincronizados</p></div>
+            <div><h2 className="text-lg font-black text-on-surface">{selectedSiteAsset?.displayName || 'Select a site'}</h2><p className="mt-1 text-xs text-on-surface-variant">{assetsQuery.data?.items.length ?? 0} synchronized assets</p></div>
             <div className="flex flex-wrap items-center gap-2">
               {can('assets:update') && selectedSiteAsset && (
                 <button type="button" onClick={() => setAccessSiteId(selectedSiteAsset.id)} className="secondary-button">
-                  <ShieldCheck className="h-4 w-4" />Configurar acceso
+                  <ShieldCheck className="h-4 w-4" />Configure access
                 </button>
               )}
-              <select value={assetType} onChange={(event) => setAssetType(event.target.value)} className="input-field min-w-44"><option value="">Todos los tipos</option>{types.map((type) => <option key={type} value={type}>{type}</option>)}</select>
+              <select value={assetType} onChange={(event) => setAssetType(event.target.value)} className="input-field min-w-44"><option value="">All types</option>{types.map((type) => <option key={type} value={type}>{type}</option>)}</select>
             </div>
           </div>
           {bulkOpen && bulkSelection.length > 0 && (
@@ -243,17 +279,43 @@ export default function AssetsCMDB() {
               }}
             />
           )}
-          {assetsQuery.isLoading ? <p className="mt-8 text-sm text-on-surface-variant">Cargando activos…</p> : assetsQuery.isError ? <div className="mt-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300"><p>{assetsQuery.error.message}</p><button type="button" onClick={() => void assetsQuery.refetch()} className="secondary-button mt-3"><RefreshCw className="h-4 w-4" />Reintentar</button></div> : (assetsQuery.data?.items.length ?? 0) === 0 ? <div className="mt-8 rounded-2xl border border-dashed border-border/50 p-10 text-center text-sm text-on-surface-variant">Este sitio no tiene activos disponibles para el filtro actual.</div> : <div className="mt-5 grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{assetsQuery.data!.items.map((asset) => <AssetCard key={asset.id} asset={asset} selected={asset.id === selectedAssetId} onSelect={() => setSelectedAssetId(asset.id)} />)}</div>}
+          {assetsQuery.isLoading ? <p className="mt-8 text-sm text-on-surface-variant">Loading assets…</p> : assetsQuery.isError ? <div className="mt-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300"><p>{assetsQuery.error.message}</p><button type="button" onClick={() => void assetsQuery.refetch()} className="secondary-button mt-3"><RefreshCw className="h-4 w-4" />Retry</button></div> : (assetsQuery.data?.items.length ?? 0) === 0 ? <div className="mt-8 rounded-2xl border border-dashed border-border/50 p-10 text-center text-sm text-on-surface-variant">This site has no assets available for the current filter.</div> : <div className="mt-5 grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{assetsQuery.data!.items.map((asset) => <AssetCard key={asset.id} asset={asset} selected={asset.id === selectedAssetId} onSelect={() => setSelectedAssetId(asset.id)} />)}</div>}
 
           {selectedAsset && (
             <section className="mt-6 rounded-2xl border border-border/40 bg-surface-container p-5">
-              <div className="flex items-center gap-3"><div className="rounded-xl bg-primary/10 p-2 text-primary"><History className="h-5 w-5" /></div><div><h3 className="font-black text-on-surface">Historial operativo de {selectedAsset.displayName}</h3><p className="mt-1 text-xs text-on-surface-variant">INC, PRB y RFC que conservaron este asset en su snapshot.</p></div></div>
-              {historyQuery.isLoading ? <p className="mt-5 text-sm text-on-surface-variant">Consultando dominios…</p> : historyQuery.data && (
+              <div className="flex items-center gap-3"><div className="rounded-xl bg-primary/10 p-2 text-primary"><History className="h-5 w-5" /></div><div><h3 className="font-black text-on-surface">Operational history of {selectedAsset.displayName}</h3><p className="mt-1 text-xs text-on-surface-variant">INC, PRB, and RFC records related to this asset—either directly or through an incident or problem whose snapshot contains it.</p></div></div>
+              {historyQuery.isLoading ? <p className="mt-5 text-sm text-on-surface-variant">Querying domains…</p> : historyQuery.data && (
                 <div className="mt-5 grid gap-4 lg:grid-cols-3">
-                  <div className="rounded-xl border border-border/30 p-4"><div className="flex items-center gap-2 text-xs font-black text-primary"><Ticket className="h-4 w-4" />INC · {historyQuery.data.incidents.length}</div><div className="mt-3 space-y-2">{historyQuery.data.incidents.slice(0, 8).map((record) => <Link key={record.id} to={`/app/tickets/${record.id}`} className="block rounded-lg bg-on-surface/5 p-2 text-xs font-bold text-on-surface hover:bg-primary/10">{record.humanId ?? record.id} · {record.title}</Link>)}{historyQuery.data.incidents.length === 0 && <p className="text-xs text-on-surface-variant">Sin incidentes relacionados.</p>}</div></div>
-                  <div className="rounded-xl border border-border/30 p-4"><div className="flex items-center gap-2 text-xs font-black text-primary"><SearchCode className="h-4 w-4" />PRB · {historyQuery.data.problems.length}</div><div className="mt-3 space-y-2">{historyQuery.data.problems.slice(0, 8).map((record) => <Link key={record.id} to={`/app/problems/${record.humanId}`} className="block rounded-lg bg-on-surface/5 p-2 text-xs font-bold text-on-surface hover:bg-primary/10">{record.humanId} · {String(record.data.title ?? 'Problema')}</Link>)}{historyQuery.data.problems.length === 0 && <p className="text-xs text-on-surface-variant">Sin problemas relacionados.</p>}</div></div>
-                  <div className="rounded-xl border border-border/30 p-4"><div className="flex items-center gap-2 text-xs font-black text-primary"><GitPullRequest className="h-4 w-4" />RFC · {historyQuery.data.changes.length}</div><div className="mt-3 space-y-2">{historyQuery.data.changes.slice(0, 8).map((record) => <Link key={record.id} to={`/app/changes/${record.humanId}`} className="block rounded-lg bg-on-surface/5 p-2 text-xs font-bold text-on-surface hover:bg-primary/10">{record.humanId} · {String(record.data.title ?? 'Cambio')}</Link>)}{historyQuery.data.changes.length === 0 && <p className="text-xs text-on-surface-variant">Sin cambios relacionados.</p>}</div></div>
-                  {historyQuery.data.unavailableDomains.length > 0 && <p className="text-xs text-amber-300 lg:col-span-3">No fue posible consultar: {historyQuery.data.unavailableDomains.join(', ')}. Puede deberse a permisos insuficientes o a un servicio temporalmente fuera de línea.</p>}
+                  <div className="rounded-xl border border-border/30 p-4" data-testid="domain-inc">
+                    <div className="flex flex-wrap items-center gap-2 text-xs font-black text-primary"><Ticket className="h-4 w-4" />INC · {historyQuery.data.incidents.items.length}<DomainIncompleteWarning issues={historyQuery.data.incidents.issues} /></div>
+                    <div className="mt-3 space-y-2">
+                      {historyQuery.data.incidents.items.slice(0, 8).map((record) => <Link key={record.id} to={`/app/tickets/${record.id}`} className="block rounded-lg bg-on-surface/5 p-2 text-xs font-bold text-on-surface hover:bg-primary/10">{record.humanId ?? record.id} · {record.title}</Link>)}
+                      {historyQuery.data.incidents.items.length === 0 && historyQuery.data.incidents.completeness === 'complete' && <p className="text-xs text-on-surface-variant">No related incidents.</p>}
+                      {historyQuery.data.incidents.items.length === 0 && historyQuery.data.incidents.completeness === 'partial' && <p className="text-xs text-amber-300">Could not determine whether there are related incidents.</p>}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-border/30 p-4" data-testid="domain-prb">
+                    <div className="flex flex-wrap items-center gap-2 text-xs font-black text-primary"><SearchCode className="h-4 w-4" />PRB · {historyQuery.data.problems.items.length}<DomainIncompleteWarning issues={historyQuery.data.problems.issues} /></div>
+                    <div className="mt-3 space-y-2">
+                      {historyQuery.data.problems.items.slice(0, 8).map((record) => <Link key={record.id} to={`/app/problems/${record.humanId}`} className="block rounded-lg bg-on-surface/5 p-2 text-xs font-bold text-on-surface hover:bg-primary/10"><span className="block truncate">{record.humanId} · {String(record.data.title ?? 'Problem')}</span><ProvenanceBadge record={record} /></Link>)}
+                      {historyQuery.data.problems.items.length === 0 && historyQuery.data.problems.completeness === 'complete' && <p className="text-xs text-on-surface-variant">No related problems.</p>}
+                      {historyQuery.data.problems.items.length === 0 && historyQuery.data.problems.completeness === 'partial' && <p className="text-xs text-amber-300">Could not determine whether there are related problems.</p>}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-border/30 p-4" data-testid="domain-rfc">
+                    <div className="flex flex-wrap items-center gap-2 text-xs font-black text-primary"><GitPullRequest className="h-4 w-4" />RFC · {historyQuery.data.changes.items.length}<DomainIncompleteWarning issues={historyQuery.data.changes.issues} /></div>
+                    <div className="mt-3 space-y-2">
+                      {historyQuery.data.changes.items.slice(0, 8).map((record) => <Link key={record.id} to={`/app/changes/${record.humanId}`} className="block rounded-lg bg-on-surface/5 p-2 text-xs font-bold text-on-surface hover:bg-primary/10"><span className="block truncate">{record.humanId} · {String(record.data.title ?? 'Change')}</span><ProvenanceBadge record={record} /></Link>)}
+                      {historyQuery.data.changes.items.length === 0 && historyQuery.data.changes.completeness === 'complete' && <p className="text-xs text-on-surface-variant">No related changes.</p>}
+                      {historyQuery.data.changes.items.length === 0 && historyQuery.data.changes.completeness === 'partial' && <p className="text-xs text-amber-300">Could not determine whether there are related changes.</p>}
+                    </div>
+                  </div>
+                  {(() => {
+                    const allIssues = [...new Set([...historyQuery.data.incidents.issues, ...historyQuery.data.problems.issues, ...historyQuery.data.changes.issues])];
+                    return allIssues.length > 0 && (
+                      <p data-testid="operational-history-partial-summary" className="text-xs text-amber-300 lg:col-span-3">Partial history: {allIssues.map(formatOperationalIssue).join(' ')}</p>
+                    );
+                  })()}
                 </div>
               )}
             </section>
@@ -285,21 +347,21 @@ function AssetAccessEditor({ site, onClose, onSaved }: { site: AssetProjection; 
   };
 
   return (
-    <section className="mt-5 rounded-2xl border border-primary/30 bg-primary/5 p-5" aria-label="Acceso organizacional del sitio">
+    <section className="mt-5 rounded-2xl border border-primary/30 bg-primary/5 p-5" aria-label="Site organizational access">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="flex items-center gap-2 font-black text-on-surface"><ShieldCheck className="h-4 w-4 text-primary" />Acceso por área o equipo</h3>
-          <p className="mt-1 text-xs text-on-surface-variant">Los dispositivos del sitio heredan estas unidades. Puedes seleccionar varias áreas.</p>
+          <h3 className="flex items-center gap-2 font-black text-on-surface"><ShieldCheck className="h-4 w-4 text-primary" />Access by organizational unit or team</h3>
+          <p className="mt-1 text-xs text-on-surface-variant">Devices at this site inherit these organizational units. You can select multiple organizational units.</p>
         </div>
-        <button type="button" onClick={onClose} aria-label="Cerrar configuración de acceso" className="rounded-lg p-2 text-on-surface-variant hover:bg-on-surface/10 hover:text-on-surface"><X className="h-4 w-4" /></button>
+        <button type="button" onClick={onClose} aria-label="Close access configuration" className="rounded-lg p-2 text-on-surface-variant hover:bg-on-surface/10 hover:text-on-surface"><X className="h-4 w-4" /></button>
       </div>
 
       {companiesQuery.isLoading ? (
-        <p className="mt-4 text-sm text-on-surface-variant">Cargando estructura de Organization…</p>
+        <p className="mt-4 text-sm text-on-surface-variant">Loading Organization structure…</p>
       ) : companiesQuery.isError ? (
         <p className="mt-4 text-sm text-red-300">{companiesQuery.error.message}</p>
       ) : assignableUnits.length === 0 ? (
-        <p className="mt-4 text-sm text-amber-200">Primero crea un departamento o equipo en Users & Roles → Organización.</p>
+        <p className="mt-4 text-sm text-amber-200">First create a department or team in Users & Roles → Organization.</p>
       ) : (
         <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {assignableUnits.map((company) => (
@@ -313,9 +375,9 @@ function AssetAccessEditor({ site, onClose, onSaved }: { site: AssetProjection; 
 
       {saveMutation.isError && <p className="mt-3 text-xs text-red-300">{saveMutation.error.message}</p>}
       <div className="mt-4 flex items-center justify-end gap-2">
-        <button type="button" onClick={onClose} className="secondary-button">Cancelar</button>
+        <button type="button" onClick={onClose} className="secondary-button">Cancel</button>
         <button type="button" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || companiesQuery.isLoading} className="primary-button">
-          {saveMutation.isPending ? 'Guardando…' : 'Guardar acceso'}
+          {saveMutation.isPending ? 'Saving…' : 'Save access'}
         </button>
       </div>
     </section>
@@ -323,12 +385,7 @@ function AssetAccessEditor({ site, onClose, onSaved }: { site: AssetProjection; 
 }
 
 /**
- * Asignación de áreas a un lote de sitios.
- *
- * Reusa la misma lista de unidades que el editor de un solo sitio; lo que
- * añade son los modos: sobre un lote heterogéneo, "reemplazar" borraría
- * asignaciones que alguien puso a mano, así que "agregar" y "quitar" tienen
- * que ser opciones de primera clase y no un efecto secundario.
+ * Bulk organizational unit assignment for multiple sites.
  */
 function BulkAccessEditor({
   assetIds,
@@ -354,27 +411,27 @@ function BulkAccessEditor({
   return (
     <section
       className="mt-5 rounded-2xl border border-primary/30 bg-primary/5 p-5"
-      aria-label="Asignación masiva de acceso"
+      aria-label="Bulk organizational access assignment"
       data-testid="assets-bulk-editor"
     >
       <div className="flex items-start justify-between gap-4">
         <div>
           <h3 className="flex items-center gap-2 font-black text-on-surface">
             <ShieldCheck className="h-4 w-4 text-primary" />
-            Asignar área a {assetIds.length} sitios
+            Assign organizational unit to {assetIds.length} sites
           </h3>
           <p className="mt-1 text-xs text-on-surface-variant">
-            Los dispositivos de cada sitio heredan estas unidades, así que no hace falta tocarlos uno por uno.
+            Devices at each site inherit these organizational units, so you don't need to configure them one by one.
           </p>
         </div>
-        <button type="button" onClick={onClose} aria-label="Cerrar asignación masiva" className="rounded-lg p-2 text-on-surface-variant hover:bg-on-surface/10 hover:text-on-surface"><X className="h-4 w-4" /></button>
+        <button type="button" onClick={onClose} aria-label="Close bulk assignment" className="rounded-lg p-2 text-on-surface-variant hover:bg-on-surface/10 hover:text-on-surface"><X className="h-4 w-4" /></button>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
         {([
-          ['add', 'Agregar'],
-          ['remove', 'Quitar'],
-          ['replace', 'Reemplazar'],
+          ['add', 'Add'],
+          ['remove', 'Remove'],
+          ['replace', 'Replace'],
         ] as const).map(([value, label]) => (
           <button
             key={value}
@@ -391,16 +448,16 @@ function BulkAccessEditor({
       </div>
       {mode === 'replace' && (
         <p className="mt-2 text-xs text-amber-200">
-          Reemplazar deja exactamente las áreas marcadas y descarta las que cada sitio tuviera antes.
+          Replace keeps exactly the selected organizational units and discards any units each site had before.
         </p>
       )}
 
       {companiesQuery.isLoading ? (
-        <p className="mt-4 text-sm text-on-surface-variant">Cargando estructura de Organization…</p>
+        <p className="mt-4 text-sm text-on-surface-variant">Loading Organization structure…</p>
       ) : companiesQuery.isError ? (
         <p className="mt-4 text-sm text-red-300">{companiesQuery.error.message}</p>
       ) : assignableUnits.length === 0 ? (
-        <p className="mt-4 text-sm text-amber-200">Primero crea un departamento o equipo en Users &amp; Roles → Organización.</p>
+        <p className="mt-4 text-sm text-amber-200">First create a department or team in Users &amp; Roles → Organization.</p>
       ) : (
         <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {assignableUnits.map((company) => (
@@ -425,7 +482,7 @@ function BulkAccessEditor({
 
       {saveMutation.isError && <p className="mt-3 text-xs text-red-300">{saveMutation.error.message}</p>}
       <div className="mt-4 flex items-center justify-end gap-2">
-        <button type="button" onClick={onClose} className="secondary-button">Cancelar</button>
+        <button type="button" onClick={onClose} className="secondary-button">Cancel</button>
         <button
           type="button"
           data-testid="assets-bulk-apply"
@@ -433,7 +490,7 @@ function BulkAccessEditor({
           onClick={() => saveMutation.mutate()}
           className="primary-button"
         >
-          {saveMutation.isPending ? 'Aplicando…' : `Aplicar a ${assetIds.length} sitios`}
+          {saveMutation.isPending ? 'Applying…' : `Apply to ${assetIds.length} sites`}
         </button>
       </div>
     </section>

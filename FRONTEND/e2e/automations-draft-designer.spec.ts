@@ -52,7 +52,7 @@ function borradorConDestinoFantasma(id: string) {
         {
           id: 'action-1', type: 'action', position: { x: 520, y: 160 },
           data: {
-            catalogKey: 'action.assign', label: 'Asignar automáticamente', title: 'Asignar automáticamente',
+            catalogKey: 'action.assign', label: 'Assign Automatically', title: 'Assign Automatically',
             supportStatus: 'operational', color: 'emerald', assignmentMode: 'user',
             departmentId: 'department-it', teamId: 'team-eliminado', assigneeUserId: 'user-eliminado',
             overwriteExisting: false,
@@ -102,7 +102,7 @@ test('una referencia organizacional ausente bloquea la publicación y no se borr
   const resultado = compileVisualWorkflow([trigger, assignment], [edge], 1);
 
   expect(resultado.payload).toBeUndefined();
-  expect(resultado.errors.join(' ')).toContain('Organization ya no reconoce');
+  expect(resultado.errors.join(' ')).toContain('Organization no longer recognizes');
   expect(resultado.issues.some((issue) => issue.nodeId === assignment.id)).toBe(true);
   // El id NO se limpia: borrarlo cambiaría el destino del diagrama guardado sin
   // que nadie lo decidiera.
@@ -151,12 +151,12 @@ test('guardar un borrador conserva el diagrama al recargar y publicar usa su id'
   await expect(page.getByTestId('workflow-visual-editor')).toBeVisible();
 
   // Estado inicial: nada pendiente.
-  await expect(page.getByTestId('canvas-dirty')).toHaveText('Guardado');
+  await expect(page.getByTestId('canvas-dirty')).toHaveText('Saved');
 
   const nodos = page.locator('.react-flow__node');
   const iniciales = await nodos.count();
-  await page.getByRole('button', { name: /Asignar automáticamente/ }).click();
-  await expect(page.getByTestId('canvas-dirty')).toHaveText('Cambios sin guardar');
+  await page.getByRole('button', { name: /Assign Automatically/ }).click();
+  await expect(page.getByTestId('canvas-dirty')).toHaveText('Unsaved changes');
   await expect(nodos).toHaveCount(iniciales + 1);
 
   await page.getByTestId('canvas-save-draft').click();
@@ -185,12 +185,12 @@ test('un destino que Organization ya no reconoce resalta el nodo y se puede enfo
 
   // El bloque queda marcado EN EL CANVAS, no solo en el panel de validación.
   await expect(page.getByTestId('workflow-node-invalid')).toBeVisible();
-  await expect(page.getByTestId('workflow-node-invalid')).toContainText('Organization ya no reconoce');
+  await expect(page.getByTestId('workflow-node-invalid')).toContainText('Organization no longer recognizes');
 
   // Y el error del panel lleva al bloque.
   await page.getByTestId('canvas-validate').click();
   const anclado = page.getByTestId('validation-issue-anchored').first();
-  await expect(anclado).toContainText('Organization ya no reconoce');
+  await expect(anclado).toContainText('Organization no longer recognizes');
   await anclado.click();
   await expect(page.getByTestId('assignment-editor')).toBeVisible();
 });
@@ -214,7 +214,7 @@ test('el 422 del backend se muestra aunque el canvas considere válido el diseñ
       layout: {
         nodes: [
           { id: 'trigger-1', type: 'trigger', position: { x: 80, y: 160 }, data: { catalogKey: 'ticket.created', label: 'INC creado', supportStatus: 'operational', color: 'cyan' } },
-          { id: 'action-1', type: 'action', position: { x: 520, y: 160 }, data: { catalogKey: 'action.assign', label: 'Asignar automáticamente', supportStatus: 'operational', color: 'emerald', assignmentMode: 'team', departmentId: 'department-it', teamId: 'team-it', overwriteExisting: false } },
+          { id: 'action-1', type: 'action', position: { x: 520, y: 160 }, data: { catalogKey: 'action.assign', label: 'Assign Automatically', supportStatus: 'operational', color: 'emerald', assignmentMode: 'team', departmentId: 'department-it', teamId: 'team-it', overwriteExisting: false } },
         ],
         edges: [{ id: 'e1', source: 'trigger-1', target: 'action-1' }],
       },
@@ -244,7 +244,7 @@ test('deshacer y rehacer devuelven el diagrama a su estado anterior', async ({ p
   const iniciales = await nodos.count();
   expect(iniciales).toBeGreaterThan(0);
 
-  await page.getByRole('button', { name: /Asignar automáticamente/ }).click();
+  await page.getByRole('button', { name: /Assign Automatically/ }).click();
   await expect(nodos).toHaveCount(iniciales + 1);
 
   await page.getByTestId('canvas-undo').click();

@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -42,10 +42,11 @@ import {
 } from './presentation';
 import { ChangeTasksBoard } from './ChangeTasksBoard';
 import { ConfiguredRecordDetail } from '@/features/tickets/ConfiguredRecordDetail';
+import { ConfirmDialog } from '@/components/ui';
 
 function fieldValue(field: FieldDefinition, value: unknown): string {
   if (value === null || value === undefined || value === '') return '—';
-  if (field.type === 'boolean') return value ? 'Sí' : 'No';
+  if (field.type === 'boolean') return value ? 'Yes' : 'No';
   if (field.type === 'date') {
     const date = new Date(`${String(value)}T00:00:00`);
     return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
@@ -55,6 +56,20 @@ function fieldValue(field: FieldDefinition, value: unknown): string {
     return field.options?.find((option) => option.value === value)?.label ?? String(value);
   }
   return String(value);
+}
+
+function resolveRelationDestination(entityKey: string, humanId: string): string | null {
+  const encodedId = encodeURIComponent(humanId);
+  switch (entityKey) {
+    case 'INC':
+      return `/app/tickets/${encodedId}`;
+    case 'PRB':
+      return `/app/problems/${encodedId}`;
+    case 'RFC':
+      return `/app/changes/${encodedId}`;
+    default:
+      return null;
+  }
 }
 
 function transitionPermission(key: string): string {
@@ -87,8 +102,9 @@ export default function ChangeDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { can, displayName } = useAuth();
+  const { can, displayName, deskUserId } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
+  const [pendingTransition, setPendingTransition] = useState<TransitionDefinition | null>(null);
   const [editData, setEditData] = useState<Record<string, unknown>>({});
   const [notice, setNotice] = useState('');
 
@@ -120,28 +136,27 @@ export default function ChangeDetail() {
       void queryClient.invalidateQueries({ queryKey: ['changes'] });
       setEditData(structuredClone(updated.data));
       setIsEditing(false);
-      setNotice('Datos actualizados y riesgo recalculado.');
+      setNotice('Data updated and risk recalculated.');
     },
   });
+  // "reject" and "complete"/"fail" need a value collected from a person
+  // before they can proceed (a justification, or an implementation result) —
+  // everything else applies immediately.
+  function transitionNeedsValue(key: string): boolean {
+    return key === 'reject' || key === 'complete' || key === 'fail';
+  }
+
   const transitionMutation = useMutation({
-    mutationFn: async (transition: TransitionDefinition) => {
+    mutationFn: async ({ transition, value }: { transition: TransitionDefinition; value?: string }) => {
       let current = changeQuery.data!;
       let data = current.data;
       if (transition.key === 'reject') {
-        const reason = window.prompt('Justificación obligatoria del rechazo:');
-        if (!reason?.trim()) throw new Error('El rechazo requiere una justificación.');
-        data = { ...data, approvalNotes: reason.trim() };
+        data = { ...data, approvalNotes: value };
         current = await updateChange(current.id, data, current.updatedAt);
         queryClient.setQueryData(['changes', id], current);
       }
-      if (['complete', 'fail'].includes(transition.key)) {
-        const result = window.prompt(
-          transition.key === 'complete'
-            ? 'Describe el resultado y las validaciones realizadas:'
-            : 'Describe la falla observada y el estado actual:',
-        );
-        if (!result?.trim()) throw new Error('Debes registrar el resultado de implementación.');
-        data = { ...current.data, implementationResult: result.trim() };
+      if (transition.key === 'complete' || transition.key === 'fail') {
+        data = { ...current.data, implementationResult: value };
         current = await updateChange(current.id, data, current.updatedAt);
         queryClient.setQueryData(['changes', id], current);
       }
@@ -150,9 +165,20 @@ export default function ChangeDetail() {
     onSuccess: (updated) => {
       queryClient.setQueryData(['changes', id], updated);
       void queryClient.invalidateQueries({ queryKey: ['changes'] });
-      setNotice(`Estado actualizado a ${changeStateLabels[updated.state] ?? updated.state}.`);
+      setPendingTransition(null);
+      setNotice(`Status updated to ${changeStateLabels[updated.state] ?? updated.state}.`);
     },
   });
+
+  function requestTransition(transition: TransitionDefinition) {
+    if (transitionNeedsValue(transition.key)) {
+      setPendingTransition(transition);
+      return;
+    }
+    transitionMutation.reset();
+    setNotice('');
+    transitionMutation.mutate({ transition });
+  }
   const deleteRelationMutation = useMutation({
     mutationFn: (relationId: string) => deleteChangeRelation(id!, relationId),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['changes', id, 'relations'] }),
@@ -209,7 +235,7 @@ export default function ChangeDetail() {
   if (changeQuery.isLoading || manifestQuery.isLoading) {
     return (
       <div className="min-h-screen bg-surface-container-lowest p-8 text-on-surface-variant">
-        Cargando solicitud de cambio…
+        Loading change request…
       </div>
     );
   }
@@ -217,12 +243,12 @@ export default function ChangeDetail() {
     const message =
       changeQuery.error?.message ??
       manifestQuery.error?.message ??
-      'La RFC solicitada no existe.';
+      'The requested RFC does not exist.';
     return (
       <div className="min-h-screen bg-surface-container-lowest p-8">
         <button onClick={() => navigate('/app/changes')} className="secondary-button mb-6">
           <ArrowLeft className="h-4 w-4" />
-          Volver
+          Back
         </button>
         <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-red-300">
           {message}
@@ -234,7 +260,7 @@ export default function ChangeDetail() {
   const change = changeQuery.data;
   const specification = manifestQuery.data.specification;
   const risk = textData(change, 'riskLevel') || 'medium';
-  const riskLabel: Record<string, string> = { low: 'Bajo', medium: 'Medio', high: 'Alto', critical: 'Crítico' };
+  const riskLabel: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High', critical: 'Critical' };
   const availableTransitions = specification.lifecycle.transitions.filter(
     (transition) =>
       transition.from === change.state &&
@@ -275,12 +301,12 @@ export default function ChangeDetail() {
     <form onSubmit={submitEdit} className="rounded-3xl border border-primary/30 bg-surface-container-low p-6">
       <div className="flex items-start justify-between border-b border-border/40 pb-4">
         <div>
-          <h2 className="font-black text-on-surface">Editar RFC</h2>
+          <h2 className="font-black text-on-surface">Edit RFC</h2>
           <p className="mt-1 text-xs text-on-surface-variant">
-            Campos interpretados desde la definición inmutable v{change.definitionVersion}.
+            Fields interpreted from the immutable definition v{change.definitionVersion}.
           </p>
         </div>
-        <button type="button" onClick={() => setIsEditing(false)} className="rounded-lg p-2 text-on-surface-variant" aria-label="Cancelar edición">
+        <button type="button" onClick={() => setIsEditing(false)} className="rounded-lg p-2 text-on-surface-variant" aria-label="Cancel editing">
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -297,9 +323,9 @@ export default function ChangeDetail() {
         ))}
       </div>
       <div className="mt-6 flex justify-end gap-3 border-t border-border/40 pt-5">
-        <button type="button" onClick={() => setIsEditing(false)} className="secondary-button">Cancelar</button>
+        <button type="button" onClick={() => setIsEditing(false)} className="secondary-button">Cancel</button>
         <button type="submit" disabled={updateMutation.isPending} className="primary-button disabled:opacity-50">
-          <Save className="h-4 w-4" /> Guardar cambios
+          <Save className="h-4 w-4" /> Save changes
         </button>
       </div>
     </form>
@@ -307,13 +333,15 @@ export default function ChangeDetail() {
 
   if (specification.detailPage) {
     return (
+      <>
       <ConfiguredRecordDetail
         record={change}
         specification={specification}
         currentUserName={displayName}
+        currentUserId={deskUserId}
         relations={relationsQuery.data ?? []}
         transitions={availableTransitions}
-        onTransition={(transition) => transitionMutation.mutate(transition)}
+        onTransition={(transition) => requestTransition(transition)}
         transitionPending={transitionMutation.isPending}
         transitionError={transitionMutation.error?.message}
         canEdit={can(PERMISSIONS.changesEdit)}
@@ -331,6 +359,38 @@ export default function ChangeDetail() {
         onBack={() => navigate('/app/changes')}
         onNavigate={navigate}
       />
+      <ConfirmDialog
+        open={pendingTransition !== null}
+        onClose={() => setPendingTransition(null)}
+        onConfirm={(value) => {
+          if (pendingTransition) transitionMutation.mutate({ transition: pendingTransition, value });
+        }}
+        title={
+          pendingTransition?.key === 'reject'
+            ? 'Reject RFC'
+            : pendingTransition?.key === 'complete'
+              ? 'Complete implementation'
+              : 'Report implementation failure'
+        }
+        description={
+          pendingTransition?.key === 'reject'
+            ? 'A justification is required to reject this RFC.'
+            : 'Describe the result and validations performed.'
+        }
+        confirmLabel={pendingTransition?.label ?? 'Confirm'}
+        tone={pendingTransition?.key === 'reject' || pendingTransition?.key === 'fail' ? 'destructive' : 'default'}
+        loading={transitionMutation.isPending}
+        error={pendingTransition ? transitionMutation.error?.message : undefined}
+        reasonLabel={pendingTransition?.key === 'reject' ? 'Justification for rejection' : 'Implementation result'}
+        reasonPlaceholder={
+          pendingTransition?.key === 'reject'
+            ? 'Why is this RFC being rejected?'
+            : pendingTransition?.key === 'complete'
+              ? 'Describe the result and validations performed…'
+              : 'Describe the observed failure and current state…'
+        }
+      />
+      </>
     );
   }
 
@@ -342,7 +402,7 @@ export default function ChangeDetail() {
           className="mb-6 flex items-center gap-2 text-sm font-bold text-on-surface-variant hover:text-primary"
         >
           <ArrowLeft className="h-4 w-4" />
-          Volver al tablero
+          Back to board
         </button>
 
         <header className="mb-6 rounded-3xl border border-border/40 bg-surface-container-low p-6 lg:p-8">
@@ -356,11 +416,11 @@ export default function ChangeDetail() {
                   {changeStateLabels[change.state] ?? change.state}
                 </span>
                 <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase ${riskStyles[risk] ?? riskStyles.medium}`}>
-                  Riesgo {riskLabel[risk] ?? risk}
+                  Risk: {riskLabel[risk] ?? risk}
                 </span>
               </div>
               <h1 className="text-3xl font-black text-on-surface">
-                {textData(change, 'title') || 'Solicitud de cambio'}
+                {textData(change, 'title') || 'Change request'}
               </h1>
               <p className="mt-3 max-w-4xl text-sm leading-6 text-on-surface-variant">
                 {textData(change, 'description')}
@@ -373,7 +433,7 @@ export default function ChangeDetail() {
                 className="secondary-button disabled:opacity-40"
               >
                 <Pencil className="h-4 w-4" />
-                Editar datos
+                Edit data
               </button>
             )}
           </div>
@@ -382,11 +442,7 @@ export default function ChangeDetail() {
             {availableTransitions.map((transition) => (
               <button
                 key={transition.key}
-                onClick={() => {
-                  transitionMutation.reset();
-                  setNotice('');
-                  transitionMutation.mutate(transition);
-                }}
+                onClick={() => requestTransition(transition)}
                 disabled={transitionMutation.isPending || isEditing}
                 className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-bold transition disabled:opacity-40 ${transitionStyle(transition.key)}`}
               >
@@ -400,7 +456,7 @@ export default function ChangeDetail() {
             ))}
             {availableTransitions.length === 0 && (
               <span className="text-xs text-on-surface-variant">
-                No hay acciones disponibles para tu permiso y el estado actual.
+                No actions available for your permissions and the current state.
               </span>
             )}
           </div>
@@ -419,7 +475,7 @@ export default function ChangeDetail() {
               {actionError instanceof ApiError &&
               actionError.status === 409 &&
               /cambi|concurr/i.test(actionError.message)
-                ? 'La RFC cambió mientras la editabas. Recarga la página antes de continuar.'
+                ? 'This RFC changed while you were editing it. Reload the page before continuing.'
                 : actionError.message}
             </span>
           </div>
@@ -432,16 +488,16 @@ export default function ChangeDetail() {
           >
             <div className="flex items-start justify-between border-b border-border/40 pb-4">
               <div>
-                <h2 className="font-black text-on-surface">Editar RFC</h2>
+                <h2 className="font-black text-on-surface">Edit RFC</h2>
                 <p className="mt-1 text-xs text-on-surface-variant">
-                  Campos interpretados desde la definición inmutable v{change.definitionVersion}.
+                  Fields interpreted from the immutable definition v{change.definitionVersion}.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsEditing(false)}
                 className="rounded-lg p-2 text-on-surface-variant hover:bg-on-surface/5"
-                aria-label="Cancelar edición"
+                aria-label="Cancel editing"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -469,7 +525,7 @@ export default function ChangeDetail() {
                 onClick={() => setIsEditing(false)}
                 className="secondary-button"
               >
-                Cancelar
+                Cancel
               </button>
               <button
                 type="submit"
@@ -477,7 +533,7 @@ export default function ChangeDetail() {
                 className="primary-button disabled:opacity-50"
               >
                 <Save className="h-4 w-4" />
-                {updateMutation.isPending ? 'Guardando…' : 'Guardar cambios'}
+                {updateMutation.isPending ? 'Saving…' : 'Save changes'}
               </button>
             </div>
           </form>
@@ -486,7 +542,7 @@ export default function ChangeDetail() {
         <div className="mb-6 rounded-3xl border border-border/40 bg-surface-container-low p-6">
           <div className="mb-5 flex items-center gap-2">
             <GitBranch className="h-5 w-5 text-primary" />
-            <h2 className="font-black text-on-surface">Ciclo de vida</h2>
+            <h2 className="font-black text-on-surface">Lifecycle</h2>
           </div>
           <div className="flex flex-wrap gap-2">
             {specification.lifecycle.states.map((state) => (
@@ -514,7 +570,7 @@ export default function ChangeDetail() {
         <section className="mb-6 rounded-3xl border border-border/40 bg-surface-container-low p-6">
           <div className="mb-5 flex items-center gap-2">
             <FileCheck2 className="h-5 w-5 text-primary" />
-            <h2 className="font-black text-on-surface">Definición y plan del cambio</h2>
+            <h2 className="font-black text-on-surface">Change definition and plan</h2>
           </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {detailFields.map(({ field, placement }) => (
@@ -537,19 +593,19 @@ export default function ChangeDetail() {
           <section className="rounded-3xl border border-border/40 bg-surface-container-low p-6">
             <div className="mb-4 flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-primary" />
-              <h2 className="font-black text-on-surface">Trazabilidad</h2>
+              <h2 className="font-black text-on-surface">Traceability</h2>
             </div>
             <dl className="space-y-3 text-sm">
               <div className="flex justify-between gap-4">
-                <dt className="text-on-surface-variant">Definición ejecutable</dt>
+                <dt className="text-on-surface-variant">Executable definition</dt>
                 <dd className="font-mono text-on-surface">RFC v{change.definitionVersion}</dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-on-surface-variant">Creada</dt>
+                <dt className="text-on-surface-variant">Created</dt>
                 <dd className="text-right text-on-surface">{formatDateTime(change.createdAt)}</dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-on-surface-variant">Última actualización</dt>
+                <dt className="text-on-surface-variant">Last updated</dt>
                 <dd className="text-right text-on-surface">{formatDateTime(change.updatedAt)}</dd>
               </div>
               <div className="flex justify-between gap-4">
@@ -564,50 +620,66 @@ export default function ChangeDetail() {
           <section className="rounded-3xl border border-border/40 bg-surface-container-low p-6">
             <div className="mb-4 flex items-center gap-2">
               <CalendarClock className="h-5 w-5 text-primary" />
-              <h2 className="font-black text-on-surface">Relaciones ITSM</h2>
+              <h2 className="font-black text-on-surface">Related Cases</h2>
             </div>
             <div className="space-y-4">
               {(relationsQuery.data?.length ?? 0) > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {relationsQuery.data?.map((relation) => {
-                    const outbound = relation.sourceEntityId === change.id;
+                    // Fixed 2026-09-06 (same class of bug as
+                    // RelationsWidget.tsx/tickets — see its comment): a raw
+                    // id match alone isn't enough, since ids are only
+                    // unique within one entity type. This page is always
+                    // an RFC, so entityKey is compared alongside the id.
+                    const outbound = relation.sourceEntityId === change.id && relation.sourceEntityKey === 'RFC';
                     const entityKey = outbound ? relation.targetEntityKey : relation.sourceEntityKey;
                     const humanId = outbound ? relation.targetHumanId : relation.sourceHumanId;
                     const label = outbound ? relation.relationLabel : relation.inverseLabel;
-                    const destination =
-                      entityKey === 'PRB'
-                        ? `/app/problems/${encodeURIComponent(humanId)}`
-                        : entityKey === 'INC'
-                          ? `/app/tickets/${encodeURIComponent(humanId)}`
-                          : '#';
+                    const destination = resolveRelationDestination(entityKey, humanId);
+
+                    if (!destination) {
+                      return (
+                        <div
+                          key={relation.id}
+                          data-testid={`relation-badge-${relation.id}`}
+                          className="rounded-xl border border-border/50 bg-surface-container/60 px-3 py-2 text-left cursor-default select-none"
+                        >
+                          <span className="block text-[9px] font-black uppercase text-on-surface-variant">{label}</span>
+                          <span className="font-mono text-xs font-semibold text-on-surface-variant">{humanId}</span>
+                        </div>
+                      );
+                    }
+
                     return (
-                      <button
+                      <Link
                         key={relation.id}
-                        onClick={() => navigate(destination)}
-                        className="rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-left"
+                        to={destination}
+                        data-testid={`relation-link-${relation.id}`}
+                        aria-label={`Open ${label} ${humanId}`}
+                        className="rounded-xl border border-primary/30 bg-primary/10 hover:bg-primary/20 hover:border-primary/50 transition-colors px-3 py-2 text-left cursor-pointer block"
                       >
                         <span className="block text-[9px] font-black uppercase text-on-surface-variant">{label}</span>
                         <span className="font-mono text-xs font-bold text-primary">{humanId}</span>
-                      </button>
+                      </Link>
                     );
                   })}
                 </div>
               )}
               <div>
                 <div className="mb-2 text-[10px] font-black uppercase tracking-wider text-on-surface-variant">
-                  Problema relacionado
+                  Related problem
                 </div>
                 <div className="text-sm text-on-surface">
                   {relationsQuery.data?.some((relation) =>
                     relation.sourceEntityKey === 'PRB' || relation.targetEntityKey === 'PRB'
                   )
-                    ? 'Gestionado mediante relaciones versionadas'
-                    : textData(change, 'relatedProblemId') || 'Sin PRB relacionado'}
+                    ? 'Managed through versioned relations'
+                    : textData(change, 'relatedProblemId') || 'No related PRB'}
                 </div>
               </div>
               <div>
                 <div className="mb-2 text-[10px] font-black uppercase tracking-wider text-on-surface-variant">
-                  Incidentes relacionados
+                  Related incidents
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {relatedIncidents.map((incident) => (
@@ -620,7 +692,7 @@ export default function ChangeDetail() {
                     </button>
                   ))}
                   {relatedIncidents.length === 0 && (
-                    <span className="text-sm text-on-surface">Sin INC relacionados</span>
+                    <span className="text-sm text-on-surface">No related INCs</span>
                   )}
                 </div>
               </div>
@@ -628,6 +700,37 @@ export default function ChangeDetail() {
           </section>
         </div>
       </div>
+      <ConfirmDialog
+        open={pendingTransition !== null}
+        onClose={() => setPendingTransition(null)}
+        onConfirm={(value) => {
+          if (pendingTransition) transitionMutation.mutate({ transition: pendingTransition, value });
+        }}
+        title={
+          pendingTransition?.key === 'reject'
+            ? 'Reject RFC'
+            : pendingTransition?.key === 'complete'
+              ? 'Complete implementation'
+              : 'Report implementation failure'
+        }
+        description={
+          pendingTransition?.key === 'reject'
+            ? 'A justification is required to reject this RFC.'
+            : 'Describe the result and validations performed.'
+        }
+        confirmLabel={pendingTransition?.label ?? 'Confirm'}
+        tone={pendingTransition?.key === 'reject' || pendingTransition?.key === 'fail' ? 'destructive' : 'default'}
+        loading={transitionMutation.isPending}
+        error={pendingTransition ? transitionMutation.error?.message : undefined}
+        reasonLabel={pendingTransition?.key === 'reject' ? 'Justification for rejection' : 'Implementation result'}
+        reasonPlaceholder={
+          pendingTransition?.key === 'reject'
+            ? 'Why is this RFC being rejected?'
+            : pendingTransition?.key === 'complete'
+              ? 'Describe the result and validations performed…'
+              : 'Describe the observed failure and current state…'
+        }
+      />
     </div>
   );
 }

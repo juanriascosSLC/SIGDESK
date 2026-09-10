@@ -53,13 +53,13 @@ export function SearchableEntityPicker({
         <input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder={`Buscar ${entityKey} por ID, título o servicio`}
+          placeholder={`Search ${entityKey} by ID, title, or service`}
           className="friendly-input w-full pl-9"
         />
       </div>
       <div className="mt-3 max-h-56 space-y-2 overflow-y-auto">
         {loading ? (
-          <p className="p-3 text-xs text-on-surface-variant">Cargando registros…</p>
+          <p className="p-3 text-xs text-on-surface-variant">Loading records…</p>
         ) : (
           available.map((entity) => (
             <button
@@ -75,7 +75,7 @@ export function SearchableEntityPicker({
                   {entity.humanId}
                 </span>
                 <span className="block truncate text-xs text-on-surface">
-                  {String(entity.data.title || `${entityKey} sin título`)}
+                  {String(entity.data.title || `Untitled ${entityKey}`)}
                 </span>
               </span>
               <span className="shrink-0 rounded-full border border-border/40 px-2 py-0.5 text-[9px] font-black uppercase text-on-surface-variant">
@@ -86,7 +86,7 @@ export function SearchableEntityPicker({
         )}
         {!loading && available.length === 0 && (
           <p className="rounded-xl border border-dashed border-border/40 p-4 text-center text-xs text-on-surface-variant">
-            No hay registros disponibles.
+            No records available.
           </p>
         )}
       </div>

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { Node, NodeProps } from '@xyflow/react';
 import { BellRing, Braces, Clock3, GitBranch, ListRestart, ShieldCheck, Sparkles, Zap } from 'lucide-react';
+import { priorityLabels } from './visual-model';
 
 export type WorkflowNodeData = {
   catalogKey?: string;
@@ -83,10 +84,10 @@ function NodeFrame({ data, icon, kind, children }: { data: WorkflowNodeData; ico
           <div className="flex items-center justify-between gap-2">
             <span className="text-[9px] font-black uppercase tracking-[0.18em] text-on-surface-variant">{kind}</span>
             <span className={`rounded-full border px-2 py-0.5 text-[8px] font-black uppercase ${planned ? 'border-slate-500/40 bg-slate-500/10 text-slate-300' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}>
-              {planned ? 'Próximo' : 'Operativo'}
+              {planned ? 'Planned' : 'Operational'}
             </span>
           </div>
-          <p className="mt-1 truncate text-sm font-black text-on-surface">{String(data.label || data.title || 'Sin nombre')}</p>
+          <p className="mt-1 truncate text-sm font-black text-on-surface">{String(data.label || data.title || 'Untitled')}</p>
         </div>
       </div>
       {children || <p className="rounded-xl border border-border/30 bg-on-surface/5 p-2.5 text-[11px] leading-relaxed text-on-surface-variant">{String(data.description || '')}</p>}
@@ -104,17 +105,18 @@ function handleClass(data: WorkflowNodeData) {
 }
 
 export function TriggerNode({ data }: WorkflowNodeProps) {
-  return <div className="relative"><NodeFrame data={data} kind="Disparador" icon={<Zap className="h-4 w-4" />} /><Handle type="source" position={Position.Right} className={handleClass(data)} /></div>;
+  return <div className="relative"><NodeFrame data={data} kind="Trigger" icon={<Zap className="h-4 w-4" />} /><Handle type="source" position={Position.Right} className={handleClass(data)} /></div>;
 }
 
 export function ConditionNode({ data }: WorkflowNodeProps) {
+  const priorityValue = String(data.priority || 'critica');
   const summary = data.catalogKey === 'condition.priority'
-    ? (data.conditionMode === 'always' ? 'Siempre' : `Prioridad = ${String(data.priority || 'critica')}`)
-    : String(data.description || 'Configura la condición');
+    ? (data.conditionMode === 'always' ? 'Always' : `Priority = ${priorityLabels[priorityValue] ?? priorityValue}`)
+    : String(data.description || 'Configure condition');
   return (
     <div className="relative">
       <Handle type="target" position={Position.Left} className={handleClass(data)} />
-      <NodeFrame data={data} kind="Condición" icon={<GitBranch className="h-4 w-4" />}>
+      <NodeFrame data={data} kind="Condition" icon={<GitBranch className="h-4 w-4" />}>
         <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-2.5 font-mono text-[11px] text-amber-200">{summary}</p>
       </NodeFrame>
       {/* Dos salidas: la condición del plan tiene rama verdadera y rama falsa.
@@ -123,7 +125,7 @@ export function ConditionNode({ data }: WorkflowNodeProps) {
           sacarlo—. Una conexión guardada sin handle sigue siendo la rama
           verdadera, para que los diagramas anteriores signifiquen lo mismo. */}
       <Handle type="source" position={Position.Right} id="yes" style={{ top: '38%' }} className="!h-3 !w-3 !border-2 !border-surface-container-low !bg-emerald-400" />
-      <span className="absolute -right-9 top-[38%] -translate-y-1/2 text-[8px] font-black uppercase text-emerald-300">Sí</span>
+      <span className="absolute -right-9 top-[38%] -translate-y-1/2 text-[8px] font-black uppercase text-emerald-300">Yes</span>
       <Handle type="source" position={Position.Right} id="no" style={{ top: '68%' }} className="!h-3 !w-3 !border-2 !border-surface-container-low !bg-red-400" />
       <span className="absolute -right-9 top-[68%] -translate-y-1/2 text-[8px] font-black uppercase text-red-300">No</span>
     </div>
@@ -135,7 +137,7 @@ export function DelayNode({ data }: WorkflowNodeProps) {
     <div className="relative">
       <Handle type="target" position={Position.Left} className={handleClass(data)} />
       <NodeFrame data={data} kind="Control" icon={<Clock3 className="h-4 w-4" />}>
-        <p className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-2.5 font-mono text-[11px] text-blue-200">Esperar {String(data.delayValue || '0')} {String(data.delayUnit || 'minutos')}</p>
+        <p className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-2.5 font-mono text-[11px] text-blue-200">Wait {String(data.delayValue || '0')} {String(data.delayUnit || 'minutes')}</p>
       </NodeFrame>
       <Handle type="source" position={Position.Right} className={handleClass(data)} />
     </div>
@@ -149,24 +151,24 @@ export function ActionNode({ data }: WorkflowNodeProps) {
   const esAsignacion = data.catalogKey === 'action.assign'
     || data.catalogKey === 'action.assign_user'
     || data.catalogKey === 'action.assign_team';
-  const equipo = String(data.teamName || data.teamId || 'sin seleccionar');
+  const equipo = String(data.teamName || data.teamId || 'unselected');
   const assignmentSummary = !esAsignacion
     ? undefined
     : data.assignmentMode === 'user'
-      ? `Persona ${String(data.assigneeName || data.assigneeUserId || 'sin seleccionar')} · Equipo ${equipo}`
-      : `Equipo ${equipo}`;
+      ? `Person ${String(data.assigneeName || data.assigneeUserId || 'unselected')} · Team ${equipo}`
+      : `Team ${equipo}`;
   // El bloque de estado resume la TRANSICIÓN, no el estado: es lo que se
   // publica, y dos transiciones pueden llevar al mismo estado.
   const statusSummary = data.catalogKey !== 'action.change_status'
     ? undefined
     : data.transitionKey
       ? `${String(data.transitionFrom ?? '?')} → ${String(data.transitionTo ?? '?')} · ${String(data.transitionKey)}`
-      : 'Transición sin seleccionar';
+      : 'Transition unselected';
   const resumen = assignmentSummary ?? statusSummary;
   return (
     <div className="relative">
       <Handle type="target" position={Position.Left} className={handleClass(data)} />
-      <NodeFrame data={data} kind="Acción" icon={data.catalogKey === 'action.notify_stakeholders' ? <BellRing className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}>
+      <NodeFrame data={data} kind="Action" icon={data.catalogKey === 'action.notify_stakeholders' ? <BellRing className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}>
         {resumen
           ? <p className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-2.5 text-[11px] leading-relaxed text-emerald-200">{resumen}</p>
           : <p className="rounded-xl border border-border/30 bg-on-surface/5 p-2.5 text-[11px] leading-relaxed text-on-surface-variant">{String(data.description || '')}</p>}
@@ -177,13 +179,13 @@ export function ActionNode({ data }: WorkflowNodeProps) {
 }
 
 export function ApprovalNode({ data }: WorkflowNodeProps) {
-  return <div className="relative"><Handle type="target" position={Position.Left} className={handleClass(data)} /><NodeFrame data={data} kind="Aprobación" icon={<ShieldCheck className="h-4 w-4" />} /><Handle type="source" position={Position.Right} className={handleClass(data)} /></div>;
+  return <div className="relative"><Handle type="target" position={Position.Left} className={handleClass(data)} /><NodeFrame data={data} kind="Approval" icon={<ShieldCheck className="h-4 w-4" />} /><Handle type="source" position={Position.Right} className={handleClass(data)} /></div>;
 }
 
 export function ParserNode({ data }: WorkflowNodeProps) {
-  return <div className="relative"><Handle type="target" position={Position.Left} className={handleClass(data)} /><NodeFrame data={data} kind="Transformación" icon={<Braces className="h-4 w-4" />} /><Handle type="source" position={Position.Right} className={handleClass(data)} /></div>;
+  return <div className="relative"><Handle type="target" position={Position.Left} className={handleClass(data)} /><NodeFrame data={data} kind="Transformation" icon={<Braces className="h-4 w-4" />} /><Handle type="source" position={Position.Right} className={handleClass(data)} /></div>;
 }
 
 export function ForEachNode({ data }: WorkflowNodeProps) {
-  return <div className="relative"><Handle type="target" position={Position.Left} className={handleClass(data)} /><NodeFrame data={data} kind="Iteración" icon={<ListRestart className="h-4 w-4" />} /><Handle type="source" position={Position.Right} className={handleClass(data)} /></div>;
+  return <div className="relative"><Handle type="target" position={Position.Left} className={handleClass(data)} /><NodeFrame data={data} kind="Iteration" icon={<ListRestart className="h-4 w-4" />} /><Handle type="source" position={Position.Right} className={handleClass(data)} /></div>;
 }

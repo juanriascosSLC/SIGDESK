@@ -1,9 +1,11 @@
 import { apiRequest, API_BASE_URL, authHeaders } from '@/lib/apiClient';
 import { getResolvedDefinition, type LifecycleTransitionDefinition } from '@/features/catalog/api';
+import { USER_UNAVAILABLE_LABEL } from './identity-labels';
 import type {
   CreateTicketInput,
   Ticket,
   TicketActivityEntry,
+  TicketAssignment,
   TicketAttachment,
   TicketComment,
   TicketFilters,
@@ -67,8 +69,38 @@ interface TicketEntityRecord {
   updatedAt?: string;
   recursoId?: string;
   creadorId?: string;
+  /**
+   * Trusted display name for `creadorId`, resolved server-side (JWT
+   * snapshot at creation, or the local identity projection for a
+   * historical ticket) — see tickets_service's `entityRecordDTO`. Empty
+   * when it could not be resolved; `toTicketFromEntityRecord` below is
+   * where that turns into the safe "Usuario no disponible" fallback, never
+   * a raw id.
+   */
+  creadorNombre?: string;
   agenteItId?: string;
   primerResponsableId?: string;
+  /**
+   * Trusted display name for the LEGACY responsible
+   * (primerResponsableId/agenteItId), resolved server-side by chaining
+   * AgenteIT.ID -> usuario_id -> nombre. Only meaningful when `assignment`
+   * is absent — an organizational assignment is the canonical one and
+   * already carries its own resolved name.
+   */
+  primerResponsableNombre?: string;
+  assignment?: {
+    departmentId: string;
+    departmentName?: string;
+    teamId: string;
+    teamName?: string;
+    assigneeUserId?: string;
+    assigneeUserName?: string;
+    source: string;
+    assignedByType: string;
+    assignedById: string;
+    assignedByUserId?: string;
+    assignedAt: string;
+  };
   prioridad?: string;
   mergedCount?: number;
   mergedIntoId?: string | null;
@@ -76,6 +108,58 @@ interface TicketEntityRecord {
     siteAssetId?: string;
     links: Array<{ assetId: string; role?: string; snapshot: Record<string, unknown> }>;
   };
+}
+
+/**
+ * Resolves the assignee half of `Ticket`'s identity fields from
+ * `entityRecordDTO`, with the precedence the backend itself documents:
+ *
+ * 1. Organizational assignment WITH a person (`assignment.assigneeUserId`)
+ *    — the canonical case, name already resolved server-side.
+ * 2. Organizational assignment with a TEAM ONLY (no assigneeUserId) — a
+ *    real destination with nobody individually assigned yet. Must never
+ *    read as "Sin asignar".
+ * 3. No organizational assignment: the LEGACY first-responsible
+ *    (`primerResponsableId`/`agenteItId`), resolved server-side via
+ *    `primerResponsableNombre` — an unescalated historical ticket.
+ * 4. Nothing at all: genuinely unassigned.
+ *
+ * `assigneeId` only ever holds a PERSON id (for filters/commands/auditing);
+ * `assigneeDisplayName`/`assigneeTeamName` are always either a safe,
+ * ready-to-render string or `null` — never a raw id.
+ */
+function resolveAssigneeIdentity(record: TicketEntityRecord): Pick<
+  Ticket,
+  'assigneeId' | 'assigneeDisplayName' | 'assigneeTeamName' | 'assignment'
+> {
+  const assignment: TicketAssignment | undefined = record.assignment;
+  const orgAssigneeId = assignment?.assigneeUserId?.trim();
+  if (orgAssigneeId) {
+    return {
+      assigneeId: orgAssigneeId,
+      assigneeDisplayName: assignment?.assigneeUserName || USER_UNAVAILABLE_LABEL,
+      assigneeTeamName: null,
+      assignment,
+    };
+  }
+  if (assignment?.teamId) {
+    return {
+      assigneeId: null,
+      assigneeDisplayName: null,
+      assigneeTeamName: assignment.teamName || USER_UNAVAILABLE_LABEL,
+      assignment,
+    };
+  }
+  const legacyId = record.primerResponsableId || record.agenteItId;
+  if (legacyId) {
+    return {
+      assigneeId: legacyId,
+      assigneeDisplayName: record.primerResponsableNombre || USER_UNAVAILABLE_LABEL,
+      assigneeTeamName: null,
+      assignment,
+    };
+  }
+  return { assigneeId: null, assigneeDisplayName: null, assigneeTeamName: null, assignment };
 }
 
 interface TicketEntityListResponse {
@@ -143,7 +227,12 @@ function priorityFromApi(value: string): string {
   const labels: Record<string, string> = { baja: 'Low', media: 'Medium', alta: 'High', critica: 'Critical' };
   return labels[labelToApi(value)] ?? labelFromApi(value);
 }
-function priorityToApi(value: string): string {
+// Exported: CatalogForm's create-time submission needs this same
+// English-label-to-Spanish-wire-value mapping to send a catalog "priority"
+// field's selection into crearEntidadRequest.Prioridad ("prioridad" on the
+// wire) — the same native ticket field this converts for every other
+// priority-touching call in this file.
+export function priorityToApi(value: string): string {
   const values: Record<string, string> = { low: 'baja', medium: 'media', high: 'alta', critical: 'critica' };
   const normalized = labelToApi(value);
   return values[normalized] ?? normalized;
@@ -158,8 +247,14 @@ function toTicket(ticket: ApiTicket): Ticket {
     status: statusFromApi(ticket.status),
     priority: priorityFromApi(ticket.priority),
     category: ticket.category,
-    requester: ticket.requesterName,
-    assignee: ticket.assigneeName,
+    // This legacy shape carries only already-resolved names, no ids — the
+    // deprecated `createTicket()` below is this DTO's sole caller, and it
+    // has no live UI caller of its own (see that function's doc comment).
+    requesterId: '',
+    requesterDisplayName: ticket.requesterName || USER_UNAVAILABLE_LABEL,
+    assigneeId: null,
+    assigneeDisplayName: ticket.assigneeName,
+    assigneeTeamName: null,
     createdAt: ticket.createdAt,
     assetId: ticket.assetId || undefined,
     site: ticket.site || undefined,
@@ -207,18 +302,30 @@ function dataString(
  *   created through the Catalog Builder the backend itself defaults
  *   categoriaID to the entityKey (see crearEntidadRequest), so this is that
  *   same value rather than an invention.
- * - `requester` <- `creadorId`: a RAW user id, not a display name. Resolving
- *   it needs a lookup against organization_service that tickets_service does
- *   not have; showing the id is the honest interim, and the pool plan tracks
- *   the resolution as separate work.
- * - `assignee` <- `agenteItId`: also a raw id, and specifically the IT agent
- *   from the *asignación de IT* (escalation). It is NOT the *asignación de
- *   ticket* first responsible (`Asignacion.PrimerResponsableID`), which the
- *   DTO does not expose — glossary.md keeps those two processes distinct, so
- *   an unescalated ticket reads as "Sin asignar" even if it has a first
- *   responsible.
- * - `assetId` <- `recursoId`: the Recurso IS the asset (camera/device) in
- *   ADR-0001 terms, so this column shows real data.
+ * - `requesterId` <- `creadorId` (the canonical id, for commands/auditing
+ *   only); `requesterDisplayName` <- `creadorNombre`, resolved server-side
+ *   (snapshot at creation from the JWT, or the local identity projection for
+ *   a historical ticket) and never a raw id — a safe "Usuario no disponible"
+ *   fallback applies here when the backend couldn't resolve one either
+ *   (Ticket identity presentation; see `resolveAssigneeIdentity` for the
+ *   symmetric assignee logic).
+ * - `assigneeId`/`assigneeDisplayName`/`assigneeTeamName` <- `assignment`
+ *   (the canonical organizational assignment, WITH a resolved name) when
+ *   present, falling back to the LEGACY first responsible
+ *   (`primerResponsableId`/`agenteItId`, resolved via
+ *   `primerResponsableNombre`) only when there is no organizational
+ *   assignment at all. A team-only organizational assignment (no
+ *   `assigneeUserId`) surfaces as `assigneeTeamName`, never as unassigned.
+ * - `assetId` <- `recursoId`: despite the field name, this is the ticket's
+ *   mandatory Recurso reference (ADR-0001), NOT an Asset/"Ítem de
+ *   inventario" — those are two distinct aggregates with different owners
+ *   and lifecycles (see `Docs/glossary.md`: Recurso = SIG-Desk's own
+ *   record, adquisición→en uso→mantenimiento→baja; Asset = a read
+ *   projection of a SIGInventory-owned config item, active/inactive/
+ *   unavailable/retired). `assetId` is the wire/type name inherited from
+ *   before that distinction was written down — it still resolves against
+ *   `resource_service`'s Recurso data, never the Asset projection. Do not
+ *   point this field at `/assets/*` or asset-typed data.
  * - `title`/`description` <- the dynamic `data` bag, with a fallback: they are
  *   catalog fields, so a Definition without them is legitimate. `title` never
  *   becomes undefined, since search and the table title both index it.
@@ -232,7 +339,7 @@ function toTicketFromEntityRecord(record: TicketEntityRecord): Ticket {
     id: record.id,
     humanId: record.humanId,
     entityId: record.id,
-    title: dataString(data, ['title', 'titulo', 'asunto']) ?? '(sin título)',
+    title: dataString(data, ['title', 'titulo', 'asunto']) ?? '(Untitled)',
     description: dataString(data, ['description', 'descripcion']) ?? '',
     // Both conversions are guarded: a single throw inside this mapper would
     // take down the whole list with "Could not load tickets", so a missing
@@ -240,8 +347,9 @@ function toTicketFromEntityRecord(record: TicketEntityRecord): Ticket {
     status: record.state ? statusFromApi(record.state) : '',
     priority: record.prioridad ? priorityFromApi(record.prioridad) : '',
     category: record.entityKey,
-    requester: record.creadorId ?? '',
-    assignee: record.primerResponsableId || record.agenteItId || null,
+    requesterId: record.creadorId ?? '',
+    requesterDisplayName: record.creadorNombre || USER_UNAVAILABLE_LABEL,
+    ...resolveAssigneeIdentity(record),
     createdAt: record.createdAt,
     assetId: record.recursoId || undefined,
     site: undefined,
@@ -252,10 +360,13 @@ function toTicketFromEntityRecord(record: TicketEntityRecord): Ticket {
 }
 
 /**
- * The backend applies status, priority, assignee, unassigned, q and
- * mergedInto before cursor pagination. This second pass is intentionally
+ * The backend applies status, priority, assignee, unassigned, q, mergedInto
+ * and createdBy before cursor pagination. This second pass is intentionally
  * defensive and also handles presentation-only category/site filters; it
- * must never be treated as the source of global counts.
+ * must never be treated as the source of global counts. createdByMe has no
+ * client-side re-check here (unlike the others) — the backend resolves "me"
+ * from the verified session itself, and there is deliberately no
+ * client-visible id to compare against.
  */
 function applyClientFilters(items: Ticket[], filters: TicketFilters): Ticket[] {
   const q = filters.q?.trim().toLowerCase();
@@ -264,8 +375,8 @@ function applyClientFilters(items: Ticket[], filters: TicketFilters): Ticket[] {
     if (filters.priority && ticket.priority !== filters.priority) return false;
     if (filters.category && ticket.category !== filters.category) return false;
     if (filters.site && ticket.site !== filters.site) return false;
-    if (filters.assignee && ticket.assignee !== filters.assignee) return false;
-    if (filters.unassigned && ticket.assignee) return false;
+    if (filters.assignee && ticket.assigneeId !== filters.assignee) return false;
+    if (filters.unassigned && ticket.assigneeId) return false;
     if (filters.mergedInto && ticket.mergedIntoId !== filters.mergedInto) return false;
     if (q) {
       const haystack = [ticket.humanId, ticket.id, ticket.title, ticket.description]
@@ -278,7 +389,15 @@ function applyClientFilters(items: Ticket[], filters: TicketFilters): Ticket[] {
   });
 }
 
-export async function listTickets(filters: TicketFilters = {}): Promise<TicketPage> {
+/**
+ * `signal` is TanStack Query's per-query AbortSignal (passed through from
+ * `useTickets`'s `queryFn`), not a caller-owned one — forwarding it into
+ * `apiRequest` (which already accepts arbitrary `RequestInit`, `signal`
+ * included) is what makes an in-flight list request actually abort when
+ * the component unmounts or the query is superseded, instead of running to
+ * completion and having its result silently discarded.
+ */
+export async function listTickets(filters: TicketFilters = {}, signal?: AbortSignal): Promise<TicketPage> {
   const params = new URLSearchParams();
   if (filters.cursor) params.set('cursor', filters.cursor);
   if (filters.limit) params.set('limit', String(filters.limit));
@@ -286,6 +405,7 @@ export async function listTickets(filters: TicketFilters = {}): Promise<TicketPa
   if (filters.priority) params.set('priority', priorityToApi(filters.priority));
   if (filters.assignee) params.set('assignee', filters.assignee);
   if (filters.unassigned) params.set('unassigned', 'true');
+  if (filters.createdByMe) params.set('createdBy', 'me');
   if (filters.q?.trim()) params.set('q', filters.q.trim());
   if (filters.mergedInto) params.set('mergedInto', filters.mergedInto);
   if (filters.assetId) params.set('assetId', filters.assetId);
@@ -293,6 +413,7 @@ export async function listTickets(filters: TicketFilters = {}): Promise<TicketPa
 
   const response = await apiRequest<TicketEntityListResponse>(
     `/entities/${TICKET_ENTITY_KEY}${query ? `?${query}` : ''}`,
+    { signal },
   );
   const items = (response.items ?? []).map(toTicketFromEntityRecord);
   return {
@@ -368,6 +489,19 @@ export async function updateTicketStatus(
   });
 }
 
+/**
+ * Legacy IT-agent assignment path. Still used by a couple of call sites that
+ * haven't moved to the organizational picker yet — new UI should call
+ * `assignTicketOrganizational` below instead, which is what the beta UX
+ * foundation pass introduced to close the debt this comment used to
+ * describe (a `window.prompt` collecting a raw agent id).
+ *
+ * «Take a ticket» stays two explicit commands, in this order (ADR-0040):
+ *   1. assign         POST /tickets/{id}/asignar
+ *   2. start work     POST /entities/INC/{id}/transitions/{key}
+ * so assigning never silently reopens or reassigns work, and starting work
+ * never silently assigns it.
+ */
 export async function assignTicket(
   id: string,
   assigneeName: string | null,
@@ -376,15 +510,82 @@ export async function assignTicket(
 ): Promise<Ticket> {
   void actorName;
   if (!assigneeName?.trim()) {
-    throw new Error('Debes seleccionar un agente para asignar el ticket.');
+    throw new Error('You must select an agent to assign the ticket.');
   }
-  const transition = transitionKey
-    ? { key: transitionKey } as LifecycleTransitionDefinition
-    : await transitionForTarget(id, 'In Progress');
-  return executeTicketTransition(id, transition.key, {
-    agenteItId: assigneeName.trim(),
-    tipoAsignacion: 'manual',
+
+  // 1) Asignar. Comando propio, con su propia ruta y su propia autorización.
+  await apiRequest<unknown>(`/tickets/${encodeURIComponent(id)}/asignar`, {
+    method: 'POST',
+    body: JSON.stringify({ agenteItId: assigneeName.trim(), tipo: 'manual' }),
   });
+
+  // 2) Iniciar trabajo. Se resuelve la transición DESPUÉS de asignar: el paso
+  // anterior pudo mover el estado, y buscarla antes daría una transición que ya
+  // no parte del estado actual.
+  const transition = transitionKey
+    ? ({ key: transitionKey } as LifecycleTransitionDefinition)
+    : await transitionForTargetOrNull(id, 'In Progress');
+  if (!transition) {
+    // El ticket ya está en progreso: el trabajo empezó y no hay nada que
+    // ejecutar. Se devuelve el estado real en vez de inventar un error.
+    return getTicket(id);
+  }
+  return executeTicketTransition(id, transition.key, {});
+}
+
+/**
+ * Real organizational assignment: department → team → assignee, resolved
+ * against Organization's directory (`AssignmentPicker`) instead of a
+ * `window.prompt` collecting a technical id. Same two-command composition as
+ * the legacy path above — assign, then separately try to start work — kept
+ * as two calls for the same reason: assigning must never silently move the
+ * ticket's state.
+ */
+export async function assignTicketOrganizational(
+  id: string,
+  target: { departmentId: string; teamId: string; assigneeId?: string },
+  options: { overwriteExisting?: boolean; startWork?: boolean } = {},
+): Promise<Ticket> {
+  await apiRequest<unknown>(`/entities/${TICKET_ENTITY_KEY}/${encodeURIComponent(id)}/assignment`, {
+    method: 'POST',
+    body: JSON.stringify({
+      department_id: target.departmentId,
+      team_id: target.teamId,
+      assignee_user_id: target.assigneeId || undefined,
+      overwrite_existing: options.overwriteExisting ?? false,
+    }),
+  });
+
+  if (options.startWork === false) {
+    return getTicket(id);
+  }
+
+  const transition = await transitionForTargetOrNull(id, 'In Progress');
+  if (!transition) {
+    // Already in progress, or the historical definition doesn't offer that
+    // transition from here — either way, assignment already succeeded.
+    return getTicket(id);
+  }
+  return executeTicketTransition(id, transition.key, {});
+}
+
+/**
+ * Como `transitionForTarget`, pero devuelve null en vez de lanzar cuando la
+ * definición no ofrece esa transición desde el estado actual.
+ *
+ * Lo necesita la composición de «tomar un ticket»: tras asignar, el ticket
+ * puede estar YA en progreso, y ahí «no hay transición» es el resultado
+ * correcto, no un fallo que haya que mostrarle a nadie.
+ */
+async function transitionForTargetOrNull(
+  id: string,
+  targetStatus: TicketStatus,
+): Promise<LifecycleTransitionDefinition | null> {
+  try {
+    return await transitionForTarget(id, targetStatus);
+  } catch {
+    return null;
+  }
 }
 
 interface ExecuteTransitionPayload {
@@ -396,13 +597,13 @@ interface ExecuteTransitionPayload {
 
 async function transitionForTarget(id: string, targetStatus: TicketStatus): Promise<LifecycleTransitionDefinition> {
   const ticket = await getTicket(id);
-  if (!ticket.entityId) throw new Error('El ticket no está vinculado a una definición de catálogo.');
+  if (!ticket.entityId) throw new Error('This ticket is not linked to a catalog definition.');
   const definition = await getResolvedDefinition(TICKET_ENTITY_KEY, ticket.entityId);
   const transition = definition.lifecycle.transitions.find(
     (candidate) => ticketStatesMatch(candidate.from, ticket.status) && ticketStatesMatch(candidate.to, targetStatus),
   );
   if (!transition) {
-    throw new Error(`La definición histórica no permite pasar de "${ticket.status}" a "${targetStatus}".`);
+    throw new Error(`The historical definition doesn't allow moving from "${ticket.status}" to "${targetStatus}".`);
   }
   return transition;
 }
@@ -497,7 +698,7 @@ export async function downloadAttachment(attachmentId: string, fileName: string)
     credentials: 'include',
     headers: authHeaders(),
   });
-  if (!response.ok) throw new Error(`No se pudo descargar el adjunto (${response.status}).`);
+  if (!response.ok) throw new Error(`Couldn't download the attachment (${response.status}).`);
   const url = URL.createObjectURL(await response.blob());
   const anchor = document.createElement('a');
   anchor.href = url;

@@ -52,22 +52,25 @@ const QUICK_FIELD_TEMPLATES: Array<{
   options?: Array<{ label: string; value: string }>;
   bindsTo?: FieldDefinition['bindsTo'];
 }> = [
-  { label: 'Texto corto', type: 'text', icon: Type, color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' },
+  { label: 'Short text', type: 'text', icon: Type, color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' },
   {
-    label: 'Lista desplegable',
+    label: 'Dropdown list',
     type: 'select',
     icon: ListFilter,
     color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
     options: [
-      { label: 'Opción 1', value: 'opcion1' },
-      { label: 'Opción 2', value: 'opcion2' },
+      { label: 'Option 1', value: 'opcion1' },
+      { label: 'Option 2', value: 'opcion2' },
     ],
   },
-  { label: 'Fecha', type: 'date', icon: Calendar, color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
-  { label: 'Número', type: 'number', icon: Hash, color: 'text-violet-400 bg-violet-500/10 border-violet-500/20' },
-  { label: 'Dispositivo del sitio', type: 'text', icon: Server, color: 'text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20', bindsTo: 'assetId' },
-  { label: 'Sí / No', type: 'boolean', icon: ToggleLeft, color: 'text-teal-400 bg-teal-500/10 border-teal-500/20' },
-  { label: 'Correo', type: 'email', icon: Mail, color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  { label: 'Date', type: 'date', icon: Calendar, color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
+  { label: 'Number', type: 'number', icon: Hash, color: 'text-violet-400 bg-violet-500/10 border-violet-500/20' },
+  // Renamed from "CMDB Device" on main: an inventory device is always
+  // scoped by a site, and `ensureSiteAssetBinding` below now materializes
+  // that prerequisite, so the label names the site-scoped thing it binds.
+  { label: 'Site Device', type: 'text', icon: Server, color: 'text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20', bindsTo: 'assetId' },
+  { label: 'Yes / No', type: 'boolean', icon: ToggleLeft, color: 'text-teal-400 bg-teal-500/10 border-teal-500/20' },
+  { label: 'Email', type: 'email', icon: Mail, color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
 ];
 
 export function FieldsEditor({
@@ -183,7 +186,7 @@ export function FieldsEditor({
     const firstDevice = current.fields.findIndex((field) => field.bindsTo === 'assetId');
     const siteField: FieldDefinition = {
       key: siteKey,
-      label: 'Sitio afectado',
+      label: 'Affected Site',
       type: 'text',
       required: false,
       bindsTo: 'siteAssetId',
@@ -308,7 +311,7 @@ export function FieldsEditor({
     optionsPreset?: Array<{ label: string; value: string }>,
     bindsToPreset?: FieldDefinition['bindsTo'],
   ) {
-    const label = labelPreset ?? `Nuevo campo ${specification.fields.length + 1}`;
+    const label = labelPreset ?? `New field ${specification.fields.length + 1}`;
     const key = uniqueFieldKey(
       specification.fields.map((field) => field.key),
       labelPreset ? technicalKey(labelPreset) : `field${specification.fields.length + 1}`,
@@ -383,8 +386,8 @@ export function FieldsEditor({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <SectionHeading
           icon={<ListChecks className="w-5 h-5" />}
-          title="Campos y presentación"
-          description="Define la estructura, tipos de datos y reglas que las personas deben completar."
+          title="Fields & Presentation"
+          description="Define the structure, data types, and rules users must complete."
         />
 
         <div className="flex items-center gap-2 relative">
@@ -393,11 +396,11 @@ export function FieldsEditor({
             onClick={() => addField('text')}
             className="primary-button shadow-md"
           >
-            <Plus className="w-4 h-4" /> Agregar campo
+            <Plus className="w-4 h-4" /> Add field
           </button>
           <button
             type="button"
-            title="Crear tipo específico"
+            title="Create specific type"
             onClick={() => setShowQuickMenu((prev) => !prev)}
             className="rounded-xl border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary p-2.5 transition-colors"
           >
@@ -407,7 +410,7 @@ export function FieldsEditor({
           {showQuickMenu && (
             <div className="absolute right-0 top-full mt-2 w-64 rounded-2xl border border-border/60 bg-surface-container shadow-2xl p-2 z-30 animate-in fade-in zoom-in-95 duration-150">
               <div className="px-3 py-2 text-[10px] font-black uppercase tracking-wider text-on-surface-variant flex items-center gap-1.5">
-                <Sparkles className="w-3 h-3 text-amber-400" /> Crear tipo predefinido
+                <Sparkles className="w-3 h-3 text-amber-400" /> Create preset type
               </div>
               <div className="space-y-1">
                 {QUICK_FIELD_TEMPLATES.map((tmpl) => {
@@ -441,7 +444,7 @@ export function FieldsEditor({
             </div>
             <div className="min-w-0">
               <span className="text-[10px] uppercase tracking-wider font-bold text-on-surface-variant block">Total</span>
-              <span className="text-xs font-bold text-on-surface truncate block">Campos</span>
+              <span className="text-xs font-bold text-on-surface truncate block">Fields</span>
             </div>
           </div>
 
@@ -450,8 +453,8 @@ export function FieldsEditor({
               {metrics.required}
             </div>
             <div className="min-w-0">
-              <span className="text-[10px] uppercase tracking-wider font-bold text-on-surface-variant block">Obligatorios</span>
-              <span className="text-xs font-bold text-on-surface truncate block">Requeridos</span>
+              <span className="text-[10px] uppercase tracking-wider font-bold text-on-surface-variant block">Required</span>
+              <span className="text-xs font-bold text-on-surface truncate block">Mandatory</span>
             </div>
           </div>
 
@@ -460,8 +463,8 @@ export function FieldsEditor({
               {metrics.withOptions}
             </div>
             <div className="min-w-0">
-              <span className="text-[10px] uppercase tracking-wider font-bold text-on-surface-variant block">Opciones</span>
-              <span className="text-xs font-bold text-on-surface truncate block">Listas / Select</span>
+              <span className="text-[10px] uppercase tracking-wider font-bold text-on-surface-variant block">Options</span>
+              <span className="text-xs font-bold text-on-surface truncate block">Lists / Select</span>
             </div>
           </div>
 
@@ -471,7 +474,7 @@ export function FieldsEditor({
             </div>
             <div className="min-w-0">
               <span className="text-[10px] uppercase tracking-wider font-bold text-on-surface-variant block">CMDB</span>
-              <span className="text-xs font-bold text-on-surface truncate block">Activos / Sitios</span>
+              <span className="text-xs font-bold text-on-surface truncate block">Assets / Sites</span>
             </div>
           </div>
 
@@ -480,8 +483,8 @@ export function FieldsEditor({
               {metrics.conditional}
             </div>
             <div className="min-w-0">
-              <span className="text-[10px] uppercase tracking-wider font-bold text-on-surface-variant block">Lógica</span>
-              <span className="text-xs font-bold text-on-surface truncate block">Condicionales</span>
+              <span className="text-[10px] uppercase tracking-wider font-bold text-on-surface-variant block">Logic</span>
+              <span className="text-xs font-bold text-on-surface truncate block">Conditionals</span>
             </div>
           </div>
         </div>
@@ -496,14 +499,14 @@ export function FieldsEditor({
               data-testid="catalog-field-search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={`Buscar entre ${specification.fields.length} campos (nombre, clave, tipo)…`}
-              aria-label="Buscar campos"
+              placeholder={`Search ${specification.fields.length} fields (name, key, type)…`}
+              aria-label="Search fields"
               className="friendly-input w-full !pl-10 pr-9 bg-surface-container-low"
             />
             {query && (
               <button
                 type="button"
-                aria-label="Limpiar la búsqueda"
+                aria-label="Clear search"
                 onClick={() => setQuery('')}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
               >
@@ -523,15 +526,15 @@ export function FieldsEditor({
                 }
               }}
               className="secondary-button !px-3 !py-2 text-xs"
-              title={expandedIndex !== null ? 'Colapsar tarjeta activa' : 'Expandir primer campo'}
+              title={expandedIndex !== null ? 'Collapse active card' : 'Expand first field'}
             >
               {expandedIndex !== null ? (
                 <>
-                  <ChevronsDownUp className="w-3.5 h-3.5" /> Colapsar
+                  <ChevronsDownUp className="w-3.5 h-3.5" /> Collapse
                 </>
               ) : (
                 <>
-                  <ChevronsUpDown className="w-3.5 h-3.5" /> Expandir
+                  <ChevronsUpDown className="w-3.5 h-3.5" /> Expand
                 </>
               )}
             </button>
@@ -550,7 +553,7 @@ export function FieldsEditor({
                   : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
               }`}
             >
-              Todos ({specification.fields.length})
+              All ({specification.fields.length})
             </button>
             <button
               type="button"
@@ -561,7 +564,7 @@ export function FieldsEditor({
                   : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
               }`}
             >
-              Texto
+              Text
             </button>
             <button
               type="button"
@@ -572,7 +575,7 @@ export function FieldsEditor({
                   : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
               }`}
             >
-              Opciones
+              Options
             </button>
             <button
               type="button"
@@ -583,7 +586,7 @@ export function FieldsEditor({
                   : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
               }`}
             >
-              Números y Fechas
+              Numbers & Dates
             </button>
             <button
               type="button"
@@ -594,7 +597,7 @@ export function FieldsEditor({
                   : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
               }`}
             >
-              Contacto
+              Contact
             </button>
             <button
               type="button"
@@ -616,16 +619,16 @@ export function FieldsEditor({
                   : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
               }`}
             >
-              Condicionales
+              Conditionals
             </button>
           </div>
 
           <span className="text-xs text-on-surface-variant">
             {trimmedQuery
-              ? `${visible.length} de ${specification.fields.length} · el orden no se puede cambiar mientras filtras`
+              ? `${visible.length} of ${specification.fields.length} · ordering disabled while filtering`
               : categoryFilter !== 'all'
-                ? `Mostrando ${visible.length} de ${specification.fields.length}`
-                : 'Arrastra por el asa para reordenar'}
+                ? `Showing ${visible.length} of ${specification.fields.length}`
+                : 'Drag by handle to reorder'}
           </span>
         </div>
       </div>
@@ -637,9 +640,9 @@ export function FieldsEditor({
             <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto mb-3">
               <Sparkles className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-bold text-on-surface">Formulario sin campos</h3>
+            <h3 className="text-base font-bold text-on-surface">Form has no fields</h3>
             <p className="text-xs text-on-surface-variant max-w-md mx-auto mt-1 mb-5">
-              Empieza agregando los campos que los solicitantes o técnicos deben completar para este ticket.
+              Start by adding the fields that requesters or agents must complete for this ticket.
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               {QUICK_FIELD_TEMPLATES.slice(0, 4).map((tmpl) => {
@@ -660,7 +663,7 @@ export function FieldsEditor({
         ) : visible.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border/60 p-8 text-center bg-surface-container/20">
             <p className="text-sm text-on-surface-variant">
-              Ningún campo coincide con «{query}».
+              No fields match "{query}".
             </p>
             <button
               type="button"
@@ -670,17 +673,17 @@ export function FieldsEditor({
               }}
               className="mt-3 text-xs font-semibold text-primary hover:underline"
             >
-              Restablecer filtros de búsqueda
+              Reset search filters
             </button>
           </div>
         ) : (
           visible.map(({ field, index }) => (
             <FieldCard
-              // La clave tÃ©cnica puede cambiar mientras se escribe la
-              // etiqueta. Usarla aquÃ­ desmonta la tarjeta en cada tecla,
+              // La clave técnica puede cambiar mientras se escribe la
+              // etiqueta. Usarla aquí desmonta la tarjeta en cada tecla,
               // haciendo que el input pierda el foco y que el navegador
-              // recalcule el scroll del contenedor. El Ã­ndice es estable
-              // durante la ediciÃ³n; las operaciones de reordenamiento siguen
+              // recalcule el scroll del contenedor. El índice es estable
+              // durante la edición; las operaciones de reordenamiento siguen
               // actualizando la lista desde el padre.
               key={index}
               field={field}

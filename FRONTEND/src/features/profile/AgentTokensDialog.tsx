@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckCircle2, Copy, KeyRound, LoaderCircle, RefreshCw, ShieldAlert, Trash2, X } from 'lucide-react';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { createAgentToken, listAgentTokens, revokeAgentToken, type AgentToken, type CreatedAgentToken } from './agentTokens.api';
 
 interface Props {
@@ -19,6 +20,7 @@ export default function AgentTokensDialog({ onClose }: Props) {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [pendingRevoke, setPendingRevoke] = useState<AgentToken | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -63,8 +65,12 @@ export default function AgentTokensDialog({ onClose }: Props) {
     window.setTimeout(() => setCopied(false), 2000);
   };
 
+  /** Confirmación de revocación. Reemplaza el `window.confirm(...)` que main
+   *  shippeó acá: beta-ux-honesty.spec.ts prohíbe los diálogos nativos, y
+   *  `ConfirmDialog` es el único modal real del proyecto (Dialog.tsx). Sin
+   *  motivo — revocar es un sí/no, no necesita justificación escrita. */
   const revoke = async (token: AgentToken) => {
-    if (!window.confirm(`¿Revocar el token “${token.nombre}”? El agente perderá acceso de inmediato.`)) return;
+    setPendingRevoke(null);
     setError(null);
     try {
       await revokeAgentToken(token.id);
@@ -103,12 +109,22 @@ export default function AgentTokensDialog({ onClose }: Props) {
 
           <section className="overflow-hidden rounded-2xl border border-border/40">
             <div className="flex items-center justify-between border-b border-border/40 bg-surface-container-low px-5 py-3"><h3 className="font-bold text-on-surface">Tokens activos</h3><button onClick={() => void load()} className="rounded-lg p-2 text-on-surface-variant hover:bg-on-surface/5" aria-label="Actualizar">{loading ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}</button></div>
-            {loading ? <p className="p-6 text-sm text-on-surface-variant">Cargando…</p> : tokens.length === 0 ? <p className="p-6 text-sm text-on-surface-variant">No tienes tokens activos.</p> : <div className="divide-y divide-border/20">{tokens.map((token) => <div key={token.id} className="flex items-center justify-between gap-4 p-4"><div className="min-w-0"><p className="truncate font-bold text-on-surface">{token.nombre}</p><p className="mt-1 text-xs text-on-surface-variant">{token.scopes.join(', ')} · Creado {formatDate(token.creado_en)} · Último uso {formatDate(token.ultimo_uso_en)}</p></div><button onClick={() => void revoke(token)} className="rounded-lg p-2 text-on-surface-variant hover:bg-red-500/10 hover:text-red-400" aria-label={`Revocar ${token.nombre}`}><Trash2 className="w-4 h-4" /></button></div>)}</div>}
+            {loading ? <p className="p-6 text-sm text-on-surface-variant">Cargando…</p> : tokens.length === 0 ? <p className="p-6 text-sm text-on-surface-variant">No tienes tokens activos.</p> : <div className="divide-y divide-border/20">{tokens.map((token) => <div key={token.id} className="flex items-center justify-between gap-4 p-4"><div className="min-w-0"><p className="truncate font-bold text-on-surface">{token.nombre}</p><p className="mt-1 text-xs text-on-surface-variant">{token.scopes.join(', ')} · Creado {formatDate(token.creado_en)} · Último uso {formatDate(token.ultimo_uso_en)}</p></div><button onClick={() => setPendingRevoke(token)} className="rounded-lg p-2 text-on-surface-variant hover:bg-red-500/10 hover:text-red-400" aria-label={`Revocar ${token.nombre}`}><Trash2 className="w-4 h-4" /></button></div>)}</div>}
           </section>
 
           <div className="flex gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 text-sm text-on-surface-variant"><ShieldAlert className="mt-0.5 w-5 h-5 shrink-0 text-amber-400" /><p>Un token no expira automáticamente. Revócalo de inmediato si lo pierdes, lo compartes por error o dejas de usar ese agente.</p></div>
         </div>
       </div>
+      <ConfirmDialog
+        open={pendingRevoke !== null}
+        onClose={() => setPendingRevoke(null)}
+        onConfirm={() => { if (pendingRevoke) void revoke(pendingRevoke); }}
+        title="Revocar token"
+        description={pendingRevoke ? `El agente “${pendingRevoke.nombre}” perderá acceso de inmediato. No se puede deshacer.` : undefined}
+        confirmLabel="Revocar"
+        cancelLabel="Cancelar"
+        tone="destructive"
+      />
     </div>,
     document.body,
   );

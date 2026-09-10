@@ -2,13 +2,14 @@ import { bindingList } from '@/features/catalog/metamodel';
 import type { PagePlacement } from '@/features/catalog/metamodel';
 import type { TicketPageContext } from './context';
 import { ticketFieldLabels } from './ticket-field-labels';
+import { assigneeText } from '../identity-labels';
 
 function formatCatalogValue(
   value: unknown,
   field?: { type: string; options?: Array<{ value: string; label: string }> },
 ): string {
   if (value === null || value === undefined || value === '') return '—';
-  if (field?.type === 'boolean') return value ? 'Sí' : 'No';
+  if (field?.type === 'boolean') return value ? 'Yes' : 'No';
   if (field?.type === 'date') {
     const date = new Date(String(value));
     return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
@@ -57,13 +58,20 @@ export function TicketFieldPlacementView({
     const { ticket } = context;
     switch (placement.fieldKey) {
       case 'humanId':
-        value = ticket.id;
+        // Bug found 2026-09-09: this showed ticket.id (the internal BIGINT
+        // PK) under the "Ticket number" placement label. ticket.humanId is
+        // the actual Numero visible (e.g. "INC-000123") -- see the
+        // id-vs-humanId distinction documented in features/tickets/api.ts.
+        // `humanId` is optional on the Ticket type, and the internal id is
+        // NOT an acceptable fallback (that is the bug above), so an absent
+        // Numero visible falls through to this view's own "no value" dash.
+        value = ticket.humanId ?? '—';
         break;
       case 'requester':
-        value = ticket.requester;
+        value = ticket.requesterDisplayName;
         break;
       case 'assignee':
-        value = ticket.assignee || 'Sin asignar';
+        value = assigneeText(ticket);
         break;
       case 'createdAt':
         value = new Date(ticket.createdAt).toLocaleString();
@@ -72,7 +80,7 @@ export function TicketFieldPlacementView({
         value = ticket.status;
         break;
       case 'mergedCount':
-        value = ticket.mergedCount ? `${ticket.mergedCount} tickets` : 'Ninguno';
+        value = ticket.mergedCount ? `${ticket.mergedCount} tickets` : 'None';
         break;
       default:
         value = '—';
