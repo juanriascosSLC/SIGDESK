@@ -157,7 +157,7 @@ export default function ChangeBoard() {
             </div>
             <h1 className="text-3xl font-black text-on-surface">Change Management</h1>
             <p className="mt-2 max-w-3xl text-sm text-on-surface-variant">
-              RFC requests versioned by Catalog Builder, with calculated risk,
+              RFC requests versioned by Entity Builder, with calculated risk,
               CAB approval and controlled execution.
             </p>
           </div>

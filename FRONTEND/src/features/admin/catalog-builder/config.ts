@@ -174,7 +174,7 @@ export const sectionItems: Array<{
   { id: 'fields', label: 'Form Fields', description: 'Data that must be completed', icon: ListChecks },
   { id: 'detail', label: 'Visual Design', description: 'Where each element appears', icon: LayoutDashboard },
   { id: 'workflow', label: 'States & Transitions', description: 'Record lifecycle', icon: GitBranch },
-  { id: 'relations', label: 'ITSM Relations', description: 'INC, PRB, and RFC links', icon: GitBranch },
+  { id: 'relations', label: 'Related Cases', description: 'INC, PRB, and RFC links', icon: GitBranch },
   { id: 'resources', label: 'Connected Modules', description: 'IAM, SLA, and automations', icon: Link2 },
   { id: 'review', label: 'Validate & Publish', description: 'Review before activating', icon: CheckCircle2 },
   { id: 'advanced', label: 'Advanced Settings', description: 'JSON for expert users', icon: Code2 },

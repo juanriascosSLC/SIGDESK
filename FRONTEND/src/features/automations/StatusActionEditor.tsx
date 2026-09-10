@@ -9,12 +9,12 @@ import type { WorkflowNodeData } from './CustomNodes';
  *
  * # Por qué guarda una transition_key y no un estado
  *
- * El estado destino lo decide la definición de Catalog Builder con la que nació
+ * El estado destino lo decide la definición de Entity Builder con la que nació
  * CADA ticket. Guardar «en_progreso» obligaría al runtime a inventar cómo se
  * llega ahí, y la misma pareja origen→destino puede no existir en la versión
  * histórica de un ticket. La clave nombra una transición concreta y estable.
  *
- * # Por qué las transiciones se leen de Catalog Builder
+ * # Por qué las transiciones se leen de Entity Builder
  *
  * Porque es su dueño. Una lista propia en Automations se desincroniza en el
  * primer cambio de lifecycle y el diseñador acabaría ofreciendo transiciones
@@ -43,7 +43,7 @@ export default function StatusActionEditor({
     [disponibles, elegida],
   );
 
-  // Una referencia que Catalog Builder ya no publica NO se borra: se MARCA.
+  // Una referencia que Entity Builder ya no publica NO se borra: se MARCA.
   // Limpiarla sola cambiaría lo que hace el flujo sin que nadie lo decidiera, y
   // la persona vería un nodo en blanco sin saber que antes pedía algo.
   useEffect(() => {
@@ -84,7 +84,7 @@ export default function StatusActionEditor({
         >
           <option value="">Select a transition…</option>
           {/* La clave configurada SIEMPRE aparece, aunque no esté entre las
-              disponibles. Sin esta opción, un fallo al leer Catalog Builder —o
+              disponibles. Sin esta opción, un fallo al leer Entity Builder —o
               una transición retirada— dejaba el selector en blanco y parecía
               que el bloque no tenía nada configurado, justo cuando lo que hace
               falta es ver qué pide para poder corregirlo. */}
@@ -112,7 +112,7 @@ export default function StatusActionEditor({
 
       {elegida && !encontrada && !transiciones.isPending && !transiciones.isError && (
         <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-[11px] leading-relaxed text-red-200" data-testid="status-transition-missing">
-          Catalog Builder no longer publishes “{elegida}”. Configuration is preserved as-is, but cannot be
+          Entity Builder no longer publishes “{elegida}”. Configuration is preserved as-is, but cannot be
           published until an active transition is selected.
         </p>
       )}

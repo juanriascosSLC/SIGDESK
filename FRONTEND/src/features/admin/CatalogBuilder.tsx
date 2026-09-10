@@ -539,7 +539,7 @@ export default function CatalogBuilder() {
       >
         <div className="text-center">
           <LoaderCircle className="mx-auto h-9 w-9 animate-spin text-primary" />
-          <h1 className="mt-4 text-xl font-black text-on-surface">Preparing Catalog Builder</h1>
+          <h1 className="mt-4 text-xl font-black text-on-surface">Preparing Entity Builder</h1>
           <p className="mt-1 text-sm text-on-surface-variant">
             Loading entities, forms, and published versions…
           </p>
@@ -608,7 +608,7 @@ export default function CatalogBuilder() {
           <div className="flex items-center gap-2 text-primary text-xs font-black uppercase tracking-[0.2em] mb-2">
             <Settings2 className="w-4 h-4" /> No-code configuration
           </div>
-          <h1 className="text-3xl font-black text-on-surface">Catalog Builder</h1>
+          <h1 className="text-3xl font-black text-on-surface">Entity Builder</h1>
           <p className="text-sm text-on-surface-variant mt-1">
             Define what's captured, how it flows, and how each record will look.
           </p>

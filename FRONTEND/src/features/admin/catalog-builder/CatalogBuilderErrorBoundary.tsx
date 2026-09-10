@@ -18,7 +18,7 @@ export class CatalogBuilderErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('Catalog Builder render error', error, info);
+    console.error('Entity Builder render error', error, info);
   }
 
   render() {
@@ -34,7 +34,7 @@ export class CatalogBuilderErrorBoundary extends Component<Props, State> {
             <AlertTriangle className="h-6 w-6" />
           </div>
           <h1 className="mt-5 text-2xl font-black text-on-surface">
-            Catalog Builder encountered an issue
+            Entity Builder encountered an issue
           </h1>
           <p className="mt-2 text-sm leading-6 text-on-surface-variant">
             Your definitions remain safe. You can retry the module without reloading or losing the rest of your session.

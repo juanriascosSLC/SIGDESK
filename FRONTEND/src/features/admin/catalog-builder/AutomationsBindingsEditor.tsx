@@ -18,7 +18,7 @@ import { EmptyMessage, IconButton, SectionHeading } from './ui';
  * # El principio que implementa
  *
  * Un workflow publicado es una capacidad reutilizable; solo una definición
- * publicada de Catalog Builder decide si forma parte del comportamiento de un
+ * publicada de Entity Builder decide si forma parte del comportamiento de un
  * ticket. Aquí no se copia nada del workflow —ni reglas, ni configuración, ni
  * plan—: se guarda una referencia versionada.
  */

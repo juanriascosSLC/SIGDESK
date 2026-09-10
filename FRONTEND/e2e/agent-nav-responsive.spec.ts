@@ -40,7 +40,7 @@ test.describe('Permission matrix — same shared config, different visible items
     await expect(nav.getByRole('link', { name: 'Tickets & Issues' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'My Tasks' })).toHaveCount(0);
     await expect(nav.getByText('Administration')).toHaveCount(0);
-    await expect(nav.getByText('ITSM')).toHaveCount(0);
+    await expect(nav.getByText('Tipos de Caso')).toHaveCount(0);
   });
 
   test('Task-only operator sees Dashboard + My Tasks only, reaches the real inbox', async ({ page }) => {
@@ -58,7 +58,7 @@ test.describe('Permission matrix — same shared config, different visible items
     await expect(page).toHaveURL(/\/app\/changes\/my-tasks$/);
   });
 
-  test('Supervisor sees Workspace + ITSM sections but no Users & Roles', async ({ page }) => {
+  test('Supervisor sees Workspace + Tipos de Caso sections but no Users & Roles', async ({ page }) => {
     await mockAuthenticatedSupervisor(page);
     await stubNotifications(page);
     await page.setViewportSize(DESKTOP_1440);
@@ -66,7 +66,7 @@ test.describe('Permission matrix — same shared config, different visible items
 
     const nav = page.locator('#app-nav');
     await expect(nav.getByText('Workspace', { exact: true })).toBeVisible();
-    await expect(nav.getByText('ITSM')).toBeVisible();
+    await expect(nav.getByText('Tipos de Caso')).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Change Mgmt' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Problem Mgmt' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Assets / CMDB' })).toBeVisible();
@@ -82,7 +82,7 @@ test.describe('Permission matrix — same shared config, different visible items
     const nav = page.locator('#app-nav');
     await expect(nav.getByText('Administration')).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Users & Roles' })).toBeVisible();
-    await expect(nav.getByRole('link', { name: 'Catalog Builder' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Entity Builder' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Automations' })).toBeVisible();
   });
 

@@ -37,7 +37,7 @@ export type NavSurface = 'sidebar' | 'drawer' | 'bottomnav';
  *  walked that back everywhere else; the nav is no exception). */
 export const NAV_SECTION_LABELS: Record<NavSection, string> = {
   workspace: 'Workspace',
-  itsm: 'ITSM',
+  itsm: 'Tipos de Caso',
   administration: 'Administration',
 };
 
@@ -138,7 +138,7 @@ export const NAV_ITEMS: NavItem[] = [
     permission: (ctx) => ctx.can(PERMISSIONS.reportsView),
     surfaces: ['sidebar', 'drawer'],
   },
-  // "Change Mgmt"/"Problem Mgmt"/"Assets" are ITSM's coordination
+  // "Change Mgmt"/"Problem Mgmt"/"Assets" are Tipos de Caso's coordination
   // surfaces (cross-team process work) — deliberately its own section,
   // never merged with Service Catalog (self-service intake) above, which
   // is a different concern that only looks adjacent.
@@ -203,7 +203,7 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     key: 'catalog-builder',
-    label: 'Catalog Builder',
+    label: 'Entity Builder',
     route: '/app/admin/catalog-builder',
     icon: FolderKanban,
     section: 'administration',
