@@ -35,9 +35,15 @@ const emptyForm: SaveChangeTaskInput = {
 function nextAction(task: ChangeTask): { key: string; label: string; icon: typeof CirclePlay }[] {
   switch (task.status) {
     case 'pending': return [{ key: 'mark_ready', label: 'Mark ready', icon: LockKeyhole }];
-    case 'ready': return [{ key: 'start', label: 'Start', icon: CirclePlay }, { key: 'cancel', label: 'Cancel', icon: Ban }];
+    case 'ready': return [
+      { key: 'start', label: 'Start', icon: CirclePlay },
+      ...(task.required ? [] : [{ key: 'cancel', label: 'Cancel', icon: Ban }]),
+    ];
     case 'in_progress': return [{ key: 'complete', label: 'Complete', icon: CheckCircle2 }, { key: 'block', label: 'Block', icon: LockKeyhole }];
-    case 'blocked': return [{ key: 'unblock', label: 'Unblock', icon: RotateCcw }, { key: 'cancel', label: 'Cancel', icon: Ban }];
+    case 'blocked': return [
+      { key: 'unblock', label: 'Unblock', icon: RotateCcw },
+      ...(task.required ? [] : [{ key: 'cancel', label: 'Cancel', icon: Ban }]),
+    ];
     case 'completed':
     case 'canceled': return [{ key: 'reopen', label: 'Reopen', icon: RotateCcw }];
   }
@@ -211,7 +217,7 @@ export function ChangeTasksBoard({
                 {/* Never the raw id: an id with no resolved name reads as
                     "User unavailable", distinct from genuinely no individual
                     assignee ("Unassigned"). */}
-                <div><dt className="text-on-surface-variant">Assignee</dt><dd className="font-bold text-on-surface">{task.organization?.assigneeName || (task.assigneeId ? USER_UNAVAILABLE_LABEL : 'Unassigned')}</dd></div>
+                <div><dt className="text-on-surface-variant">Assignee</dt><dd className="font-bold text-on-surface">{task.assigneeName || task.organization?.assigneeName || (task.assigneeUserId ? USER_UNAVAILABLE_LABEL : 'Unassigned')}</dd></div>
                 <div><dt className="text-on-surface-variant">Priority</dt><dd className="font-bold capitalize text-on-surface">{task.priority}</dd></div>
               </dl>
               {task.dependencyIds.length > 0 && (

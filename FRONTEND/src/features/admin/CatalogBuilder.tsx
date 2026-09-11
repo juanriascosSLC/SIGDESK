@@ -885,6 +885,7 @@ export default function CatalogBuilder() {
               specification={specification}
               updateSpecification={updateSpecification}
               guided={guidedMode}
+              entityKey={selected?.entityKey}
             />
           )}
           {activeSection === 'review' && (

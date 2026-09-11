@@ -10,6 +10,7 @@ type SlaMetricView = {
   completed: boolean;
   breached: boolean;
   paused: boolean;
+  unavailable: boolean;
 };
 
 function formatDuration(milliseconds: number): string {
@@ -27,17 +28,40 @@ function formatDuration(milliseconds: number): string {
 }
 
 function slaMetric(assessment: SlaAssessment, kind: 'response' | 'resolution'): SlaMetricView {
-  const dueAt = new Date(kind === 'response' ? assessment.responseDueAt : assessment.resolutionDueAt);
+  const dueValue = kind === 'response' ? assessment.responseDueAt : assessment.resolutionDueAt;
+  const dueAt = new Date(dueValue);
+  const startedAt = new Date(assessment.startedAt);
   const completedValue = kind === 'response' ? assessment.respondedAt : assessment.resolvedAt;
   const completedAt = completedValue ? new Date(completedValue) : null;
   const pausedAt = assessment.pausedAt ? new Date(assessment.pausedAt) : null;
   const effectiveNow = completedAt ?? pausedAt ?? new Date();
   const explicitTarget =
     kind === 'response' ? assessment.responseTargetMinutes : assessment.resolutionTargetMinutes;
+  const hasExplicitTarget =
+    typeof explicitTarget === 'number' && Number.isFinite(explicitTarget) && explicitTarget > 0;
   const targetMinutes =
-    explicitTarget && explicitTarget > 0
+    hasExplicitTarget
       ? explicitTarget
-      : Math.max(1, (dueAt.getTime() - new Date(assessment.startedAt).getTime()) / 60_000);
+      : Math.max(1, (dueAt.getTime() - startedAt.getTime()) / 60_000);
+
+  const invalidTiming =
+    !Number.isFinite(dueAt.getTime()) ||
+    !Number.isFinite(startedAt.getTime()) ||
+    !Number.isFinite(effectiveNow.getTime()) ||
+    !Number.isFinite(targetMinutes) ||
+    targetMinutes <= 0;
+  if (invalidTiming) {
+    return {
+      pct: 0,
+      label: 'Timing unavailable',
+      deadline: 'Unavailable',
+      completed: false,
+      breached: false,
+      paused: false,
+      unavailable: true,
+    };
+  }
+
   const remaining = dueAt.getTime() - effectiveNow.getTime();
   const breached =
     (kind === 'response' ? assessment.responseBreached : assessment.resolutionBreached) || remaining < 0;
@@ -57,12 +81,15 @@ function slaMetric(assessment: SlaAssessment, kind: 'response' | 'resolution'): 
     completed: Boolean(completedAt),
     breached,
     paused: Boolean(pausedAt && !completedAt),
+    unavailable: false,
   };
 }
 
 function SlaBar({ title, metric }: { title: string; metric: SlaMetricView }) {
   const successful = metric.completed && !metric.breached;
-  const barColor = successful
+  const barColor = metric.unavailable
+    ? 'bg-status-warning-icon'
+    : successful
     ? 'bg-status-success-icon'
     : metric.breached
       ? 'bg-status-danger-icon'
@@ -71,7 +98,9 @@ function SlaBar({ title, metric }: { title: string; metric: SlaMetricView }) {
         : metric.pct >= 75
           ? 'bg-status-warning-icon'
           : 'bg-primary';
-  const textColor = successful
+  const textColor = metric.unavailable
+    ? 'text-status-warning-fg'
+    : successful
     ? 'text-status-success-fg'
     : metric.breached
       ? 'text-status-danger-fg'
@@ -94,7 +123,9 @@ function SlaBar({ title, metric }: { title: string; metric: SlaMetricView }) {
         />
       </div>
       <span className="block mt-1 text-[10px] text-on-surface-variant">
-        Deadline: {metric.deadline} · {Math.round(metric.pct)}% consumed
+        {metric.unavailable
+          ? 'Deadline data is unavailable.'
+          : `Deadline: ${metric.deadline} · ${Math.round(metric.pct)}% consumed`}
       </span>
     </div>
   );

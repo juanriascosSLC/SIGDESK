@@ -17,9 +17,26 @@ import {
  * 768x1024 (tablet, drawer), 390x844 (mobile, bottom nav + More).
  */
 
-async function stubNotifications(page: Page) {
+async function stubAgentShellDependencies(page: Page) {
   await page.route('**/notifications*', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], unread: 0 }) }),
+  );
+  // Knowledge Base is now backed by knowledge_service. Navigation tests use
+  // synthetic credentials, so letting these reads escape would correctly
+  // return 401 and tear down the mocked session before the navigation
+  // assertion. Keep this suite focused on the shell while preserving the
+  // real route shapes.
+  await page.route('**/knowledge/health', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'ok', service: 'knowledge' }) }),
+  );
+  await page.route('**/knowledge/articulos*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [] }) }),
+  );
+  // Fonts are presentation-only and external network access is intentionally
+  // denied in the browser test sandbox. An empty stylesheet exercises the
+  // documented system-font fallback without creating a false console error.
+  await page.route('https://fonts.googleapis.com/**', (route) =>
+    route.fulfill({ status: 200, contentType: 'text/css', body: '' }),
   );
 }
 
@@ -31,7 +48,7 @@ const MOBILE_390 = { width: 390, height: 844 };
 test.describe('Permission matrix — same shared config, different visible items', () => {
   test('IT agent (tickets:read:global) sees Dashboard + Tickets only, no Administration', async ({ page }) => {
     await mockAuthenticatedAgentWithoutAdminAccess(page);
-    await stubNotifications(page);
+    await stubAgentShellDependencies(page);
     await page.setViewportSize(DESKTOP_1440);
     await page.goto('/app');
 
@@ -47,7 +64,7 @@ test.describe('Permission matrix — same shared config, different visible items
     await expect(nav.getByText('Reference', { exact: true })).toHaveCount(0);
   });
 
-  test('Task-only operator sees Dashboard + My Tasks only, reaches the real inbox', async ({ page }) => {
+  test('Task-only operator sees Dashboard, My Tasks and Services, and reaches the real inbox', async ({ page }) => {
     await mockAuthenticatedTaskExecutor(page);
     await page.setViewportSize(DESKTOP_1440);
     await page.goto('/app');
@@ -55,6 +72,7 @@ test.describe('Permission matrix — same shared config, different visible items
     const nav = page.locator('#app-nav');
     await expect(nav.getByRole('link', { name: 'Dashboard' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'My Tasks' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Services' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Incidents' })).toHaveCount(0);
     await expect(nav.getByText('Administration')).toHaveCount(0);
 
@@ -64,7 +82,7 @@ test.describe('Permission matrix — same shared config, different visible items
 
   test('Supervisor sees Workspace + Cases + Reference sections but no Users & Roles', async ({ page }) => {
     await mockAuthenticatedSupervisor(page);
-    await stubNotifications(page);
+    await stubAgentShellDependencies(page);
     await page.setViewportSize(DESKTOP_1440);
     await page.goto('/app');
 
@@ -77,12 +95,13 @@ test.describe('Permission matrix — same shared config, different visible items
     // this branch introduced is exactly this distinction.
     await expect(nav.getByText('Reference', { exact: true })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Assets / CMDB' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Services' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Users & Roles' })).toHaveCount(0);
   });
 
   test('Administrator sees every section, including Administration', async ({ page }) => {
     await mockAuthenticatedAdmin(page);
-    await stubNotifications(page);
+    await stubAgentShellDependencies(page);
     await page.setViewportSize(DESKTOP_1440);
     await page.goto('/app');
 
@@ -91,6 +110,7 @@ test.describe('Permission matrix — same shared config, different visible items
     await expect(nav.getByRole('link', { name: 'Users & Roles' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Entity Builder' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Automations' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Services' })).toBeVisible();
   });
 
   test('Requester cannot reach /app by direct URL — hiding the link is not the guard', async ({ page }) => {
@@ -107,7 +127,7 @@ test.describe('Desktop (1440x900 and 1024x768) — persistent sidebar', () => {
   for (const viewport of [DESKTOP_1440, DESKTOP_1024]) {
     test(`sidebar is visible and no bottom nav/drawer trigger at ${viewport.width}x${viewport.height}`, async ({ page }) => {
       await mockAuthenticatedAdmin(page);
-      await stubNotifications(page);
+      await stubAgentShellDependencies(page);
       await page.setViewportSize(viewport);
       await page.goto('/app');
 
@@ -124,7 +144,7 @@ test.describe('Desktop (1440x900 and 1024x768) — persistent sidebar', () => {
 
   test('the SIG-DESK brand is a real link, reachable and activatable by keyboard', async ({ page }) => {
     await mockAuthenticatedAdmin(page);
-    await stubNotifications(page);
+    await stubAgentShellDependencies(page);
     await page.setViewportSize(DESKTOP_1440);
     await page.goto('/app/knowledge');
 
@@ -138,7 +158,7 @@ test.describe('Desktop (1440x900 and 1024x768) — persistent sidebar', () => {
 
   test('collapsed sidebar shows the shared Tooltip on keyboard focus, not just hover', async ({ page }) => {
     await mockAuthenticatedAdmin(page);
-    await stubNotifications(page);
+    await stubAgentShellDependencies(page);
     await page.setViewportSize(DESKTOP_1440);
     await page.goto('/app');
 
@@ -163,7 +183,7 @@ test.describe('Desktop (1440x900 and 1024x768) — persistent sidebar', () => {
   // real user's eye (or a screen magnifier) would see it.
   test('collapsed sidebar tooltip renders to the right of the sidebar, fully on-screen, and is actually painted (not clipped by an ancestor)', async ({ page }) => {
     await mockAuthenticatedAdmin(page);
-    await stubNotifications(page);
+    await stubAgentShellDependencies(page);
     await page.setViewportSize(DESKTOP_1440);
     await page.goto('/app');
     await page.getByTestId('app-nav-toggle').click(); // collapse the rail
@@ -233,7 +253,7 @@ test.describe('Desktop (1440x900 and 1024x768) — persistent sidebar', () => {
 
   test('Escape dismisses the tooltip without moving focus; Enter still activates the link', async ({ page }) => {
     await mockAuthenticatedAdmin(page);
-    await stubNotifications(page);
+    await stubAgentShellDependencies(page);
     await page.setViewportSize(DESKTOP_1440);
     await page.goto('/app/knowledge'); // start off Tickets, so Enter below is a real navigation
     await page.getByTestId('app-nav-toggle').click();
@@ -257,7 +277,7 @@ test.describe('Desktop (1440x900 and 1024x768) — persistent sidebar', () => {
 
   test('the tooltip follows its trigger when the sidebar scrolls, and re-clamps inside the viewport on resize', async ({ page }) => {
     await mockAuthenticatedAdmin(page);
-    await stubNotifications(page);
+    await stubAgentShellDependencies(page);
     // Short enough that the collapsed rail's item list genuinely overflows
     // (verified: ~550px of scrollable content at this height), so scrolling
     // it actually moves a trigger already on screen — Playwright's
@@ -320,7 +340,7 @@ test.describe('Desktop (1440x900 and 1024x768) — persistent sidebar', () => {
 test.describe('Tablet (768x1024) — drawer', () => {
   test.beforeEach(async ({ page }) => {
     await mockAuthenticatedAdmin(page);
-    await stubNotifications(page);
+    await stubAgentShellDependencies(page);
     await page.setViewportSize(TABLET_768);
     await page.goto('/app');
   });
@@ -346,9 +366,8 @@ test.describe('Tablet (768x1024) — drawer', () => {
     const trigger = page.getByTestId('app-nav-drawer-toggle');
     await trigger.click();
     const dialog = page.getByRole('dialog', { name: 'Navigation' });
-    // Knowledge Base fetches nothing (it's the honest "not available yet"
-    // screen) — a safe navigation target that can't 401 against the live
-    // backend under this fixture's synthetic token.
+    // The shell fixture stubs Knowledge Base's real read contracts so this
+    // navigation assertion cannot be converted into an auth test.
     await dialog.getByRole('link', { name: 'Knowledge Base' }).click();
 
     await expect(dialog).toBeHidden();
@@ -389,7 +408,7 @@ test.describe('Tablet (768x1024) — drawer', () => {
 test.describe('Mobile (390x844) — bottom nav + More', () => {
   test.beforeEach(async ({ page }) => {
     await mockAuthenticatedAdmin(page);
-    await stubNotifications(page);
+    await stubAgentShellDependencies(page);
     await page.setViewportSize(MOBILE_390);
     await page.goto('/app');
   });
@@ -432,9 +451,8 @@ test.describe('Mobile (390x844) — bottom nav + More', () => {
     // Administration items that never compete for a bottom-nav slot still
     // have to be reachable somewhere on mobile.
     await expect(dialog.getByRole('link', { name: 'Users & Roles' })).toBeVisible();
-    // Knowledge Base fetches nothing (it's the honest "not available yet"
-    // screen) — a safe navigation target that can't 401 against the live
-    // backend under this fixture's synthetic token.
+    // The shell fixture stubs Knowledge Base's real read contracts so this
+    // navigation assertion cannot be converted into an auth test.
     await dialog.getByRole('link', { name: 'Knowledge Base' }).click();
 
     await expect(dialog).toBeHidden();
@@ -485,7 +503,7 @@ test.describe('Mobile (390x844) — bottom nav + More', () => {
 test.describe('Mobile (390x844) — no empty More for a limited persona', () => {
   test('IT agent (Dashboard + Tickets only) sees no More button at all', async ({ page }) => {
     await mockAuthenticatedAgentWithoutAdminAccess(page);
-    await stubNotifications(page);
+    await stubAgentShellDependencies(page);
     await page.setViewportSize(MOBILE_390);
     await page.goto('/app');
 
@@ -505,7 +523,7 @@ test.describe('Mobile (390x844) — no empty More for a limited persona', () => 
 test.describe('Deep links and active-state correctness', () => {
   test('a deep link into a ticket detail marks Incidents active, not Dashboard', async ({ page }) => {
     await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
-    await stubNotifications(page);
+    await stubAgentShellDependencies(page);
     await page.route('**/entities/INC/*', (route) =>
       route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error_code: 'TICKET_NO_ENCONTRADO', message: 'not found' }) }),
     );
@@ -520,7 +538,7 @@ test.describe('Deep links and active-state correctness', () => {
 
   test('/app/changes/my-tasks marks My Tasks active, not Changes (longest-match tie-break)', async ({ page }) => {
     await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
-    await stubNotifications(page);
+    await stubAgentShellDependencies(page);
     await page.route('**/change-tasks*', (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [] }) }),
     );
@@ -535,7 +553,7 @@ test.describe('Deep links and active-state correctness', () => {
 
 test('no console errors while opening/closing drawer and More across viewports', async ({ page }) => {
   await mockAuthenticatedAdmin(page);
-  await stubNotifications(page);
+  await stubAgentShellDependencies(page);
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
   page.on('console', (msg) => {

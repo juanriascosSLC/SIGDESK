@@ -17,6 +17,8 @@ import {
   useRemoveWatcher,
   useActivity,
   ticketKeys,
+	useIncidentWork,
+	useTransitionIncidentWork,
 } from './hooks';
 import { AssignTicketDialog, ReopenTicketDialog, ResolveWithSlaBreachDialog, MergeIntoTicketDialog, WatchToggleDialog } from './dialogs/TicketDialogs';
 import { useToast } from '@/components/ui';
@@ -55,6 +57,7 @@ import { IncidentProblemDialog } from '@/features/problems/IncidentProblemDialog
 import { IncidentChangeDialog } from '@/features/changes/IncidentChangeDialog';
 import { TicketPageLayout } from './TicketPageLayout';
 import type { TicketPageContext, TimelineItem } from './widgets/context';
+import { IncidentWorkPanel } from './components/IncidentWorkPanel';
 
 export default function TicketDetail() {
   const { id } = useParams();
@@ -103,6 +106,8 @@ export default function TicketDetail() {
   const addWatcher = useAddWatcher(ticket?.id || '');
   const removeWatcher = useRemoveWatcher(ticket?.id || '');
   const activity = useActivity(ticket?.id);
+	const incidentWork = useIncidentWork(ticket?.id);
+	const transitionIncidentWork = useTransitionIncidentWork(ticket?.id || '');
   const slaAssessment = useQuery({
     queryKey: ['sla-assessment', ticket?.entityId ?? 'unlinked'],
     queryFn: () => getSlaAssessment(ticket!.entityId!),
@@ -777,6 +782,23 @@ export default function TicketDetail() {
           {editNotice}
         </div>
       )}
+
+		<IncidentWorkPanel
+			items={incidentWork.data ?? []}
+			attachments={attachments.data ?? []}
+			loading={incidentWork.isLoading}
+			error={incidentWork.error?.message}
+			canManage={can(PERMISSIONS.ticketsEdit)}
+			pending={transitionIncidentWork.isPending}
+			onRetry={() => void incidentWork.refetch()}
+			onTransition={(workItemId, input) => transitionIncidentWork.mutate(
+				{ workItemId, input },
+				{
+					onSuccess: (item) => toast.show({ tone: 'success', title: item.status === 'service_required' ? 'Services follow-up requested' : 'Incident work updated' }),
+					onError: (transitionError) => toast.show({ tone: 'error', title: "Couldn't update incident work", description: transitionError.message }),
+				},
+			)}
+		/>
 
       {/* Values come from the exact INC definition used at creation; the page
           structure comes from the backend-resolved layout. resolvedDefinition

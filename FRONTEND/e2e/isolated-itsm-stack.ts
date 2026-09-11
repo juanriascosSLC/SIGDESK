@@ -122,6 +122,10 @@ async function spawnIsolatedService(options: SpawnServiceOptions): Promise<Isola
   let leaseEstablished = false;
   let child: ChildProcess | null = null;
   let requestContext: APIRequestContext | null = null;
+  let processOutputTail = '';
+  const rememberProcessOutput = (chunk: Buffer | string): void => {
+    processOutputTail = `${processOutputTail}${chunk.toString()}`.slice(-8_192);
+  };
 
   const cleanup = async (): Promise<void> => {
     const errors: string[] = [];
@@ -244,6 +248,8 @@ async function spawnIsolatedService(options: SpawnServiceOptions): Promise<Isola
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+    child.stdout?.on('data', rememberProcessOutput);
+    child.stderr?.on('data', rememberProcessOutput);
     child.on('error', (err) => {
       console.error(`[isolated-itsm-stack:${options.serviceLabel}] Process error:`, err);
     });
@@ -285,6 +291,7 @@ async function spawnIsolatedService(options: SpawnServiceOptions): Promise<Isola
 
     const readyDeadline = Date.now() + 15_000;
     let ready = false;
+    let lastReadyResponse = 'no response received';
     while (Date.now() < readyDeadline) {
       try {
         const res = await fetch(`${baseUrl}/ready`);
@@ -292,13 +299,17 @@ async function spawnIsolatedService(options: SpawnServiceOptions): Promise<Isola
           ready = true;
           break;
         }
+        lastReadyResponse = `${res.status} ${await res.text()}`;
       } catch (err) {
-        void err;
+        lastReadyResponse = describeError(err);
       }
       await sleep(100);
     }
     if (!ready) {
-      throw new Error(`e2e_${options.serviceLabel}_service did not become ready at ${baseUrl}/ready within 15s`);
+      throw new Error(
+        `e2e_${options.serviceLabel}_service did not become ready at ${baseUrl}/ready within 15s. ` +
+          `Last response: ${lastReadyResponse}. Process output tail:\n${processOutputTail || '<empty>'}`,
+      );
     }
 
     requestContext = await playwrightRequest.newContext({
@@ -397,6 +408,7 @@ export async function startIsolatedItsmStack(): Promise<IsolatedItsmStack> {
       jwtSecret,
       organizationServiceUrl: organization.baseUrl,
       organizationInternalSecret: organization.internalSecret,
+      resourceServiceUrl: '',
     });
 
     // Both problem_service and change_service need the tickets internal
@@ -426,6 +438,7 @@ export async function startIsolatedItsmStack(): Promise<IsolatedItsmStack> {
         RESOURCE_INTERNAL_SECRET: INTERNAL_SECRETS.resource,
         ORGANIZATION_INTERNAL_SECRET: organization.internalSecret,
         ORGANIZATION_SERVICE_URL: organization.baseUrl,
+        CATALOG_SERVICE_URL: tickets.baseUrl,
         TICKETS_SERVICE_URL: tickets.baseUrl,
         RESOURCE_SERVICE_URL: process.env.RESOURCE_SERVICE_URL || 'http://localhost:8082',
       },
@@ -445,6 +458,7 @@ export async function startIsolatedItsmStack(): Promise<IsolatedItsmStack> {
         RESOURCE_INTERNAL_SECRET: INTERNAL_SECRETS.resource,
         ORGANIZATION_INTERNAL_SECRET: organization.internalSecret,
         ORGANIZATION_SERVICE_URL: organization.baseUrl,
+        CATALOG_SERVICE_URL: tickets.baseUrl,
         TICKETS_SERVICE_URL: tickets.baseUrl,
         CHANGE_SERVICE_URL: change.baseUrl,
         RESOURCE_SERVICE_URL: process.env.RESOURCE_SERVICE_URL || 'http://localhost:8082',

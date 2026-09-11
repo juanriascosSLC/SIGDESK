@@ -156,6 +156,7 @@ function CanvasEditor({
 }: WorkflowCanvasEditorProps) {
   const navigate = useNavigate();
   const basePath = useAutomationsBasePath();
+  const { resolvedTheme } = useResolvedTheme();
   const start = useMemo(() => initialGraph(definition), [definition]);
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>(start.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(start.edges.map((e) => edgeStyle(e, resolvedTheme)));
@@ -234,10 +235,10 @@ function CanvasEditor({
     setSinGuardar(true);
   }, [edges, futuro, nodes, pasado, setEdges, setNodes]);
 
-  // El directorio se consulta también aquí, no solo en el panel: es lo que
-  // permite detectar que un destino guardado ya no existe ANTES de publicar.
-  // React Query comparte la misma clave con el panel, así que no hay dos
-  // llamadas.
+  // El canvas es el único dueño de esta consulta: valida las referencias
+  // guardadas antes de publicar y entrega el mismo resultado al panel. Montar
+  // un segundo observador sobre un error disparaba un reintento adicional y
+  // ocultaba el fallo antes de que la persona pudiera decidir reintentarlo.
   const directorio = useQuery({
     queryKey: ['organization', 'assignment-directory', 'tickets'],
     queryFn: getWorkflowAssignmentDirectory,
@@ -414,7 +415,7 @@ function CanvasEditor({
                       ? 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300'
                       : 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-300'}`}
                 >
-                  {(definition.estado === 'publicado' ? 'Published' : definition.estado === 'borrador' ? 'Draft' : 'Disabled')} · v{definition.version}
+                  {(definition.estado === 'publicado' ? 'Published' : definition.estado === 'borrador' ? 'Draft' : definition.estado === 'reemplazado' ? 'Superseded' : 'Disabled')} · v{definition.version}
                 </span>
               )}
             </div>
@@ -664,6 +665,7 @@ function CanvasEditor({
               <AssignmentActionEditor
                 data={selectedNode.data}
                 readOnly={readOnly}
+                directory={directorio}
                 onChange={updateSelected}
               />
             )}
@@ -675,6 +677,82 @@ function CanvasEditor({
                 entityKey={definition?.categoria_id ?? 'INC'}
                 onChange={updateSelected}
               />
+            )}
+
+            {selectedNode.data.catalogKey === 'action.create_incident_work' && (
+              <div className="mt-5 space-y-4" data-testid="incident-work-action-editor">
+                <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Work key
+                  <input disabled={readOnly} value={String(selectedNode.data.workKey ?? '')} onChange={(event) => updateSelected({ workKey: event.target.value })} className="input-field mt-2 w-full normal-case" placeholder="initial_troubleshooting" />
+                  <span className="mt-1 block text-[10px] font-medium normal-case tracking-normal">Stable lowercase identifier. It preserves idempotency across retries.</span>
+                </label>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Work title
+                  <input disabled={readOnly} value={String(selectedNode.data.workTitle ?? '')} onChange={(event) => updateSelected({ workTitle: event.target.value })} className="input-field mt-2 w-full normal-case" />
+                </label>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Instructions
+                  <textarea disabled={readOnly} rows={6} value={String(selectedNode.data.workInstructions ?? '')} onChange={(event) => updateSelected({ workInstructions: event.target.value })} className="input-field mt-2 w-full resize-y normal-case" />
+                </label>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Due in minutes
+                  <input disabled={readOnly} type="number" min={0} max={43200} step={1} value={String(selectedNode.data.workDueMinutes ?? '0')} onChange={(event) => updateSelected({ workDueMinutes: event.target.value })} className="input-field mt-2 w-full normal-case" />
+                  <span className="mt-1 block text-[10px] font-medium normal-case tracking-normal">Use 0 for no dedicated deadline. The ticket SLA still applies.</span>
+                </label>
+                <label className="flex items-center gap-3 rounded-xl border border-border/40 bg-on-surface/5 p-3 text-xs font-bold text-on-surface">
+                  <input disabled={readOnly} type="checkbox" checked={selectedNode.data.workRequired !== false} onChange={(event) => updateSelected({ workRequired: event.target.checked })} className="h-4 w-4 accent-primary" />
+                  Required before the incident can be operationally completed
+                </label>
+                <p className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs leading-relaxed text-on-surface-variant">If troubleshooting does not resolve the incident, the agent must record notes and evidence and choose <strong>Service required</strong>. That decision starts the approval and field-work path; this block does not create an unapproved RFC Task.</p>
+              </div>
+            )}
+
+            {selectedNode.data.catalogKey === 'action.create_service_rfc' && (
+              <div className="mt-5 space-y-4" data-testid="service-rfc-action-editor">
+                <p className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs leading-relaxed text-on-surface-variant">
+                  This action only runs after IT records a <strong>Service required</strong> troubleshooting outcome. It creates an RFC in <strong>Pending approval</strong>; it never creates or starts field work before approval.
+                </p>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Service affected
+                  <input disabled={readOnly} value={String(selectedNode.data.serviceAffected ?? '')} onChange={(event) => updateSelected({ serviceAffected: event.target.value })} className="input-field mt-2 w-full normal-case" placeholder="Field Services" />
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Change type
+                    <select disabled={readOnly} value={String(selectedNode.data.changeType ?? 'normal')} onChange={(event) => updateSelected({ changeType: event.target.value as 'standard' | 'normal' | 'emergency' })} className="input-field mt-2 w-full normal-case">
+                      <option value="standard">Standard</option><option value="normal">Normal</option><option value="emergency">Emergency</option>
+                    </select>
+                  </label>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Impact
+                    <select disabled={readOnly} value={String(selectedNode.data.impact ?? selectedNode.data.changeImpact ?? 'medium')} onChange={(event) => updateSelected({ impact: event.target.value as 'low' | 'medium' | 'high' | 'critical', changeImpact: event.target.value as 'low' | 'medium' | 'high' | 'critical' })} className="input-field mt-2 w-full normal-case">
+                      <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option>
+                    </select>
+                  </label>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Probability
+                    <select disabled={readOnly} value={String(selectedNode.data.probability ?? selectedNode.data.changeProbability ?? 'low')} onChange={(event) => updateSelected({ probability: event.target.value as 'low' | 'medium' | 'high', changeProbability: event.target.value as 'low' | 'medium' | 'high' })} className="input-field mt-2 w-full normal-case">
+                      <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+                    </select>
+                  </label>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Urgency
+                    <select disabled={readOnly} value={String(selectedNode.data.urgency ?? selectedNode.data.changeUrgency ?? 'medium')} onChange={(event) => updateSelected({ urgency: event.target.value as 'low' | 'medium' | 'high', changeUrgency: event.target.value as 'low' | 'medium' | 'high' })} className="input-field mt-2 w-full normal-case">
+                      <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+                    </select>
+                  </label>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Lead time (minutes)
+                    <input disabled={readOnly} type="number" min={0} max={43200} step={1} value={String(selectedNode.data.leadTimeMinutes ?? selectedNode.data.changeLeadMinutes ?? '60')} onChange={(event) => updateSelected({ leadTimeMinutes: event.target.value, changeLeadMinutes: event.target.value })} className="input-field mt-2 w-full normal-case" />
+                  </label>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Duration (minutes)
+                    <input disabled={readOnly} type="number" min={1} max={43200} step={1} value={String(selectedNode.data.durationMinutes ?? selectedNode.data.changeDurationMinutes ?? '120')} onChange={(event) => updateSelected({ durationMinutes: event.target.value, changeDurationMinutes: event.target.value })} className="input-field mt-2 w-full normal-case" />
+                  </label>
+                </div>
+                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-emerald-300 flex items-center justify-between" data-testid="service-rfc-approval-lock">
+                  <span className="font-bold">Human Approval Policy:</span>
+                  <span className="font-mono text-[11px] bg-emerald-500/20 px-2 py-0.5 rounded text-emerald-200">Mandatory (request_approval: true)</span>
+                </div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Implementation plan
+                  <textarea disabled={readOnly} rows={5} value={String(selectedNode.data.implementationPlan ?? '')} onChange={(event) => updateSelected({ implementationPlan: event.target.value })} className="input-field mt-2 w-full resize-y normal-case" />
+                </label>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Rollback plan
+                  <textarea disabled={readOnly} rows={4} value={String(selectedNode.data.rollbackPlan ?? '')} onChange={(event) => updateSelected({ rollbackPlan: event.target.value })} className="input-field mt-2 w-full resize-y normal-case" />
+                </label>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Validation plan
+                  <textarea disabled={readOnly} rows={4} value={String(selectedNode.data.validationPlan ?? '')} onChange={(event) => updateSelected({ validationPlan: event.target.value })} className="input-field mt-2 w-full resize-y normal-case" />
+                </label>
+              </div>
             )}
 
             {!readOnly && <div className="mt-6 grid grid-cols-2 gap-2 border-t border-border/40 pt-5">
@@ -693,7 +771,7 @@ function CanvasEditor({
                 <h2 className="flex items-center gap-2 text-lg font-black text-on-surface">{showJSON ? <Braces className="h-5 w-5 text-primary" /> : <CheckCircle2 className="h-5 w-5 text-primary" />} {showJSON ? 'Executable contract and layout' : 'Pre-validation'}</h2>
                 <p className="mt-1 text-sm text-on-surface-variant">{showJSON ? 'Runtime executes rules; the editor preserves exact layout.' : 'Only fully operational branches can be published.'}</p>
               </div>
-              <button type="button" onClick={() => { setShowValidation(false); setShowJSON(false); }} className="rounded-lg p-2 text-on-surface-variant hover:bg-on-surface/5"><X className="h-4 w-4" /></button>
+              <button type="button" data-testid="modal-close" onClick={() => { setShowValidation(false); setShowJSON(false); }} className="rounded-lg p-2 text-on-surface-variant hover:bg-on-surface/5"><X className="h-4 w-4" /></button>
             </div>
             {showJSON ? (
               <pre className="mt-5 max-h-[60vh] overflow-auto rounded-2xl bg-surface-container-high border border-border/40 p-5 text-xs text-status-success-fg">{JSON.stringify(compilation.payload ?? { errors: compilation.errors }, null, 2)}</pre>

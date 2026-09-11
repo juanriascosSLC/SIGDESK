@@ -3,6 +3,8 @@ import { getResolvedDefinition, type LifecycleTransitionDefinition } from '@/fea
 import { USER_UNAVAILABLE_LABEL } from './identity-labels';
 import type {
   CreateTicketInput,
+	IncidentWorkItem,
+	IncidentWorkTransitionInput,
   Ticket,
   TicketActivityEntry,
   TicketAssignment,
@@ -664,6 +666,18 @@ export async function addComment(
 export async function listAttachments(ticketId: string): Promise<TicketAttachment[]> {
   const response = await apiRequest<{ items: TicketAttachment[] }>(`/tickets/${ticketId}/attachments`);
   return response.items;
+}
+
+export async function listIncidentWork(ticketId: string): Promise<IncidentWorkItem[]> {
+	const response = await apiRequest<{ items: IncidentWorkItem[] }>(`/entities/INC/${encodeURIComponent(ticketId)}/work-items`);
+	return response.items;
+}
+
+export async function transitionIncidentWork(ticketId: string, workItemId: number, input: IncidentWorkTransitionInput): Promise<IncidentWorkItem> {
+	return apiRequest<IncidentWorkItem>(`/entities/INC/${encodeURIComponent(ticketId)}/work-items/${workItemId}/transitions/${input.transition}`, {
+		method: 'POST',
+		body: JSON.stringify({ notes: input.notes, evidence: input.evidence, reopen_reason: input.reopenReason }),
+	});
 }
 
 export async function uploadAttachment(

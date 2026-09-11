@@ -612,10 +612,20 @@ export interface ResourceReference {
   required: boolean;
 }
 
+export interface AutomationCapabilityMetadata {
+  categoryId: string;
+  trigger: string;
+  workflowId: string;
+  familyId: string;
+  version: number;
+  selectable: boolean;
+}
+
 export interface AvailableResource {
   reference: ResourceReference;
   displayName: string;
   description?: string;
+  automationCapability?: AutomationCapabilityMetadata;
 }
 
 export interface ExecutableDefinitionManifest {

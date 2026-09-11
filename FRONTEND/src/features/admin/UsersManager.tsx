@@ -758,7 +758,7 @@ function UsersTab() {
             disabled={roles.length === 0 || organizationalUnits.length === 0}
             className="inline-flex items-center gap-2 rounded-xl bg-cyan-500 px-4 py-2 text-sm font-black text-slate-950 disabled:opacity-50"
           >
-            <Plus className="h-4 w-4" /> Crear agente de prueba
+            <Plus className="h-4 w-4" /> Create test agent
           </button>
         )}
       </div>
@@ -899,13 +899,13 @@ function TestAgentForm({
       className="grid gap-4 rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-5 md:grid-cols-2 xl:grid-cols-3"
     >
       <div className="md:col-span-2 xl:col-span-3">
-        <h2 className="text-sm font-black text-on-surface">Nuevo agente de prueba</h2>
+        <h2 className="text-sm font-black text-on-surface">New test agent</h2>
         <p className="mt-1 text-xs text-on-surface-variant">
-          Crea el Usuario, le asigna una unidad organizacional y registra su perfil de Agente IT.
+          Creates the user, assigns an organizational unit, and registers the IT Agent profile.
         </p>
       </div>
       <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
-        Nombre completo
+        Full name
         <input
           required
           value={name}
@@ -915,7 +915,7 @@ function TestAgentForm({
         />
       </label>
       <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
-        Correo de prueba
+        Test email
         <input
           required
           type="email"
@@ -926,7 +926,7 @@ function TestAgentForm({
         />
       </label>
       <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
-        Area o equipo IT
+        IT area or team
         <select
           required
           value={companyId}
@@ -941,7 +941,7 @@ function TestAgentForm({
         </select>
       </label>
       <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
-        Rol
+        Role
         <select
           required
           value={roleId}
@@ -954,7 +954,7 @@ function TestAgentForm({
         </select>
       </label>
       <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
-        Habilidad
+        Skill
         <input
           required
           value={skill}
@@ -963,7 +963,7 @@ function TestAgentForm({
         />
       </label>
       <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
-        Capacidad simultanea
+        Concurrent capacity
         <input
           required
           min="0"
@@ -976,14 +976,14 @@ function TestAgentForm({
       </label>
       <div className="flex items-end justify-end gap-3 md:col-span-2 xl:col-span-3">
         <button type="button" onClick={onCancel} className="text-xs font-bold text-on-surface-variant hover:text-on-surface">
-          Cancelar
+          Cancel
         </button>
         <button
           type="submit"
           disabled={isPending || !name.trim() || !email.trim() || !companyId || !roleId || !skill.trim()}
           className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-black text-slate-950 disabled:opacity-50"
         >
-          {isPending ? 'Creando...' : 'Crear agente de prueba'}
+          {isPending ? 'Creating...' : 'Create test agent'}
         </button>
       </div>
     </form>

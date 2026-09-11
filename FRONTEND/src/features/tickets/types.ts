@@ -172,6 +172,36 @@ export interface TicketAttachment {
   createdAt: string;
 }
 
+export type IncidentWorkStatus = 'pending' | 'in_progress' | 'resolved' | 'service_required' | 'canceled';
+
+export interface IncidentWorkItem {
+	id: number;
+	ticketId: number;
+	workKey: string;
+	kind: string;
+	title: string;
+	instructions: string;
+	status: IncidentWorkStatus;
+	required: boolean;
+	dueAt?: string;
+	createdByType: 'user' | 'service';
+	createdById: string;
+	startedById?: string;
+	outcomeById?: string;
+	outcomeNotes?: string;
+	evidence: string[];
+	createdAt: string;
+	updatedAt: string;
+	completedAt?: string;
+}
+
+export interface IncidentWorkTransitionInput {
+	transition: 'start' | 'resolve' | 'require_service' | 'cancel' | 'reopen';
+	notes?: string;
+	evidence?: string[];
+	reopenReason?: string;
+}
+
 export interface TicketWatcher {
   ticketId: string;
   watcherName: string;

@@ -27,6 +27,8 @@ function statusStyle(status: WorkflowExecution['estado']) {
 
 const actionLabels: Record<string, string> = {
   notificar_interesados: 'Notify stakeholders',
+	create_incident_work_item: 'Create incident work',
+	create_service_rfc: 'Create Service RFC',
   asignar_automatico: 'Assign automatically',
   marcar_sla_en_riesgo: 'Mark SLA at risk',
   marcar_sla_incumplido: 'Mark SLA breached',

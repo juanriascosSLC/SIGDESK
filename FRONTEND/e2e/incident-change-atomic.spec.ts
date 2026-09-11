@@ -85,5 +85,7 @@ test('INC creates its RFC and typed origin relation through one atomic endpoint'
 
   await expect.poll(() => atomicBody?.incidentId).toBe('10');
   expect(atomicBody?.data).toMatchObject({ requester: 'Playwright Admin' });
-  await expect(page).toHaveURL(/\/app\/changes\/RFC-000090$/);
+  // ChangeDetail resolves records by the immutable numeric aggregate id;
+  // the human id remains presentation-only.
+  await expect(page).toHaveURL(/\/app\/changes\/90$/);
 });

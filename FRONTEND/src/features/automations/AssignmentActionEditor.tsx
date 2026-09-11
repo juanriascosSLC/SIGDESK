@@ -1,26 +1,19 @@
-import { useQuery } from '@tanstack/react-query';
+import type { UseQueryResult } from '@tanstack/react-query';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
-import { getWorkflowAssignmentDirectory } from './api';
+import type { WorkflowAssignmentDirectory } from './api';
 import type { WorkflowNodeData } from './CustomNodes';
 
 interface AssignmentActionEditorProps {
   data: WorkflowNodeData;
   readOnly: boolean;
+  directory: UseQueryResult<WorkflowAssignmentDirectory, Error>;
   onChange: (data: Partial<WorkflowNodeData>) => void;
 }
 
-export default function AssignmentActionEditor({ data, readOnly, onChange }: AssignmentActionEditorProps) {
+export default function AssignmentActionEditor({ data, readOnly, directory, onChange }: AssignmentActionEditorProps) {
   // El modo vive en el nodo. Antes lo imponía el bloque elegido en la paleta, y
   // cambiar de equipo a persona obligaba a borrar el nodo y reconfigurarlo.
   const mode: 'team' | 'user' = data.assignmentMode === 'user' ? 'user' : 'team';
-  const directory = useQuery({
-    queryKey: ['organization', 'assignment-directory', 'tickets'],
-    queryFn: getWorkflowAssignmentDirectory,
-    enabled: !readOnly,
-    retry: 1,
-    staleTime: 5 * 60 * 1000,
-  });
-
   const departments = directory.data?.departments ?? [];
   const teams = (directory.data?.teams ?? []).filter((team) => team.department_id === data.departmentId);
   const assignees = (directory.data?.assignees ?? []).filter((assignee) => assignee.team_id === data.teamId);

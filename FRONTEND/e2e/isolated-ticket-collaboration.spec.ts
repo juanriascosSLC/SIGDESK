@@ -176,7 +176,7 @@ test.describe('Isolated ticket collaboration (identity presentation, no shared-D
       await expect(page.getByText('Playwright Requester', { exact: true }).first()).toBeVisible();
       await expect(page.getByText(commentBody, { exact: true }).first()).toBeVisible();
       await expect(page.getByText(attachmentName, { exact: true })).toBeVisible();
-      await expect(page.getByText('Tickets combinados en', { exact: false })).toBeVisible();
+      await expect(page.getByText('Tickets merged into', { exact: false })).toBeVisible();
       await expect(page.getByText('Playwright secondary incident for merge (isolated)', { exact: true })).toBeVisible();
     } finally {
       await stack.cleanup();

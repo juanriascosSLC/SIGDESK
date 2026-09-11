@@ -82,6 +82,7 @@ export interface ChangeTask {
   id: string;
   humanId: string;
   changeId: string;
+  workflowKey?: string;
   title: string;
   description: string;
   area: string;
@@ -90,6 +91,8 @@ export interface ChangeTask {
   departmentId: string;
   teamId: string;
   assigneeUserId: string;
+  /** Trusted current-assignment display name; never a raw user UUID. */
+  assigneeName?: string;
   organization?: {
     departmentId: string;
     departmentName: string;

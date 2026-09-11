@@ -35,6 +35,15 @@ async function stubNotifications(page: import('@playwright/test').Page) {
   await page.route('**/notifications*', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], unread: 0 }) }),
   );
+  await page.route('**/knowledge/health', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'ok', service: 'knowledge' }) }),
+  );
+  await page.route('**/knowledge/articulos*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [] }) }),
+  );
+  await page.route('https://fonts.googleapis.com/**', (route) =>
+    route.fulfill({ status: 200, contentType: 'text/css', body: '' }),
+  );
 }
 
 test.describe('static: no functional native dialogs or dead links in production code', () => {
@@ -371,7 +380,7 @@ test('Home shows no hardcoded ticket/CSAT numbers', async ({ page }) => {
   await expect(page.getByText('4.6')).toHaveCount(0);
   // The real, permission-derived quick link still renders — scoped to
   // <main> since the same link also exists in the sidebar nav.
-  await expect(page.getByRole('main').getByRole('link', { name: /tickets & issues/i })).toBeVisible();
+  await expect(page.getByRole('main').getByRole('link', { name: 'Incidents', exact: true })).toBeVisible();
 });
 
 test('Portal Catalog: select a definition, open its form inside /portal, cancel back to /portal/catalog', async ({ page }) => {

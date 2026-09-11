@@ -25,9 +25,11 @@ import { EmptyMessage, IconButton, SectionHeading } from './ui';
 export function AutomationsBindingsEditor({
   specification,
   updateSpecification,
+  entityKey = 'INC',
 }: {
   specification: CatalogSpecification;
   updateSpecification: (updater: (current: CatalogSpecification) => CatalogSpecification) => void;
+  entityKey?: string;
 }) {
   const recursos = useQuery({
     queryKey: ['catalog-resources'],
@@ -35,8 +37,17 @@ export function AutomationsBindingsEditor({
   });
 
   const disponibles = useMemo(
-    () => (recursos.data ?? []).filter((recurso) => recurso.reference.module === 'automations'),
-    [recursos.data],
+    () =>
+      (recursos.data ?? []).filter((recurso) => {
+        if (recurso.reference.module !== 'automations') return false;
+        const cap = recurso.automationCapability;
+        if (!cap) return true;
+        if (cap.selectable === false) return false;
+        if (entityKey && cap.categoryId !== entityKey) return false;
+        if (cap.trigger === 'incident_service_required' && entityKey !== 'INC') return false;
+        return true;
+      }),
+    [recursos.data, entityKey],
   );
 
   const vinculadas = useMemo(
@@ -55,18 +66,29 @@ export function AutomationsBindingsEditor({
     const recurso = disponibles.find((candidato) => candidato.reference.resourceInstanceId === workflowID);
     if (!recurso) return;
     updateSpecification((current) => {
-      current.bindings = [
-        ...(current.bindings ?? []),
-        {
-          module: 'automations',
-          resourceType: 'workflow',
-          resourceId: recurso.reference.resourceId,
-          resourceInstanceId: recurso.reference.resourceInstanceId,
-          resourceVersion: recurso.reference.resourceVersion,
-          contractVersion: recurso.reference.contractVersion,
-          enabled: true,
-        } satisfies ResourceBinding,
-      ];
+      const existingBindings = current.bindings ?? [];
+      const sameFamilyIndex = existingBindings.findIndex(
+        (b) =>
+          b.module === 'automations' &&
+          b.resourceType === 'workflow' &&
+          b.resourceId === recurso.reference.resourceId,
+      );
+      const newBinding: ResourceBinding = {
+        module: 'automations',
+        resourceType: 'workflow',
+        resourceId: recurso.reference.resourceId,
+        resourceInstanceId: recurso.reference.resourceInstanceId,
+        resourceVersion: recurso.reference.resourceVersion,
+        contractVersion: recurso.reference.contractVersion,
+        enabled: true,
+      };
+      if (sameFamilyIndex >= 0) {
+        const updated = [...existingBindings];
+        updated[sameFamilyIndex] = newBinding;
+        current.bindings = updated;
+      } else {
+        current.bindings = [...existingBindings, newBinding];
+      }
       return current;
     });
   }

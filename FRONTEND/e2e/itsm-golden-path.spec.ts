@@ -5,8 +5,18 @@ import {
   type APIResponse,
 } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
-import { mockAuthenticatedAdmin, SIG_DESK_API_BASE } from './support';
+import * as fs from 'node:fs';
+import * as http from 'node:http';
+import type { AddressInfo } from 'node:net';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  mockAuthenticatedAdmin,
+  mockAuthenticatedTaskExecutor,
+  SIG_DESK_API_BASE,
+} from './support';
 import { startIsolatedItsmStack } from './isolated-itsm-stack';
+import { mintE2EJWT, resolveJwtSecret } from './isolated-catalog-stack';
 import {
   definitionData,
   type Definition,
@@ -26,8 +36,9 @@ import {
 //   - /catalog/definitions/*, /entities/INC, /tickets/*      -> tickets_service
 //   - /entities/PRB/*, /relationships/*  (ALL entity keys)   -> problem_service
 //   - /changes, /changes/*                                   -> change_service
-//   - /assets/sites (shared, read-only CMDB dependency)      -> the shared backend
+//   - asset validation during creation                       -> run-owned tickets stub
 const apiBaseURL = SIG_DESK_API_BASE;
+const e2eDirectory = path.dirname(fileURLToPath(import.meta.url));
 
 type Entity = {
   id: string;
@@ -212,6 +223,16 @@ async function publishRealPrbDefinition(ticketsRequest: APIRequestContext): Prom
               { key: 'close', label: 'Close', from: 'resolved', to: 'closed' },
             ],
           },
+          relations: [
+            {
+              key: 'investigates', label: 'Investigated incident', targetEntityKey: 'INC',
+              inverseKey: 'affectedByProblem', inverseLabel: 'Related problem', cardinality: 'many', contractVersion: '1',
+            },
+            {
+              key: 'resolvedBy', label: 'Resolution change', targetEntityKey: 'RFC',
+              inverseKey: 'resolvesProblem', inverseLabel: 'Resolves problem', cardinality: 'many', contractVersion: '1',
+            },
+          ],
         },
       },
     }),
@@ -223,23 +244,70 @@ async function publishRealPrbDefinition(ticketsRequest: APIRequestContext): Prom
   );
 }
 
-test('executes and traces the metadata-driven INC → PRB → RFC golden path', async ({
-  page,
-  request,
-}) => {
+async function publishCanonicalRfcDefinition(ticketsRequest: APIRequestContext): Promise<void> {
+  const fixturePath = path.resolve(e2eDirectory, '../../BACKEND/scripts/fixtures/catalog-rfc-v1.json');
+  const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8')) as {
+    entityKey: 'RFC';
+    name: string;
+    specification: Record<string, unknown>;
+  };
+  const draft = await jsonOrFailure<Definition & { version: number }>(
+    await ticketsRequest.post('/catalog/definitions', { data: fixture }),
+    'create canonical RFC definition draft',
+  );
+  await jsonOrFailure(
+    await ticketsRequest.post(`/catalog/definitions/RFC/versions/${draft.version}/publish`),
+    'publish canonical RFC definition',
+  );
+}
+
+test('the scoped browser session overrides the release-gate administrator header', async ({ browser }) => {
+  const gateToken = 'release-gate-administrator-token';
+  const scopedToken = 'services-operator-session-token';
+  const receivedAuthorization: string[] = [];
+  const server = http.createServer((request, response) => {
+    receivedAuthorization.push(request.headers.authorization ?? '');
+    response.writeHead(200, { 'Content-Type': 'application/json' });
+    response.end(JSON.stringify({ items: [] }));
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+
+  const context = await browser.newContext({
+    extraHTTPHeaders: { Authorization: `Bearer ${gateToken}` },
+  });
+  try {
+    const routedPage = await context.newPage();
+    const port = (server.address() as AddressInfo).port;
+    await mockAuthenticatedTaskExecutor(routedPage, {
+      changeApiUrl: `http://127.0.0.1:${port}`,
+      sessionToken: scopedToken,
+      runToken: 'scoped-token-regression',
+      specLabel: 'itsm-golden-path.spec.ts / scoped-token regression',
+    });
+
+    const response = await routedPage.goto(`${apiBaseURL}/changes/tasks/assigned?assignedToMe=true`);
+    expect(response?.status()).toBe(200);
+    expect(receivedAuthorization).toEqual([`Bearer ${scopedToken}`]);
+  } finally {
+    await context.close();
+    await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  }
+});
+
+test('executes and traces the metadata-driven INC → PRB → RFC golden path', async ({ page }) => {
   const stack = await startIsolatedItsmStack();
   try {
     await publishRealPrbDefinition(stack.tickets.isolatedRequest);
+    await publishCanonicalRfcDefinition(stack.tickets.isolatedRequest);
 
     const incDefinition = await getDefinition(stack.tickets.isolatedRequest, '/catalog/definitions/INC');
-    // Sites are a shared, read-only CMDB dependency — same carve-out as
-    // every other isolated-stack spec.
-    const sites = await jsonOrFailure<{ items: Array<{ id: string }> }>(
-      await request.get(`${apiBaseURL}/assets/sites?limit=1`),
-      'load one CMDB site',
-    );
-    const siteId = sites.items[0]?.id;
-    expect(siteId).toBeTruthy();
+    // The isolated tickets process owns a deterministic resolver that
+    // accepts this synthetic site identity and persists its snapshot. No
+    // shared Resource/Inventory service participates in this golden path.
+    const siteId = '00000000-0000-4000-8000-0000000000aa';
     const incData = definitionData(incDefinition, {
       title: 'E2E recurring camera outage',
       description:
@@ -324,7 +392,7 @@ test('executes and traces the metadata-driven INC → PRB → RFC golden path', 
           'Eliminate the documented root cause and prevent additional incidents.',
         impact: 'critical',
         urgency: 'high',
-        likelihood: 'high',
+        probability: 'high',
       },
       new Set(['riskLevel', 'relatedProblemId', 'relatedIncidentIds']),
     );
@@ -340,7 +408,7 @@ test('executes and traces the metadata-driven INC → PRB → RFC golden path', 
       'replay RFC',
     );
     expect(changeReplay.id).toBe(change.id);
-    expect(change.data.riskLevel).toBe('high');
+    expect(change.data.riskLevel).toBe('critical');
 
     let changeInProgress = await transitionChange(stack.change.isolatedRequest, change.id, 'submit');
     changeInProgress = await transitionChange(stack.change.isolatedRequest, changeInProgress.id, 'request_approval');
@@ -388,8 +456,69 @@ test('executes and traces the metadata-driven INC → PRB → RFC golden path', 
     await transitionTask(stack.change.isolatedRequest, change.id, inventoryTask.id, 'start');
     await transitionTask(stack.change.isolatedRequest, change.id, inventoryTask.id, 'complete', { evidence: ['Stock validated'] });
     await transitionTask(stack.change.isolatedRequest, change.id, installationTask.id, 'mark_ready');
-    await transitionTask(stack.change.isolatedRequest, change.id, installationTask.id, 'start');
-    await transitionTask(stack.change.isolatedRequest, change.id, installationTask.id, 'complete', { evidence: ['Deployment validated'] });
+
+    // Exercise the Services workspace against the REAL isolated
+    // change_service instead of finishing its task through a setup API call.
+    // The browser identity has only change_tasks permissions and its signed
+    // JWT subject is the actual assignee. It can execute the Work Order but
+    // cannot open the parent RFC.
+    const servicesPage = await page.context().newPage();
+    try {
+      const servicesToken = mintE2EJWT(
+        resolveJwtSecret(),
+        servicesAssignment.assignee.id,
+        servicesAssignment.assignee.name,
+        ['change_tasks:read:propio', 'change_tasks:update:propio'],
+      );
+      await mockAuthenticatedTaskExecutor(servicesPage, {
+        changeApiUrl: stack.change.baseUrl,
+        sessionToken: servicesToken,
+        runToken: stack.runToken,
+        specLabel: 'itsm-golden-path.spec.ts / Services Work Order',
+      });
+      await servicesPage.route('**/notifications*', (route) => route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: [], unread: 0 }),
+      }));
+
+      await servicesPage.goto('/app/services');
+      await expect(servicesPage.getByRole('heading', { name: 'Services operations' })).toBeVisible();
+      const workOrder = servicesPage.getByTestId(`service-work-order-${installationTask.id}`);
+      await expect(workOrder).toContainText(installationTask.humanId);
+      await expect(workOrder).toContainText(servicesAssignment.assignee.name);
+      await expect(servicesPage.getByText(inventoryTask.humanId, { exact: true })).toHaveCount(0);
+      await workOrder.click();
+
+      await expect(servicesPage.getByRole('heading', { name: 'Deploy and validate remediation' })).toBeVisible();
+      await expect(servicesPage.getByRole('link', { name: 'Open RFC' })).toHaveCount(0);
+      await servicesPage.getByRole('button', { name: 'Start work' }).click();
+      await servicesPage.getByRole('button', { name: 'Report blocker' }).click();
+      await servicesPage.getByLabel('Reason for blocking').fill('Waiting for the approved maintenance window.');
+      await servicesPage.getByRole('dialog').getByRole('button', { name: 'Block', exact: true }).click();
+      await expect(servicesPage.getByText('Waiting for the approved maintenance window.')).toBeVisible();
+      await servicesPage.getByRole('button', { name: 'Clear blocker' }).click();
+      await expect(servicesPage.getByText('Ready to start', { exact: true })).toBeVisible();
+      await servicesPage.getByRole('button', { name: 'Start work' }).click();
+      await servicesPage.getByRole('button', { name: 'Complete with evidence' }).click();
+      const completionDialog = servicesPage.getByRole('dialog');
+      await expect(completionDialog.getByRole('button', { name: 'Complete', exact: true })).toBeDisabled();
+      await completionDialog.getByLabel('Evidence or result').fill('Deployment validated from the Services workspace.');
+      await completionDialog.getByRole('button', { name: 'Complete', exact: true }).click();
+      await expect(servicesPage.getByText('Deployment validated from the Services workspace.')).toBeVisible();
+      await expect(servicesPage.getByText('Completed', { exact: true })).toBeVisible();
+
+      // Reopen is also a real domain transition. Return the task to a valid
+      // terminal state afterwards so the RFC can continue and close.
+      await servicesPage.getByRole('button', { name: 'Reopen' }).click();
+      await servicesPage.getByRole('button', { name: 'Start work' }).click();
+      await servicesPage.getByRole('button', { name: 'Complete with evidence' }).click();
+      await servicesPage.getByLabel('Evidence or result').fill('Final Services verification after reopening.');
+      await servicesPage.getByRole('dialog').getByRole('button', { name: 'Complete', exact: true }).click();
+      await expect(servicesPage.getByText('Final Services verification after reopening.')).toBeVisible();
+    } finally {
+      await servicesPage.close();
+    }
 
     await transitionChange(stack.change.isolatedRequest, change.id, 'schedule');
     await transitionChange(stack.change.isolatedRequest, change.id, 'start');
@@ -461,11 +590,9 @@ test('executes and traces the metadata-driven INC → PRB → RFC golden path', 
       }),
     ).toBeVisible();
     await expect(page.getByText(problem.humanId, { exact: true })).toBeVisible();
-    // ChangeDetail renders this badge as "Risk: {label}" in English today
-    // (riskLabel maps 'high' -> 'High') — this test asserted the stale
-    // Spanish "Riesgo Alto", which no longer exists anywhere in the
-    // component and made the assertion fail instead of finding the real text.
-    await expect(page.getByText('Risk: High', { exact: true }).first()).toBeVisible();
+    // All three canonical risk inputs are high, so the domain calculation
+    // must preserve its highest band in both the API and the real detail UI.
+    await expect(page.getByText('Risk: Critical', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('Validate replacement stock', { exact: true })).toBeVisible();
     await expect(page.getByText('Deploy and validate remediation', { exact: true })).toBeVisible();
   } finally {

@@ -7,7 +7,7 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
   /** Adds a hover affordance for cards that act as click targets. */
   interactive?: boolean;
   /** Forwarded to the underlying div, for call sites that need to scroll a
-   *  card into view or focus it (SrvDetail's equipment checklist). React 19
+   *  card into view or focus it. React 19
    *  passes `ref` through as a normal prop, so no forwardRef wrapper is
    *  needed — only the type has to admit it. */
   ref?: Ref<HTMLDivElement>;

@@ -27,6 +27,28 @@ export type WorkflowNodeData = {
   assigneeUserId?: string;
   assigneeName?: string;
   overwriteExisting?: boolean;
+  onOmitted?: 'continue' | 'stop';
+	workKey?: string;
+	workTitle?: string;
+	workInstructions?: string;
+	workRequired?: boolean;
+	workDueMinutes?: string;
+  serviceAffected?: string;
+  changeType?: 'standard' | 'normal' | 'emergency';
+  impact?: 'low' | 'medium' | 'high' | 'critical';
+  probability?: 'low' | 'medium' | 'high';
+  urgency?: 'low' | 'medium' | 'high';
+  leadTimeMinutes?: string;
+  durationMinutes?: string;
+  requestApproval?: boolean;
+  changeImpact?: 'low' | 'medium' | 'high' | 'critical';
+  changeProbability?: 'low' | 'medium' | 'high';
+  changeUrgency?: 'low' | 'medium' | 'high';
+  changeLeadMinutes?: string;
+  changeDurationMinutes?: string;
+  implementationPlan?: string;
+  rollbackPlan?: string;
+  validationPlan?: string;
   /** Transición publicada que pide el bloque «Cambiar estado».
    *
    * Solo `transitionKey` se publica. El origen, el destino y la etiqueta se
@@ -164,7 +186,13 @@ export function ActionNode({ data }: WorkflowNodeProps) {
     : data.transitionKey
       ? `${String(data.transitionFrom ?? '?')} → ${String(data.transitionTo ?? '?')} · ${String(data.transitionKey)}`
       : 'Transition unselected';
-  const resumen = assignmentSummary ?? statusSummary;
+  const workSummary = data.catalogKey !== 'action.create_incident_work'
+    ? undefined
+    : `${String(data.workTitle || 'Untitled work')} · ${String(data.workDueMinutes || '0')} min`;
+  const serviceEscalationSummary = data.catalogKey !== 'action.create_service_rfc'
+    ? undefined
+    : `${String(data.serviceAffected || 'Service not selected')} · approval required`;
+  const resumen = assignmentSummary ?? statusSummary ?? workSummary ?? serviceEscalationSummary;
   return (
     <div className="relative">
       <Handle type="target" position={Position.Left} className={handleClass(data)} />

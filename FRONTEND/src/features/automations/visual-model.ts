@@ -6,6 +6,8 @@ import type {
   WorkflowExecutionPlan,
   WorkflowPlanNode,
   WorkflowRule,
+  WorkflowIncidentWorkConfig,
+  WorkflowServiceEscalationConfig,
   WorkflowStatusConfig,
   WorkflowVisualLayout,
 } from './api';
@@ -41,6 +43,7 @@ export interface WorkflowCatalogItem {
 
 export const workflowCatalog: WorkflowCatalogItem[] = [
   { key: 'ticket.created', group: 'Triggers', nodeType: 'trigger', title: 'INC Created', description: 'When an incident is created.', support: 'operational', color: 'cyan' },
+  { key: 'incident.service_required', group: 'Triggers', nodeType: 'trigger', title: 'Service Required', description: 'When IT documents that the incident requires field or service work.', support: 'operational', color: 'cyan' },
   { key: 'ticket.status_changed', group: 'Triggers', nodeType: 'trigger', title: 'Status Changed', description: 'When a ticket transitions.', support: 'planned', color: 'cyan' },
   { key: 'ticket.assigned', group: 'Triggers', nodeType: 'trigger', title: 'Ticket Assigned', description: 'When assignee or team changes.', support: 'planned', color: 'cyan' },
   { key: 'ticket.comment_added', group: 'Triggers', nodeType: 'trigger', title: 'Comment Added', description: 'When activity is recorded.', support: 'planned', color: 'cyan' },
@@ -66,6 +69,8 @@ export const workflowCatalog: WorkflowCatalogItem[] = [
   { key: 'action.assign', group: 'Actions', nodeType: 'action', title: 'Assign Automatically', description: 'Routes work to an area, team, or person.', support: 'operational', color: 'emerald', defaults: { assignmentMode: 'team', overwriteExisting: false } },
   { key: 'action.add_stakeholder', group: 'Actions', nodeType: 'action', title: 'Add Stakeholder', description: 'Adds person or interested area.', support: 'planned', color: 'emerald' },
   { key: 'action.change_status', group: 'Actions', nodeType: 'action', title: 'Change Status', description: 'Requests a published lifecycle transition.', support: 'operational', color: 'emerald', defaults: { actionType: 'changeStatus' } },
+	{ key: 'action.create_incident_work', group: 'Actions', nodeType: 'action', title: 'Create Incident Work', description: 'Creates the initial IT troubleshooting checklist inside the INC.', support: 'operational', color: 'emerald', defaults: { actionType: 'createIncidentWork', workKey: 'initial_troubleshooting', workTitle: 'Troubleshoot incident', workInstructions: 'Validate power, network, affected devices, service health, and recent changes. Document the findings.', workRequired: true, workDueMinutes: '30' } },
+  { key: 'action.create_service_rfc', group: 'Actions', nodeType: 'action', title: 'Create Service RFC', description: 'Creates a related RFC from documented troubleshooting and sends it for approval.', support: 'operational', color: 'emerald', defaults: { actionType: 'createServiceRfc', serviceAffected: 'Field Services', changeType: 'normal', impact: 'medium', probability: 'low', urgency: 'medium', leadTimeMinutes: '60', durationMinutes: '120', requestApproval: true, changeImpact: 'medium', changeProbability: 'low', changeUrgency: 'medium', changeLeadMinutes: '60', changeDurationMinutes: '120', implementationPlan: 'Services will inspect the affected site and devices, perform the approved corrective work, and record evidence.', rollbackPlan: 'Stop work, restore the prior configuration or equipment state, and notify IT and interested areas.', validationPlan: 'IT validates service health, recording, playback, detections, and the original incident symptoms after field work.' } },
   { key: 'action.change_priority', group: 'Actions', nodeType: 'action', title: 'Change Priority', description: 'Updates ticket priority.', support: 'planned', color: 'emerald' },
   { key: 'action.add_comment', group: 'Actions', nodeType: 'action', title: 'Add Comment', description: 'Records automated activity.', support: 'planned', color: 'emerald' },
   { key: 'action.create_prb', group: 'Actions', nodeType: 'action', title: 'Create PRB', description: 'Opens a related problem.', support: 'planned', color: 'emerald' },
@@ -185,13 +190,16 @@ export function compileVisualWorkflow(nodes: WorkflowNode[], edges: Edge[], vers
     errors.push(message);
     issues.push({ nodeId, message });
   };
-  const triggers = nodes.filter((node) => node.type === 'trigger' && node.data.catalogKey === 'ticket.created');
+  const triggers = nodes.filter((node) => node.type === 'trigger'
+    && (node.data.catalogKey === 'ticket.created' || node.data.catalogKey === 'incident.service_required'));
   const actions = nodes.filter((node) => node.type === 'action'
     && node.data.supportStatus === 'operational'
     && (String(node.data.catalogKey) === 'action.notify_stakeholders'
       || String(node.data.catalogKey) === 'action.change_status'
+		|| String(node.data.catalogKey) === 'action.create_incident_work'
+      || String(node.data.catalogKey) === 'action.create_service_rfc'
       || esAccionDeAsignacion(node.data.catalogKey)));
-  if (triggers.length !== 1) fallar('The workflow must have exactly one operational trigger: “INC created”.');
+  if (triggers.length !== 1) fallar('The workflow must have exactly one operational incident trigger.');
   if (actions.length === 0) fallar('Connect at least one operational action.');
 
   const connectedIDs = new Set(edges.flatMap((edge) => [edge.source, edge.target]));
@@ -255,6 +263,88 @@ export function compileVisualWorkflow(nodes: WorkflowNode[], edges: Edge[], vers
         condicion: conditionText,
         demora_segundos: delaySeconds,
         config: { transition_key: transitionKey } satisfies WorkflowStatusConfig,
+      });
+      continue;
+    }
+
+		if (String(action.data.catalogKey) === 'action.create_incident_work') {
+			if (triggers[0]?.data.catalogKey !== 'ticket.created') {
+				fallar('“Create Incident Work” must start from the “INC Created” trigger.', action.id);
+				continue;
+			}
+			const workKey = String(action.data.workKey ?? '');
+			const title = String(action.data.workTitle ?? '');
+			const instructions = String(action.data.workInstructions ?? '');
+			const dueMinutes = Number(action.data.workDueMinutes ?? 0);
+			if (!/^[a-z0-9][a-z0-9_:-]*$/.test(workKey) || workKey.length > 120) {
+				fallar(`Use a stable lowercase work key in “${String(action.data.label)}”.`, action.id);
+				continue;
+			}
+			if (!title.trim() || !instructions.trim()) {
+				fallar(`Complete the title and instructions in “${String(action.data.label)}”.`, action.id);
+				continue;
+			}
+			if ([workKey, title, instructions].some((value) => value !== value.trim())) {
+				fallar(`Incident work in “${String(action.data.label)}” contains surrounding whitespace.`, action.id);
+				continue;
+			}
+			if (!Number.isInteger(dueMinutes) || dueMinutes < 0 || dueMinutes > 43_200) {
+				fallar(`Due time in “${String(action.data.label)}” must be between 0 and 43,200 minutes.`, action.id);
+				continue;
+			}
+			rules.push({
+				id: action.id,
+				accion: 'create_incident_work_item',
+				condicion: conditionText,
+				demora_segundos: delaySeconds,
+				config: { work_key: workKey, title, instructions, required: action.data.workRequired !== false, due_in_minutes: dueMinutes } satisfies WorkflowIncidentWorkConfig,
+			});
+			continue;
+		}
+
+    if (String(action.data.catalogKey) === 'action.create_service_rfc') {
+      if (triggers[0]?.data.catalogKey !== 'incident.service_required') {
+        fallar('“Create Service RFC” must start from the “Service Required” trigger.', action.id);
+        continue;
+      }
+      const serviceAffected = String(action.data.serviceAffected ?? '');
+      const changeType = String(action.data.changeType ?? '');
+      const impact = String(action.data.impact ?? action.data.changeImpact ?? '');
+      const probability = String(action.data.probability ?? action.data.changeProbability ?? '');
+      const urgency = String(action.data.urgency ?? action.data.changeUrgency ?? '');
+      const leadMinutes = Number(action.data.leadTimeMinutes ?? action.data.changeLeadMinutes ?? 0);
+      const durationMinutes = Number(action.data.durationMinutes ?? action.data.changeDurationMinutes ?? 0);
+      const implementationPlan = String(action.data.implementationPlan ?? '');
+      const rollbackPlan = String(action.data.rollbackPlan ?? '');
+      const validationPlan = String(action.data.validationPlan ?? '');
+      const textValues = [serviceAffected, changeType, impact, probability, urgency, implementationPlan, rollbackPlan, validationPlan];
+      if (textValues.some((value) => !value.trim() || value !== value.trim())) {
+        fallar(`Complete the RFC governance fields in “${String(action.data.label)}” without surrounding whitespace.`, action.id);
+        continue;
+      }
+      if (!Number.isInteger(leadMinutes) || leadMinutes < 0 || leadMinutes > 43_200
+        || !Number.isInteger(durationMinutes) || durationMinutes <= 0 || durationMinutes > 43_200) {
+        fallar(`Planning times in “${String(action.data.label)}” are invalid.`, action.id);
+        continue;
+      }
+      rules.push({
+        id: action.id,
+        accion: 'create_service_rfc',
+        condicion: conditionText,
+        demora_segundos: delaySeconds,
+        config: {
+          service_affected: serviceAffected,
+          change_type: changeType as WorkflowServiceEscalationConfig['change_type'],
+          impact: impact as WorkflowServiceEscalationConfig['impact'],
+          probability: probability as WorkflowServiceEscalationConfig['probability'],
+          urgency: urgency as WorkflowServiceEscalationConfig['urgency'],
+          lead_time_minutes: leadMinutes,
+          duration_minutes: durationMinutes,
+          implementation_plan: implementationPlan,
+          rollback_plan: rollbackPlan,
+          validation_plan: validationPlan,
+          request_approval: true,
+        } satisfies WorkflowServiceEscalationConfig,
       });
       continue;
     }
@@ -340,6 +430,30 @@ function assignmentConfig(config: WorkflowRule['config']): WorkflowAssignmentCon
   };
 }
 
+function incidentWorkConfig(config: WorkflowRule['config']): WorkflowIncidentWorkConfig | undefined {
+	if (!config || typeof config !== 'object') return undefined;
+	const candidate = config as Partial<WorkflowIncidentWorkConfig>;
+	if (typeof candidate.work_key !== 'string' || typeof candidate.title !== 'string' || typeof candidate.instructions !== 'string') return undefined;
+	return candidate as WorkflowIncidentWorkConfig;
+}
+
+function serviceEscalationConfig(config: WorkflowRule['config']): WorkflowServiceEscalationConfig | undefined {
+  if (!config || typeof config !== 'object') return undefined;
+  const candidate = config as Partial<WorkflowServiceEscalationConfig>;
+  if (typeof candidate.service_affected !== 'string'
+    || typeof candidate.change_type !== 'string'
+    || typeof candidate.impact !== 'string'
+    || typeof candidate.probability !== 'string'
+    || typeof candidate.urgency !== 'string'
+    || typeof candidate.lead_time_minutes !== 'number'
+    || typeof candidate.duration_minutes !== 'number'
+    || typeof candidate.implementation_plan !== 'string'
+    || typeof candidate.rollback_plan !== 'string'
+    || typeof candidate.validation_plan !== 'string'
+    || candidate.request_approval !== true) return undefined;
+  return candidate as WorkflowServiceEscalationConfig;
+}
+
 function actionFromRule(rule: WorkflowRule, position: { x: number; y: number }): WorkflowNode {
   if (rule.accion === 'notificar_interesados') {
     return nodeFromCatalog(catalogItem('action.notify_stakeholders')!, position);
@@ -355,6 +469,37 @@ function actionFromRule(rule: WorkflowRule, position: { x: number; y: number }):
     node.data.teamId = config?.team_id;
     node.data.assigneeUserId = config?.assignee_user_id;
     node.data.overwriteExisting = config?.overwrite_existing ?? false;
+    return node;
+  }
+	if (rule.accion === 'create_incident_work_item') {
+		const config = incidentWorkConfig(rule.config);
+		const node = nodeFromCatalog(catalogItem('action.create_incident_work')!, position);
+		node.data.workKey = config?.work_key ?? '';
+		node.data.workTitle = config?.title ?? '';
+		node.data.workInstructions = config?.instructions ?? '';
+		node.data.workRequired = config?.required !== false;
+		node.data.workDueMinutes = String(config?.due_in_minutes ?? 0);
+		return node;
+	}
+  if (rule.accion === 'create_service_rfc') {
+    const config = serviceEscalationConfig(rule.config);
+    const node = nodeFromCatalog(catalogItem('action.create_service_rfc')!, position);
+    node.data.serviceAffected = config?.service_affected ?? '';
+    node.data.changeType = config?.change_type ?? 'normal';
+    node.data.impact = config?.impact ?? 'medium';
+    node.data.probability = config?.probability ?? 'low';
+    node.data.urgency = config?.urgency ?? 'medium';
+    node.data.leadTimeMinutes = String(config?.lead_time_minutes ?? 60);
+    node.data.durationMinutes = String(config?.duration_minutes ?? 120);
+    node.data.requestApproval = true;
+    node.data.changeImpact = config?.impact ?? 'medium';
+    node.data.changeProbability = config?.probability ?? 'low';
+    node.data.changeUrgency = config?.urgency ?? 'medium';
+    node.data.changeLeadMinutes = String(config?.lead_time_minutes ?? 60);
+    node.data.changeDurationMinutes = String(config?.duration_minutes ?? 120);
+    node.data.implementationPlan = config?.implementation_plan ?? '';
+    node.data.rollbackPlan = config?.rollback_plan ?? '';
+    node.data.validationPlan = config?.validation_plan ?? '';
     return node;
   }
   return {
@@ -379,7 +524,11 @@ export function graphFromDefinition(definition: WorkflowDefinition): { nodes: Wo
       edges: definition.layout.edges as Edge[],
     };
   }
-  const trigger = nodeFromCatalog(catalogItem('ticket.created')!, { x: 80, y: 160 });
+  const publishedTriggerType = definition.execution_plan?.nodes.find((node) => node.kind === 'trigger')?.type;
+  const triggerKey = publishedTriggerType === 'incident_service_required'
+    ? 'incident.service_required'
+    : 'ticket.created';
+  const trigger = nodeFromCatalog(catalogItem(triggerKey)!, { x: 80, y: 160 });
   trigger.id = 'trigger-published';
   const nodes: WorkflowNode[] = [trigger];
   const edges: Edge[] = [];
@@ -427,12 +576,18 @@ export function graphFromDefinition(definition: WorkflowDefinition): { nodes: Wo
  *  eso lo comprueba compileVisualWorkflow antes de llegar aquí. */
 function esNodoEjecutable(node: WorkflowNode): boolean {
   if (node.data.supportStatus !== 'operational') return false;
-  if (node.type === 'trigger') return node.data.catalogKey === 'ticket.created';
+  if (node.type === 'trigger') {
+    return node.data.catalogKey === 'ticket.created' || node.data.catalogKey === 'incident.service_required';
+  }
   if (node.type === 'condition') return node.data.catalogKey === 'condition.priority';
   if (node.type === 'delay') return node.data.catalogKey === 'control.delay';
   if (node.type === 'action') {
     const clave = String(node.data.catalogKey ?? '');
-    return clave === 'action.notify_stakeholders' || clave === 'action.change_status' || esAccionDeAsignacion(clave);
+		return clave === 'action.notify_stakeholders'
+      || clave === 'action.change_status'
+      || clave === 'action.create_incident_work'
+      || clave === 'action.create_service_rfc'
+      || esAccionDeAsignacion(clave);
   }
   return false;
 }
@@ -453,6 +608,8 @@ function accionDeNodo(node: WorkflowNode): string | undefined {
   const clave = String(node.data.catalogKey ?? '');
   if (clave === 'action.notify_stakeholders') return 'notificar_interesados';
   if (clave === 'action.change_status') return 'cambiar_estado_ticket';
+	if (clave === 'action.create_incident_work') return 'create_incident_work_item';
+  if (clave === 'action.create_service_rfc') return 'create_service_rfc';
   if (esAccionDeAsignacion(clave)) return 'asignar_automatico';
   return undefined;
 }
@@ -509,7 +666,12 @@ export function compileExecutionPlan(
   const planNodes: WorkflowPlanNode[] = [];
   for (const node of ejecutables) {
     if (node.type === 'trigger') {
-      planNodes.push({ id: node.id, kind: 'trigger', type: 'ticket_created', next: salidas(node.id) });
+      planNodes.push({
+        id: node.id,
+        kind: 'trigger',
+        type: node.data.catalogKey === 'incident.service_required' ? 'incident_service_required' : 'ticket_created',
+        next: salidas(node.id),
+      });
       continue;
     }
     if (node.type === 'condition') {
@@ -538,7 +700,13 @@ export function compileExecutionPlan(
     // error de validación anterior; omitirla aquí deja que el mensaje que ve la
     // persona sea el de su bloque, no uno sobre el plan.
     if (!accion || !conIDDeRegla.has(node.id)) continue;
-    planNodes.push({ id: node.id, kind: 'action', action: accion, next: salidas(node.id) });
+    planNodes.push({
+      id: node.id,
+      kind: 'action',
+      action: accion,
+      next: salidas(node.id),
+      ...(node.data.onOmitted ? { on_omitted: node.data.onOmitted } : {}),
+    });
   }
 
   return {

@@ -179,8 +179,11 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Services',
     route: '/app/services',
     icon: Wrench,
-    section: 'cases',
-    permission: (ctx) => ctx.can(PERMISSIONS.changesView),
+    section: 'workspace',
+    // Services is not a fourth case type. It is the operating surface over
+    // RFC tasks directed to Services plus Inventory-backed sites. Either
+    // capability exposes the workspace; each panel and route narrows again.
+    permission: (ctx) => ctx.can(PERMISSIONS.changeTasksView) || ctx.can(PERMISSIONS.assetsView),
     surfaces: ['sidebar', 'drawer'],
   },
   {

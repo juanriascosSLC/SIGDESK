@@ -193,7 +193,7 @@ function AssignedTaskCard({
   // Never the raw id as a fallback: an id with no resolved name reads as
   // "User unavailable", distinct from genuinely having no individual
   // assignee (team-only), which the render below phrases separately.
-  const assignee = task.organization?.assigneeName || (task.assigneeId ? USER_UNAVAILABLE_LABEL : '');
+  const assignee = task.assigneeName || task.organization?.assigneeName || (task.assigneeUserId ? USER_UNAVAILABLE_LABEL : '');
 
   return (
     <article className="flex flex-col rounded-2xl border border-border/30 bg-surface-container p-4">

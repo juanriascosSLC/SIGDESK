@@ -73,6 +73,108 @@ const QUICK_FIELD_TEMPLATES: Array<{
   { label: 'Email', type: 'email', icon: Mail, color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
 ];
 
+function placeNewField(current: CatalogSpecification, key: string) {
+  current.views = current.views ?? {};
+  current.views.create = [...new Set([...(current.views.create ?? []), key])];
+  if (current.layouts?.create) {
+    const section = current.layouts.create.default.sections[0];
+    const placement = {
+      id: `placement-create-${key}`,
+      kind: 'field' as const,
+      source: 'catalog' as const,
+      fieldKey: key,
+      columnSpan: 1 as const,
+    };
+    if (section) {
+      section.placements.push(placement);
+    } else {
+      current.layouts.create.default.sections.push({
+        id: 'section-create-main',
+        columns: 1,
+        placements: [placement],
+      });
+    }
+  }
+  if (current.createPage) {
+    current.createPage = mapPageDefinition(current.createPage, (page) => appendCatalogFieldRow(page, key));
+  }
+  if (current.editPage) {
+    current.editPage = mapPageDefinition(current.editPage, (page) => appendCatalogFieldRow(page, key));
+  }
+  const detailReady = upgradeSpecificationToPageLayout(current);
+  current.detailPage = mapPageDefinition(detailReady.detailPage!, (page) =>
+    appendCatalogFieldRow(page, key),
+  );
+  if (current.detailLayout) {
+    const alreadyPlaced = current.detailLayout.fields.some(
+      (placement) => placement.source === 'catalog' && placement.fieldKey === key,
+    );
+    if (!alreadyPlaced) {
+      current.detailLayout.fields.push({ source: 'catalog', fieldKey: key, width: 'full' });
+    }
+  }
+}
+
+function ensureCreatePlacement(
+  specification: CatalogSpecification,
+  key: string,
+): CatalogSpecification {
+  const next = specification.createPage || specification.layouts?.create
+    ? specification
+    : upgradeSpecificationToFormPages(specification);
+
+  next.views = next.views ?? {};
+  next.views.create = [...new Set([...(next.views.create ?? []), key])];
+
+  const appendToLegacyDocument = (document: LayoutDocument) => {
+    const alreadyPlaced = document.sections.some((section) =>
+      section.placements.some(
+        (placement) => placement.kind === 'field' && placement.source === 'catalog' && placement.fieldKey === key,
+      ),
+    );
+    if (alreadyPlaced) return;
+    const placement = {
+      id: `placement-create-${key}`,
+      kind: 'field' as const,
+      source: 'catalog' as const,
+      fieldKey: key,
+      columnSpan: 1 as const,
+    };
+    const section = document.sections[0];
+    if (section) section.placements.push(placement);
+    else document.sections.push({ id: 'section-create-main', columns: 1, placements: [placement] });
+  };
+
+  if (next.layouts?.create) {
+    appendToLegacyDocument(next.layouts.create.default);
+    next.layouts.create.variants?.forEach((variant) => appendToLegacyDocument(variant.document));
+  }
+  if (next.createPage) {
+    next.createPage = mapPageDefinition(next.createPage, (page) => appendCatalogFieldRow(page, key));
+  }
+  return next;
+}
+
+function ensureSiteAssetBinding(current: CatalogSpecification): CatalogSpecification {
+  if (current.fields.some((field) => field.bindsTo === 'siteAssetId')) return current;
+
+  const siteKey = uniqueFieldKey(
+    current.fields.map((field) => field.key),
+    'siteAfectado',
+  );
+  const firstDevice = current.fields.findIndex((field) => field.bindsTo === 'assetId');
+  const siteField: FieldDefinition = {
+    key: siteKey,
+    label: 'Affected Site',
+    type: 'text',
+    required: false,
+    bindsTo: 'siteAssetId',
+  };
+  current.fields.splice(firstDevice < 0 ? current.fields.length : firstDevice, 0, siteField);
+  placeNewField(current, siteKey);
+  return current;
+}
+
 export function FieldsEditor({
   specification,
   updateSpecification,
@@ -133,70 +235,6 @@ export function FieldsEditor({
   // designer existed, or removed from it and later turned into a binding, so
   // adding the binding must repair the placement instead of asking the admin
   // to discover a backend-only validation error at publish time.
-  function ensureCreatePlacement(
-    specification: CatalogSpecification,
-    key: string,
-  ): CatalogSpecification {
-    const next = specification.createPage || specification.layouts?.create
-      ? specification
-      : upgradeSpecificationToFormPages(specification);
-
-    next.views = next.views ?? {};
-    next.views.create = [...new Set([...(next.views.create ?? []), key])];
-
-    const appendToLegacyDocument = (document: LayoutDocument) => {
-      const alreadyPlaced = document.sections.some((section) =>
-        section.placements.some(
-          (placement) => placement.kind === 'field' && placement.source === 'catalog' && placement.fieldKey === key,
-        ),
-      );
-      if (alreadyPlaced) return;
-      const placement = {
-        id: `placement-create-${key}`,
-        kind: 'field' as const,
-        source: 'catalog' as const,
-        fieldKey: key,
-        columnSpan: 1 as const,
-      };
-      const section = document.sections[0];
-      if (section) section.placements.push(placement);
-      else document.sections.push({ id: 'section-create-main', columns: 1, placements: [placement] });
-    };
-
-    if (next.layouts?.create) {
-      appendToLegacyDocument(next.layouts.create.default);
-      next.layouts.create.variants?.forEach((variant) => appendToLegacyDocument(variant.document));
-    }
-    if (next.createPage) {
-      next.createPage = mapPageDefinition(next.createPage, (page) => appendCatalogFieldRow(page, key));
-    }
-    return next;
-  }
-
-  // Inventory devices are always scoped by a site. Reuse the existing
-  // `assetId` ("Dispositivo del sitio") binding, but make its prerequisite
-  // explicit so the API never receives an impossible definition.
-  function ensureSiteAssetBinding(current: CatalogSpecification): CatalogSpecification {
-    if (current.fields.some((field) => field.bindsTo === 'siteAssetId')) return current;
-
-    const siteKey = uniqueFieldKey(
-      current.fields.map((field) => field.key),
-      'siteAfectado',
-    );
-    const firstDevice = current.fields.findIndex((field) => field.bindsTo === 'assetId');
-    const siteField: FieldDefinition = {
-      key: siteKey,
-      label: 'Affected Site',
-      type: 'text',
-      required: false,
-      bindsTo: 'siteAssetId',
-    };
-    // Keep the logical field order intuitive even when repairing an old draft.
-    current.fields.splice(firstDevice < 0 ? current.fields.length : firstDevice, 0, siteField);
-    placeNewField(current, siteKey);
-    return current;
-  }
-
   // Also repair drafts authored before this guard existed. Without this, a
   // field that is already `bindsTo` would require the admin to toggle its
   // selector off and on again before the definition could be published.
@@ -261,48 +299,6 @@ export function FieldsEditor({
       }
       return withCreatePlacement;
     });
-  }
-
-  function placeNewField(current: CatalogSpecification, key: string) {
-    current.views = current.views ?? {};
-    current.views.create = [...new Set([...(current.views.create ?? []), key])];
-    if (current.layouts?.create) {
-      const section = current.layouts.create.default.sections[0];
-      const placement = {
-        id: `placement-create-${key}`,
-        kind: 'field' as const,
-        source: 'catalog' as const,
-        fieldKey: key,
-        columnSpan: 1 as const,
-      };
-      if (section) {
-        section.placements.push(placement);
-      } else {
-        current.layouts.create.default.sections.push({
-          id: 'section-create-main',
-          columns: 1,
-          placements: [placement],
-        });
-      }
-    }
-    if (current.createPage) {
-      current.createPage = mapPageDefinition(current.createPage, (page) => appendCatalogFieldRow(page, key));
-    }
-    if (current.editPage) {
-      current.editPage = mapPageDefinition(current.editPage, (page) => appendCatalogFieldRow(page, key));
-    }
-    const detailReady = upgradeSpecificationToPageLayout(current);
-    current.detailPage = mapPageDefinition(detailReady.detailPage!, (page) =>
-      appendCatalogFieldRow(page, key),
-    );
-    if (current.detailLayout) {
-      const alreadyPlaced = current.detailLayout.fields.some(
-        (placement) => placement.source === 'catalog' && placement.fieldKey === key,
-      );
-      if (!alreadyPlaced) {
-        current.detailLayout.fields.push({ source: 'catalog', fieldKey: key, width: 'full' });
-      }
-    }
   }
 
   function addField(

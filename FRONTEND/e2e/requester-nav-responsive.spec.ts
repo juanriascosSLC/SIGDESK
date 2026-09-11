@@ -34,7 +34,8 @@ const BREAKPOINT_GAP_VIEWPORTS = [
  * Every test in this file that actually CLICKS through to New Case
  * or My Tickets needs `forwardUnmatched: false` plus these two stubs.
  * Without them, `mockAuthenticatedRequester`'s default forwards
- * `GET /catalog/definitions` and `GET /entities/INC?createdBy=me` to the
+ * `GET /catalog/definitions`, `GET /entities/INC?createdBy=me`, and the
+ * Knowledge Base reads to the
  * live backend with this fixture's synthetic token — both 401, and
  * apiClient's global handler signs the session out mid-navigation. React
  * Router updates the URL synchronously on click, so a `toHaveURL`
@@ -49,6 +50,12 @@ async function stubPortalDomainCalls(page: Page) {
   );
   await page.route('**/entities/INC?*', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], hasMore: false }) }),
+  );
+  await page.route('**/knowledge/health', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'ok', service: 'knowledge' }) }),
+  );
+  await page.route('**/knowledge/articulos*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [] }) }),
   );
 }
 

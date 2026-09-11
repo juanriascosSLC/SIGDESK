@@ -118,12 +118,12 @@ test('un administrador crea un agente de prueba con unidad IT y rol Agente', asy
   });
 
   await page.goto('/app/admin/users');
-  await expect(page.getByRole('heading', { name: /Usuarios, roles/ })).toBeVisible();
-  await page.getByRole('button', { name: 'Usuarios' }).click();
+  await expect(page.getByRole('heading', { name: 'Users, roles and organization', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Users' }).click();
   await page.getByTestId('create-test-agent').click();
-  await page.getByLabel('Nombre completo').fill('Ana Soporte');
-  await page.getByLabel('Correo de prueba').fill('ana.soporte@example.test');
-  await page.getByTestId('create-test-agent-form').getByRole('button', { name: 'Crear agente de prueba' }).click();
+  await page.getByLabel('Full name').fill('Ana Soporte');
+  await page.getByLabel('Test email').fill('ana.soporte@example.test');
+  await page.getByTestId('create-test-agent-form').getByRole('button', { name: 'Create test agent' }).click();
 
   await expect(page.getByTestId('create-test-agent-form')).toHaveCount(0);
 });
