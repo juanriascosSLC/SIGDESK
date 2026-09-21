@@ -43,6 +43,8 @@ export interface WorkflowCatalogItem {
 
 export const workflowCatalog: WorkflowCatalogItem[] = [
   { key: 'ticket.created', group: 'Triggers', nodeType: 'trigger', title: 'INC Created', description: 'When an incident is created.', support: 'operational', color: 'cyan' },
+  { key: 'incident.not_duplicate', group: 'Triggers', nodeType: 'trigger', title: 'Not a Duplicate', description: 'After IT 1 records the typed not_duplicate decision.', support: 'operational', color: 'cyan' },
+  { key: 'incident.escalated_to_it2', group: 'Triggers', nodeType: 'trigger', title: 'Escalated to IT 2', description: 'After IT 1 records the typed escalate_to_it2 outcome.', support: 'operational', color: 'cyan' },
   { key: 'incident.service_required', group: 'Triggers', nodeType: 'trigger', title: 'Service Required', description: 'When IT documents that the incident requires field or service work.', support: 'operational', color: 'cyan' },
   { key: 'ticket.status_changed', group: 'Triggers', nodeType: 'trigger', title: 'Status Changed', description: 'When a ticket transitions.', support: 'planned', color: 'cyan' },
   { key: 'ticket.assigned', group: 'Triggers', nodeType: 'trigger', title: 'Ticket Assigned', description: 'When assignee or team changes.', support: 'planned', color: 'cyan' },
@@ -102,6 +104,23 @@ export function catalogItem(key: string) {
   const unificado = workflowCatalog.find((item) => item.key === 'action.assign');
   if (!unificado) return undefined;
   return { ...unificado, defaults: { ...unificado.defaults, assignmentMode: modo } };
+}
+
+const triggerTypeByCatalogKey: Record<string, string> = {
+  'ticket.created': 'ticket_created',
+  'incident.not_duplicate': 'incident_not_duplicate',
+  'incident.escalated_to_it2': 'incident_escalated_to_it2',
+  'incident.service_required': 'incident_service_required',
+};
+
+const triggerCatalogKeyByType: Record<string, string> = Object.fromEntries(
+  Object.entries(triggerTypeByCatalogKey).map(([key, value]) => [value, key]),
+);
+
+function isOperationalTrigger(node: WorkflowNode): boolean {
+  return node.type === 'trigger'
+    && node.data.supportStatus === 'operational'
+    && String(node.data.catalogKey) in triggerTypeByCatalogKey;
 }
 
 export function nodeFromCatalog(item: WorkflowCatalogItem, position: { x: number; y: number }): WorkflowNode {
@@ -190,8 +209,7 @@ export function compileVisualWorkflow(nodes: WorkflowNode[], edges: Edge[], vers
     errors.push(message);
     issues.push({ nodeId, message });
   };
-  const triggers = nodes.filter((node) => node.type === 'trigger'
-    && (node.data.catalogKey === 'ticket.created' || node.data.catalogKey === 'incident.service_required'));
+  const triggers = nodes.filter(isOperationalTrigger);
   const actions = nodes.filter((node) => node.type === 'action'
     && node.data.supportStatus === 'operational'
     && (String(node.data.catalogKey) === 'action.notify_stakeholders'
@@ -199,7 +217,7 @@ export function compileVisualWorkflow(nodes: WorkflowNode[], edges: Edge[], vers
 		|| String(node.data.catalogKey) === 'action.create_incident_work'
       || String(node.data.catalogKey) === 'action.create_service_rfc'
       || esAccionDeAsignacion(node.data.catalogKey)));
-  if (triggers.length !== 1) fallar('The workflow must have exactly one operational incident trigger.');
+  if (triggers.length === 0) fallar('The workflow must have at least one operational incident trigger.');
   if (actions.length === 0) fallar('Connect at least one operational action.');
 
   const connectedIDs = new Set(edges.flatMap((edge) => [edge.source, edge.target]));
@@ -211,10 +229,16 @@ export function compileVisualWorkflow(nodes: WorkflowNode[], edges: Edge[], vers
   const rules: PublishWorkflowInput['reglas'] = [];
   for (const action of actions) {
     const { ancestors, conditionBranch } = ancestorsOf(action.id, nodes, edges);
-    if (!ancestors.some((node) => triggers.some((trigger) => trigger.id === node.id))) {
+    const actionTriggers = ancestors.filter((node) => triggers.some((trigger) => trigger.id === node.id));
+    if (actionTriggers.length === 0) {
       fallar(`Action “${String(action.data.label)}” is not connected to the trigger.`, action.id);
       continue;
     }
+    if (actionTriggers.length > 1) {
+      fallar(`Action "${String(action.data.label)}" is connected to more than one trigger. Use one deterministic trigger per action.`, action.id);
+      continue;
+    }
+    const actionTriggerKey = String(actionTriggers[0].data.catalogKey);
     const conditions = ancestors.filter((node) => node.type === 'condition' && node.data.supportStatus === 'operational');
     const delays = ancestors.filter((node) => node.type === 'delay' && node.data.supportStatus === 'operational');
     if (conditions.length > 1) fallar('Each publishable branch supports only one operational condition in this version.', action.id);
@@ -268,13 +292,16 @@ export function compileVisualWorkflow(nodes: WorkflowNode[], edges: Edge[], vers
     }
 
 		if (String(action.data.catalogKey) === 'action.create_incident_work') {
-			if (triggers[0]?.data.catalogKey !== 'ticket.created') {
+			if (!['ticket.created', 'incident.not_duplicate', 'incident.escalated_to_it2'].includes(actionTriggerKey)) {
 				fallar('“Create Incident Work” must start from the “INC Created” trigger.', action.id);
 				continue;
 			}
 			const workKey = String(action.data.workKey ?? '');
+			const workType = String(action.data.workType ?? '');
 			const title = String(action.data.workTitle ?? '');
 			const instructions = String(action.data.workInstructions ?? '');
+			const departmentID = String(action.data.departmentId ?? '');
+			const teamID = String(action.data.teamId ?? '');
 			const dueMinutes = Number(action.data.workDueMinutes ?? 0);
 			if (!/^[a-z0-9][a-z0-9_:-]*$/.test(workKey) || workKey.length > 120) {
 				fallar(`Use a stable lowercase work key in “${String(action.data.label)}”.`, action.id);
@@ -284,7 +311,14 @@ export function compileVisualWorkflow(nodes: WorkflowNode[], edges: Edge[], vers
 				fallar(`Complete the title and instructions in “${String(action.data.label)}”.`, action.id);
 				continue;
 			}
-			if ([workKey, title, instructions].some((value) => value !== value.trim())) {
+			const expectedWorkType = actionTriggerKey === 'incident.not_duplicate'
+				? 'it1_remote_troubleshooting'
+				: actionTriggerKey === 'incident.escalated_to_it2' ? 'it2_troubleshooting' : '';
+			if (expectedWorkType && (workType !== expectedWorkType || !departmentID.trim() || !teamID.trim())) {
+				fallar(`Incident work must use ${expectedWorkType} with an explicit department and team.`, action.id);
+				continue;
+			}
+			if ([workKey, workType, title, instructions, departmentID, teamID].some((value) => value !== value.trim())) {
 				fallar(`Incident work in “${String(action.data.label)}” contains surrounding whitespace.`, action.id);
 				continue;
 			}
@@ -297,13 +331,22 @@ export function compileVisualWorkflow(nodes: WorkflowNode[], edges: Edge[], vers
 				accion: 'create_incident_work_item',
 				condicion: conditionText,
 				demora_segundos: delaySeconds,
-				config: { work_key: workKey, title, instructions, required: action.data.workRequired !== false, due_in_minutes: dueMinutes } satisfies WorkflowIncidentWorkConfig,
+				config: {
+					work_key: workKey,
+					...(workType ? { work_type: workType as WorkflowIncidentWorkConfig['work_type'] } : {}),
+					title,
+					instructions,
+					required: action.data.workRequired !== false,
+					due_in_minutes: dueMinutes,
+					...(departmentID ? { department_id: departmentID } : {}),
+					...(teamID ? { team_id: teamID } : {}),
+				} satisfies WorkflowIncidentWorkConfig,
 			});
 			continue;
 		}
 
     if (String(action.data.catalogKey) === 'action.create_service_rfc') {
-      if (triggers[0]?.data.catalogKey !== 'incident.service_required') {
+      if (actionTriggerKey !== 'incident.service_required') {
         fallar('“Create Service RFC” must start from the “Service Required” trigger.', action.id);
         continue;
       }
@@ -400,7 +443,7 @@ export function compileVisualWorkflow(nodes: WorkflowNode[], edges: Edge[], vers
   // orden publicado es el orden dibujado. El backend lo valida entero —ciclos,
   // nodos inalcanzables, conectores— y devuelve 422 con el motivo, que el canvas
   // muestra junto al nodo culpable.
-  const plan = compileExecutionPlan(nodes, edges, triggers[0], rules);
+  const plan = compileExecutionPlan(nodes, edges, triggers, rules);
   if (!plan) {
     fallar('El diagrama no se pudo compilar en un plan ejecutable. Revisa que todo cuelgue del disparador.');
     return { errors: [...new Set(errors)], warnings: [...new Set(warnings)], issues };
@@ -475,10 +518,13 @@ function actionFromRule(rule: WorkflowRule, position: { x: number; y: number }):
 		const config = incidentWorkConfig(rule.config);
 		const node = nodeFromCatalog(catalogItem('action.create_incident_work')!, position);
 		node.data.workKey = config?.work_key ?? '';
+		node.data.workType = config?.work_type ?? '';
 		node.data.workTitle = config?.title ?? '';
 		node.data.workInstructions = config?.instructions ?? '';
 		node.data.workRequired = config?.required !== false;
 		node.data.workDueMinutes = String(config?.due_in_minutes ?? 0);
+		node.data.departmentId = config?.department_id ?? '';
+		node.data.teamId = config?.team_id ?? '';
 		return node;
 	}
   if (rule.accion === 'create_service_rfc') {
@@ -524,10 +570,68 @@ export function graphFromDefinition(definition: WorkflowDefinition): { nodes: Wo
       edges: definition.layout.edges as Edge[],
     };
   }
+  const persistedPlanNodes = definition.execution_plan?.nodes ?? [];
+  if (persistedPlanNodes.length > 0) {
+    const rulesByID = new Map((definition.reglas ?? []).map((rule) => [rule.id, rule]));
+    const nodes: WorkflowNode[] = [];
+    const edges: Edge[] = [];
+    persistedPlanNodes.forEach((planNode, index) => {
+      const position = { x: planNode.kind === 'trigger' ? 80 : planNode.kind === 'action' ? 760 : 410, y: 70 + index * 180 };
+      if (planNode.kind === 'trigger') {
+        const triggerKey = triggerCatalogKeyByType[String(planNode.type ?? '')];
+        const item = triggerKey ? catalogItem(triggerKey) : undefined;
+        if (!item) return;
+        const node = nodeFromCatalog(item, position);
+        node.id = planNode.id;
+        nodes.push(node);
+        return;
+      }
+      if (planNode.kind === 'action') {
+        const rule = rulesByID.get(planNode.id);
+        if (!rule) return;
+        const node = actionFromRule(rule, position);
+        node.id = planNode.id;
+        node.data.onOmitted = planNode.on_omitted;
+        nodes.push(node);
+        return;
+      }
+      if (planNode.kind === 'condition') {
+        const node = nodeFromCatalog(catalogItem('condition.priority')!, position);
+        node.id = planNode.id;
+        const expression = planNode.expression?.condicion ?? 'siempre';
+        node.data.conditionMode = expression === 'siempre' ? 'always' : 'priority';
+        if (node.data.conditionMode === 'priority') node.data.priority = expression.split('==')[1]?.trim() || 'critica';
+        nodes.push(node);
+        return;
+      }
+      if (planNode.kind === 'delay') {
+        const node = nodeFromCatalog(catalogItem('control.delay')!, position);
+        node.id = planNode.id;
+        node.data.delayValue = String(planNode.delay_seconds ?? 0);
+        node.data.delayUnit = 'seconds';
+        nodes.push(node);
+      }
+    });
+    const nodeIDs = new Set(nodes.map((node) => node.id));
+    persistedPlanNodes.forEach((planNode) => {
+      const connect = (target: string, handle?: 'yes' | 'no') => {
+        if (!nodeIDs.has(planNode.id) || !nodeIDs.has(target)) return;
+        edges.push({
+          id: `e-${planNode.id}-${handle ?? 'next'}-${target}`,
+          source: planNode.id,
+          target,
+          ...(handle ? { sourceHandle: handle } : {}),
+          animated: true,
+        });
+      };
+      (planNode.next ?? []).forEach((target) => connect(target));
+      (planNode.on_true ?? []).forEach((target) => connect(target, 'yes'));
+      (planNode.on_false ?? []).forEach((target) => connect(target, 'no'));
+    });
+    return { nodes, edges };
+  }
   const publishedTriggerType = definition.execution_plan?.nodes.find((node) => node.kind === 'trigger')?.type;
-  const triggerKey = publishedTriggerType === 'incident_service_required'
-    ? 'incident.service_required'
-    : 'ticket.created';
+  const triggerKey = triggerCatalogKeyByType[String(publishedTriggerType ?? '')] ?? 'ticket.created';
   const trigger = nodeFromCatalog(catalogItem(triggerKey)!, { x: 80, y: 160 });
   trigger.id = 'trigger-published';
   const nodes: WorkflowNode[] = [trigger];
@@ -576,9 +680,7 @@ export function graphFromDefinition(definition: WorkflowDefinition): { nodes: Wo
  *  eso lo comprueba compileVisualWorkflow antes de llegar aquí. */
 function esNodoEjecutable(node: WorkflowNode): boolean {
   if (node.data.supportStatus !== 'operational') return false;
-  if (node.type === 'trigger') {
-    return node.data.catalogKey === 'ticket.created' || node.data.catalogKey === 'incident.service_required';
-  }
+  if (node.type === 'trigger') return isOperationalTrigger(node);
   if (node.type === 'condition') return node.data.catalogKey === 'condition.priority';
   if (node.type === 'delay') return node.data.catalogKey === 'control.delay';
   if (node.type === 'action') {
@@ -633,10 +735,10 @@ function accionDeNodo(node: WorkflowNode): string | undefined {
 export function compileExecutionPlan(
   nodes: WorkflowNode[],
   edges: Edge[],
-  trigger: WorkflowNode | undefined,
+  triggers: WorkflowNode[],
   rules: PublishWorkflowInput['reglas'],
 ): WorkflowExecutionPlan | undefined {
-  if (!trigger) return undefined;
+  if (triggers.length === 0) return undefined;
 
   const ejecutables = nodes.filter(esNodoEjecutable);
   const permitidos = new Set(ejecutables.map((node) => node.id));
@@ -666,10 +768,12 @@ export function compileExecutionPlan(
   const planNodes: WorkflowPlanNode[] = [];
   for (const node of ejecutables) {
     if (node.type === 'trigger') {
+      const triggerType = triggerTypeByCatalogKey[String(node.data.catalogKey)];
+      if (!triggerType) continue;
       planNodes.push({
         id: node.id,
         kind: 'trigger',
-        type: node.data.catalogKey === 'incident.service_required' ? 'incident_service_required' : 'ticket_created',
+        type: triggerType,
         next: salidas(node.id),
       });
       continue;
@@ -710,8 +814,8 @@ export function compileExecutionPlan(
   }
 
   return {
-    version: 1,
-    entrypoints: [trigger.id],
+    version: triggers.length > 1 ? 2 : 1,
+    entrypoints: triggers.map((trigger) => trigger.id).sort(),
     // Ordenado por id, por la misma razón que las salidas: el plan publicado
     // tiene que ser el mismo para el mismo diagrama.
     nodes: planNodes.sort((a, b) => a.id.localeCompare(b.id)),

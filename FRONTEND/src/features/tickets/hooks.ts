@@ -22,6 +22,7 @@ import {
   unmergeTicket,
   updateTicketStatus,
 	transitionIncidentWork,
+	getIncidentOperationalCycle,
   uploadAttachment,
 } from './api';
 import type { CreateTicketInput, IncidentWorkTransitionInput, TicketFilters, TicketStatus } from './types';
@@ -35,6 +36,7 @@ export const ticketKeys = {
   watchers: (id: string) => ['tickets', id, 'watchers'] as const,
   activity: (id: string) => ['tickets', id, 'activity'] as const,
 	incidentWork: (id: string) => ['tickets', id, 'incident-work'] as const,
+	incidentCycle: (id: string) => ['tickets', id, 'incident-cycle'] as const,
 };
 
 export function useTickets(filters: TicketFilters = {}) {
@@ -200,12 +202,21 @@ export function useIncidentWork(ticketId?: string) {
 	});
 }
 
+export function useIncidentOperationalCycle(ticketId?: string) {
+	return useQuery({
+		queryKey: ticketKeys.incidentCycle(ticketId || ''),
+		queryFn: () => getIncidentOperationalCycle(ticketId!),
+		enabled: Boolean(ticketId),
+	});
+}
+
 export function useTransitionIncidentWork(ticketId: string) {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: ({ workItemId, input }: { workItemId: number; input: IncidentWorkTransitionInput }) => transitionIncidentWork(ticketId, workItemId, input),
 		onSuccess: () => {
 			void queryClient.invalidateQueries({ queryKey: ticketKeys.incidentWork(ticketId) });
+			void queryClient.invalidateQueries({ queryKey: ticketKeys.incidentCycle(ticketId) });
 			void queryClient.invalidateQueries({ queryKey: ticketKeys.activity(ticketId) });
 		},
 	});

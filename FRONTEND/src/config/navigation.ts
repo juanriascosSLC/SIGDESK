@@ -16,6 +16,7 @@ import {
   MessageSquare,
   Settings,
   Wrench,
+  ShoppingCart,
   type LucideIcon,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/features/auth/permissions';
@@ -184,6 +185,15 @@ export const NAV_ITEMS: NavItem[] = [
     // RFC tasks directed to Services plus Inventory-backed sites. Either
     // capability exposes the workspace; each panel and route narrows again.
     permission: (ctx) => ctx.can(PERMISSIONS.changeTasksView) || ctx.can(PERMISSIONS.assetsView),
+    surfaces: ['sidebar', 'drawer'],
+  },
+  {
+    key: 'purchasing',
+    label: 'Purchasing',
+    route: '/app/purchasing',
+    icon: ShoppingCart,
+    section: 'workspace',
+    permission: (ctx) => ctx.can(PERMISSIONS.serviceRequestsView),
     surfaces: ['sidebar', 'drawer'],
   },
   {

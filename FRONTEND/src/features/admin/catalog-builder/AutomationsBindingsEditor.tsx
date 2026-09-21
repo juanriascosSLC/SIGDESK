@@ -44,7 +44,12 @@ export function AutomationsBindingsEditor({
         if (!cap) return true;
         if (cap.selectable === false) return false;
         if (entityKey && cap.categoryId !== entityKey) return false;
-        if (cap.trigger === 'incident_service_required' && entityKey !== 'INC') return false;
+        const triggers = cap.triggers?.length ? cap.triggers : [cap.trigger].filter(Boolean);
+        if (triggers.some((trigger) => [
+          'incident_not_duplicate',
+          'incident_escalated_to_it2',
+          'incident_service_required',
+        ].includes(trigger)) && entityKey !== 'INC') return false;
         return true;
       }),
     [recursos.data, entityKey],

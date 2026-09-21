@@ -27,6 +27,8 @@ const WorkflowBuilder = React.lazy(() => import('./features/automations/Workflow
 const ServicesDashboard = React.lazy(() => import('./features/services/ServicesDashboard'));
 const WorkOrderDetail = React.lazy(() => import('./features/services/WorkOrderDetail'));
 const ServiceSiteDetail = React.lazy(() => import('./features/services/ServiceSiteDetail'));
+const ServiceRequests = React.lazy(() => import('./features/purchasing/ServiceRequests'));
+const ServiceRequestDetail = React.lazy(() => import('./features/purchasing/ServiceRequestDetail'));
 const KnowledgeBase = React.lazy(() => import('./features/knowledge/KnowledgeBase'));
 const ArticleDetail = React.lazy(() => import('./features/knowledge/ArticleDetail'));
 const KnowledgeEditor = React.lazy(() => import('./features/knowledge/KnowledgeEditor'));
@@ -187,6 +189,7 @@ function AppRoutes() {
             // grant es sobre `change_tasks`. Sin esta linea, el asignado de
             // una Task no podia entrar al workspace donde vive su trabajo.
             PERMISSIONS.changeTasksView,
+            PERMISSIONS.serviceRequestsView,
             PERMISSIONS.problemsView,
             PERMISSIONS.assetsView,
             PERMISSIONS.reportsView,
@@ -302,6 +305,16 @@ function AppRoutes() {
               <Route path="/services/sites/:siteId" element={
                 <ProtectedRoute requiredPermission={PERMISSIONS.assetsView} fallbackTo="/app/services">
                   <ServiceSiteDetail />
+                </ProtectedRoute>
+              } />
+              <Route path="/purchasing" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.serviceRequestsView} fallbackTo="/app">
+                  <ServiceRequests />
+                </ProtectedRoute>
+              } />
+              <Route path="/purchasing/:id" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.serviceRequestsView} fallbackTo="/app/purchasing">
+                  <ServiceRequestDetail />
                 </ProtectedRoute>
               } />
               <Route path="/automations" element={

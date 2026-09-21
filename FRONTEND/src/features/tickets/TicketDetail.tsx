@@ -17,7 +17,7 @@ import {
   useRemoveWatcher,
   useActivity,
   ticketKeys,
-	useIncidentWork,
+	useIncidentOperationalCycle,
 	useTransitionIncidentWork,
 } from './hooks';
 import { AssignTicketDialog, ReopenTicketDialog, ResolveWithSlaBreachDialog, MergeIntoTicketDialog, WatchToggleDialog } from './dialogs/TicketDialogs';
@@ -106,7 +106,7 @@ export default function TicketDetail() {
   const addWatcher = useAddWatcher(ticket?.id || '');
   const removeWatcher = useRemoveWatcher(ticket?.id || '');
   const activity = useActivity(ticket?.id);
-	const incidentWork = useIncidentWork(ticket?.id);
+	const incidentCycle = useIncidentOperationalCycle(ticket?.id);
 	const transitionIncidentWork = useTransitionIncidentWork(ticket?.id || '');
   const slaAssessment = useQuery({
     queryKey: ['sla-assessment', ticket?.entityId ?? 'unlinked'],
@@ -784,13 +784,14 @@ export default function TicketDetail() {
       )}
 
 		<IncidentWorkPanel
-			items={incidentWork.data ?? []}
+			ticketId={ticket?.id || ''}
+			cycle={incidentCycle.data}
 			attachments={attachments.data ?? []}
-			loading={incidentWork.isLoading}
-			error={incidentWork.error?.message}
+			loading={incidentCycle.isLoading}
+			error={incidentCycle.error?.message}
 			canManage={can(PERMISSIONS.ticketsEdit)}
 			pending={transitionIncidentWork.isPending}
-			onRetry={() => void incidentWork.refetch()}
+			onRetry={() => void incidentCycle.refetch()}
 			onTransition={(workItemId, input) => transitionIncidentWork.mutate(
 				{ workItemId, input },
 				{

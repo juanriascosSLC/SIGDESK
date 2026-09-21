@@ -1,7 +1,12 @@
 import {
   listAssignedChangeTasks,
+  listChangeTaskAttachments,
+  scheduleChangeTask,
   transitionChangeTask,
+  uploadChangeTaskAttachment,
+  downloadChangeTaskAttachment,
   type AssignedChangeTaskFilter,
+  type ChangeTaskOutcomeCode,
 } from '@/features/changes/api';
 import {
   getAsset,
@@ -24,10 +29,15 @@ export function transitionServiceWorkOrder(
   changeId: string,
   taskId: string,
   transitionKey: string,
-  options: { reason?: string; evidence?: string[] } = {},
+  options: { reason?: string; evidence?: string[]; notes?: string[]; outcomeCode?: ChangeTaskOutcomeCode; parts?: Array<{ sku?: string; description: string; quantity: number }> } = {},
 ) {
   return transitionChangeTask(changeId, taskId, transitionKey, options);
 }
+
+export const scheduleServiceWorkOrder = scheduleChangeTask;
+export const listServiceWorkOrderAttachments = listChangeTaskAttachments;
+export const uploadServiceWorkOrderAttachment = uploadChangeTaskAttachment;
+export const downloadServiceWorkOrderAttachment = downloadChangeTaskAttachment;
 
 export const listServiceSites = listAssetSites;
 export const getServiceSite = getAsset;

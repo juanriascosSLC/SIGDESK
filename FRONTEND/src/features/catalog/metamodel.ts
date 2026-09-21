@@ -615,6 +615,9 @@ export interface ResourceReference {
 export interface AutomationCapabilityMetadata {
   categoryId: string;
   trigger: string;
+  /** Complete typed trigger set for plan contract v2. `trigger` remains the
+   * backward-compatible summary returned for v1 servers. */
+  triggers?: string[];
   workflowId: string;
   familyId: string;
   version: number;

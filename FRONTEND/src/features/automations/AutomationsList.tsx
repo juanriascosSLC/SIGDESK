@@ -7,7 +7,7 @@ import { PERMISSIONS } from '@/features/auth/permissions';
 import { deactivateWorkflow, getWorkflowAssignmentDirectory, listWorkflows, saveWorkflowDraft, type SaveDraftInput } from './api';
 import { useAutomationsBasePath } from './basePath';
 
-import { buildBlueprintADraft, buildBlueprintBDraft } from './guidedBlueprints';
+import { buildBlueprintA3Draft, buildBlueprintADraft, buildBlueprintBDraft } from './guidedBlueprints';
 
 const actionLabels: Record<string, string> = {
   notificar_interesados: 'Notify creator and stakeholders',
@@ -44,10 +44,14 @@ export default function AutomationsList() {
 
   const [selectedDeptId, setSelectedDeptId] = useState('');
   const [selectedTeamId, setSelectedTeamId] = useState('');
+  const [it2DeptId, setIt2DeptId] = useState('');
+  const [it2TeamId, setIt2TeamId] = useState('');
 
   const openTemplateModal = () => {
     setSelectedDeptId('');
     setSelectedTeamId('');
+    setIt2DeptId('');
+    setIt2TeamId('');
     setTemplateError(null);
     setShowTemplateModal(true);
     void directoryQuery.refetch();
@@ -57,6 +61,8 @@ export default function AutomationsList() {
     setShowTemplateModal(false);
     setSelectedDeptId('');
     setSelectedTeamId('');
+    setIt2DeptId('');
+    setIt2TeamId('');
     setTemplateError(null);
   };
 
@@ -65,6 +71,8 @@ export default function AutomationsList() {
     : [];
 
   const selectedTeam = availableTeams.find((t) => t.id === selectedTeamId);
+  const availableIT2Teams = it2DeptId ? (directoryQuery.data?.teams ?? []).filter((team) => team.department_id === it2DeptId) : [];
+  const selectedIT2Team = availableIT2Teams.find((team) => team.id === it2TeamId);
   const isTeamValid = Boolean(selectedTeam && selectedTeam.department_id === selectedDeptId);
   const isTeamSelected = Boolean(selectedTeamId && isTeamValid);
   const teamAssignees = isTeamSelected
@@ -115,6 +123,24 @@ export default function AutomationsList() {
     setTemplateError(null);
     const payload = buildBlueprintBDraft();
     createDraft.mutate(payload);
+  };
+
+  const handleCreateBlueprintA3 = () => {
+    setTemplateError(null);
+    const it1Department = directoryQuery.data?.departments.find((item) => item.id === selectedDeptId);
+    const it1Team = directoryQuery.data?.teams.find((item) => item.id === selectedTeamId && item.department_id === selectedDeptId);
+    const it2Department = directoryQuery.data?.departments.find((item) => item.id === it2DeptId);
+    const it2Team = directoryQuery.data?.teams.find((item) => item.id === it2TeamId && item.department_id === it2DeptId);
+    if (!it1Department || !it1Team || !it2Department || !it2Team || it1Team.id === it2Team.id) {
+      setTemplateError('Select distinct, valid IT 1 and IT 2 teams.');
+      return;
+    }
+    createDraft.mutate(buildBlueprintA3Draft({
+      it1DepartmentId: it1Department.id, it1DepartmentName: it1Department.nombre,
+      it1TeamId: it1Team.id, it1TeamName: it1Team.nombre,
+      it2DepartmentId: it2Department.id, it2DepartmentName: it2Department.nombre,
+      it2TeamId: it2Team.id, it2TeamName: it2Team.nombre,
+    }));
   };
 
   const deactivate = useMutation({
@@ -191,6 +217,18 @@ export default function AutomationsList() {
             )}
 
             <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="rounded-2xl border border-primary/40 bg-primary/5 p-5 md:col-span-2" data-testid="blueprint-a3-card">
+                <div className="flex items-center gap-2 text-sm font-bold text-primary"><Sparkles className="h-4 w-4" />Blueprint A v3 · ADR-0061</div>
+                <h3 className="mt-2 text-lg font-bold text-on-surface">Canonical incident lifecycle</h3>
+                <p className="mt-1 text-xs text-on-surface-variant">Creates separate IT 1 and IT 2 troubleshooting branches and a governed Service RFC branch. It remains a draft until explicitly reviewed and published.</p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <label className="text-xs font-bold">IT 1 department<select className="input-field mt-1 w-full" value={selectedDeptId} onChange={(event) => { setSelectedDeptId(event.target.value); setSelectedTeamId(''); }}><option value="">Select…</option>{(directoryQuery.data?.departments ?? []).map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label>
+                  <label className="text-xs font-bold">IT 1 team<select className="input-field mt-1 w-full" value={selectedTeamId} disabled={!selectedDeptId} onChange={(event) => setSelectedTeamId(event.target.value)}><option value="">Select…</option>{availableTeams.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label>
+                  <label className="text-xs font-bold">IT 2 department<select className="input-field mt-1 w-full" value={it2DeptId} onChange={(event) => { setIt2DeptId(event.target.value); setIt2TeamId(''); }}><option value="">Select…</option>{(directoryQuery.data?.departments ?? []).map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label>
+                  <label className="text-xs font-bold">IT 2 team<select className="input-field mt-1 w-full" value={it2TeamId} disabled={!it2DeptId} onChange={(event) => setIt2TeamId(event.target.value)}><option value="">Select…</option>{availableIT2Teams.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label>
+                </div>
+                <button type="button" className="primary-button mt-4" data-testid="create-blueprint-a3-btn" disabled={!directoryQuery.isSuccess || !selectedTeam || !selectedIT2Team || selectedTeam.id === selectedIT2Team.id || createDraft.isPending} onClick={handleCreateBlueprintA3}><Plus className="h-4 w-4" />Create Blueprint A v3 draft</button>
+              </div>
               {/* Blueprint A Card */}
               <div className="rounded-2xl border border-border/50 bg-surface-container p-5 flex flex-col justify-between" data-testid="blueprint-a-card">
                 <div>

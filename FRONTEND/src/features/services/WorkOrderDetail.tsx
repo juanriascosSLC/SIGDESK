@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import {
@@ -9,6 +9,7 @@ import {
   CirclePlay,
   FileCheck2,
   GitPullRequest,
+  Paperclip,
   LockKeyhole,
   MapPin,
   PackageSearch,
@@ -34,8 +35,8 @@ import { PERMISSIONS } from '@/features/auth/permissions';
 import { USER_UNAVAILABLE_LABEL } from '@/features/tickets/identity-labels';
 import { formatDateTime, formatRelativeTime } from '@/i18n/format';
 import { TaskActionDialog } from '@/features/changes/dialogs/TaskActionDialog';
-import type { ChangeTask } from '@/features/changes/api';
-import { listServiceWorkOrders, transitionServiceWorkOrder } from './api';
+import type { ChangeTask, ChangeTaskAttachment, ChangeTaskOutcomeCode } from '@/features/changes/api';
+import { downloadServiceWorkOrderAttachment, listServiceWorkOrderAttachments, listServiceWorkOrders, scheduleServiceWorkOrder, transitionServiceWorkOrder, uploadServiceWorkOrderAttachment } from './api';
 import {
   actionsForWorkOrder,
   PRIORITY_TONE,
@@ -62,12 +63,19 @@ export default function WorkOrderDetail() {
     () => query.data?.find(({ task }) => task.id === taskId && task.changeId === changeId),
     [changeId, query.data, taskId],
   );
+  const fieldWorkTask = useMemo(() => query.data?.find((candidate) => candidate.task.changeId === changeId && candidate.task.workType === 'field_work_order')?.task, [changeId, query.data]);
+  const attachments = useQuery({
+    queryKey: ['services', 'work-order-attachments', changeId, taskId],
+    queryFn: () => listServiceWorkOrderAttachments(changeId!, taskId!),
+    enabled: Boolean(changeId && taskId && item?.task.workType === 'field_work_order'),
+  });
 
   const transition = useMutation({
-    mutationFn: ({ task, action, value }: { task: ChangeTask; action: WorkOrderAction; value?: string }) =>
+    mutationFn: ({ task, action, value, outcomeCode, notes, evidence, parts }: { task: ChangeTask; action: WorkOrderAction; value?: string; outcomeCode?: ChangeTaskOutcomeCode; notes?: string[]; evidence?: string[]; parts?: Array<{ sku?: string; description: string; quantity: number }> }) =>
       transitionServiceWorkOrder(task.changeId, task.id, action.key, {
         reason: action.requiresInput === 'reason' ? value : undefined,
-        evidence: action.requiresInput === 'evidence' && value ? [value] : undefined,
+        evidence: evidence ?? (action.requiresInput === 'evidence' && value ? [value] : undefined),
+        notes, outcomeCode, parts,
       }),
     onSuccess: (task) => {
       setDialogAction(null);
@@ -98,7 +106,11 @@ export default function WorkOrderDetail() {
   const assets = workOrderAssets(task);
   const siteId = workOrderSiteId(task);
   const governanceBlock = workOrderGovernanceBlock(task, change.state);
-  const actions = can(PERMISSIONS.changeTasksExecute) ? actionsForWorkOrder(task.status, Boolean(governanceBlock)) : [];
+  const canExecuteTask = can(PERMISSIONS.changeTasksExecute) &&
+    (task.workType !== 'payment_approval' || can(PERMISSIONS.financialApprovalsManage));
+  const actions = canExecuteTask
+    ? actionsForWorkOrder(task.status, Boolean(governanceBlock)).filter((action) => task.workType === 'generic' || action.key !== 'complete')
+    : [];
   const department = task.organization?.departmentName || task.area || 'Services';
   const team = task.organization?.teamName || task.team || 'Team unavailable';
   const assignee = task.assigneeName || task.organization?.assigneeName || (task.assigneeUserId ? USER_UNAVAILABLE_LABEL : 'Team assignment');
@@ -134,6 +146,8 @@ export default function WorkOrderDetail() {
             {task.blockedReason && <div className="mt-4 flex items-start gap-2 rounded-xl border border-status-warning-border bg-status-warning-bg p-3 text-sm text-status-warning-fg"><LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" /><div><strong>Current blocker</strong><p className="mt-1">{task.blockedReason}</p></div></div>}
           </Card>
 
+          {task.workType === 'field_work_order' && <Card><CardHeader><div><CardTitle>Work Order files</CardTitle><CardDescription>Binary evidence belongs to this Work Order, independently from the incident attachments.</CardDescription></div></CardHeader><TaskAttachments changeId={task.changeId} taskId={task.id} items={attachments.data ?? []} loading={attachments.isLoading} onChanged={() => void attachments.refetch()} /></Card>}
+
           <Card>
             <CardHeader><div><CardTitle>Affected equipment</CardTitle><CardDescription>Immutable asset context captured when the RFC task was created.</CardDescription></div>{siteId && can(PERMISSIONS.assetsView) && <Link to={`/app/services/sites/${encodeURIComponent(siteId)}`} className="secondary-button px-3 py-1.5 text-xs"><MapPin className="h-3.5 w-3.5" />Open site</Link>}</CardHeader>
             {assets.length === 0 ? <EmptyState compact icon="inbox" title="No affected equipment" description="This task was created without an asset snapshot." /> : (
@@ -156,9 +170,11 @@ export default function WorkOrderDetail() {
             <CardHeader><CardTitle>Next action</CardTitle></CardHeader>
             {governanceBlock && <div role="status" className="mb-3 flex items-start gap-2 rounded-xl border border-status-warning-border bg-status-warning-bg p-3 text-sm text-status-warning-fg"><LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" /><span>{governanceBlock}</span></div>}
             {task.status === 'ready' && !task.assigneeUserId && actions.some((action) => action.key === 'start') && <div role="note" className="mb-3 rounded-xl border border-services-border bg-services-surface-container p-3 text-sm text-services-on-surface-variant">Starting this work order assigns it to you and records that ownership on the RFC task.</div>}
-            {actions.length === 0 ? <p className="text-sm text-services-on-surface-variant">{can(PERMISSIONS.changeTasksExecute) ? 'No execution action is available in the current state.' : 'You have read access, but not permission to execute this work order.'}</p> : (
+            {actions.length === 0 ? <p className="text-sm text-services-on-surface-variant">{canExecuteTask ? 'No execution action is available in the current state.' : task.workType === 'payment_approval' ? 'Financial approval permission is required for this task.' : 'You have read access, but not permission to execute this work order.'}</p> : (
               <div className="space-y-2">{actions.map((action) => <Button key={action.key} className="w-full" variant={action.key === 'block' ? 'secondary' : 'primary'} loading={transition.isPending} onClick={() => runAction(action)} leadingIcon={action.key === 'start' ? <CirclePlay className="h-4 w-4" /> : action.key === 'complete' ? <CheckCircle2 className="h-4 w-4" /> : action.key === 'block' ? <LockKeyhole className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}>{action.label}</Button>)}</div>
             )}
+            {canExecuteTask && task.status === 'in_progress' && task.workType !== 'generic' && <GovernedCompletion task={task} busy={transition.isPending} onComplete={(outcomeCode, notes, evidence, parts) => transition.mutate({ task, action: { key: 'complete', label: 'Complete' }, outcomeCode, notes, evidence, parts })} />}
+            {canExecuteTask && task.workType === 'service_scheduling' && fieldWorkTask && !fieldWorkTask.scheduledStart && <ScheduleFieldWork task={fieldWorkTask} onScheduled={() => { setNotice('The field Work Order was scheduled.'); void query.refetch(); }} />}
           </Card>
 
           <Card>
@@ -193,6 +209,42 @@ export default function WorkOrderDetail() {
       />
     </Shell>
   );
+}
+
+const OUTCOMES: Partial<Record<ChangeTask['workType'], Array<{ code: ChangeTaskOutcomeCode; label: string }>>> = {
+  inventory_readiness: [{ code: 'parts_not_required', label: 'No parts required' }, { code: 'parts_required', label: 'Parts required' }],
+  service_scheduling: [{ code: 'schedule_confirmed', label: 'Confirm schedule' }],
+  field_work_order: [{ code: 'work_completed', label: 'Work completed' }, { code: 'work_failed', label: 'Work failed' }, { code: 'additional_issue_found', label: 'Additional issue found' }],
+  restoration_validation: [{ code: 'restoration_validated', label: 'Restoration validated' }, { code: 'restoration_failed', label: 'Restoration failed' }],
+  payment_approval: [{ code: 'payment_approved', label: 'Payment approved' }, { code: 'payment_rejected', label: 'Payment rejected' }, { code: 'payment_not_required', label: 'Payment not required' }],
+  service_closeout: [{ code: 'closeout_completed', label: 'Close out service cycle' }],
+};
+
+function GovernedCompletion({ task, busy, onComplete }: { task: ChangeTask; busy: boolean; onComplete: (outcome: ChangeTaskOutcomeCode, notes: string[], evidence: string[], parts: Array<{ sku?: string; description: string; quantity: number }>) => void }) {
+  const [outcome, setOutcome] = useState<ChangeTaskOutcomeCode>();
+  const [notes, setNotes] = useState('');
+  const [evidence, setEvidence] = useState('');
+  const [parts, setParts] = useState('');
+  const available = OUTCOMES[task.workType] ?? [];
+  const parsedParts = parts.split('\n').map((line) => { const [sku, description, rawQuantity] = line.split('|').map((value) => value.trim()); return { sku, description, quantity: Number(rawQuantity) }; }).filter((line) => line.description && Number.isInteger(line.quantity) && line.quantity > 0);
+  const noteItems = notes.split('\n').map((value) => value.trim()).filter(Boolean);
+  const evidenceItems = evidence.split('\n').map((value) => value.trim()).filter(Boolean);
+  const valid = Boolean(outcome && noteItems.length && evidenceItems.length && (outcome !== 'parts_required' || parsedParts.length));
+  return <div className="mt-4 border-t border-services-border pt-4"><p className="text-xs font-black uppercase tracking-wider text-services-on-surface-variant">Typed completion</p><div className="mt-3 flex flex-wrap gap-2">{available.map((item) => <Button key={item.code} size="sm" variant={outcome === item.code ? 'primary' : 'secondary'} onClick={() => setOutcome(item.code)}>{item.label}</Button>)}</div>{outcome && <div className="mt-3 space-y-3"><label className="block text-xs font-bold">Notes (one per line)<textarea className="input-field mt-1 w-full" rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} /></label><label className="block text-xs font-bold">Evidence references (one per line)<textarea className="input-field mt-1 w-full" rows={3} value={evidence} onChange={(event) => setEvidence(event.target.value)} /></label>{outcome === 'parts_required' && <label className="block text-xs font-bold">Required parts (SKU | description | quantity)<textarea className="input-field mt-1 w-full" rows={3} value={parts} onChange={(event) => setParts(event.target.value)} placeholder="CAM-01 | Replacement camera | 1" /></label>}<Button className="w-full" loading={busy} disabled={!valid} onClick={() => onComplete(outcome, noteItems, evidenceItems, parsedParts)}>Record governed outcome</Button></div>}</div>;
+}
+
+function ScheduleFieldWork({ task, onScheduled }: { task: ChangeTask; onScheduled: () => void }) {
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+  const mutation = useMutation({ mutationFn: () => scheduleServiceWorkOrder(task.changeId, task.id, new Date(start).toISOString(), new Date(end).toISOString()), onSuccess: onScheduled });
+  function submit(event: FormEvent) { event.preventDefault(); mutation.mutate(); }
+  return <form className="mt-4 space-y-3 border-t border-services-border pt-4" onSubmit={submit}><p className="text-xs font-black uppercase tracking-wider text-services-on-surface-variant">Field Work Order schedule</p><label className="block text-xs font-bold">Start<input className="input-field mt-1 w-full" type="datetime-local" required value={start} onChange={(event) => setStart(event.target.value)} /></label><label className="block text-xs font-bold">End<input className="input-field mt-1 w-full" type="datetime-local" required value={end} onChange={(event) => setEnd(event.target.value)} /></label>{mutation.isError && <p role="alert" className="text-xs text-status-danger-fg">{mutation.error.message}</p>}<Button type="submit" size="sm" loading={mutation.isPending} disabled={!start || !end || new Date(end) <= new Date(start)}>Schedule field work</Button></form>;
+}
+
+function TaskAttachments({ changeId, taskId, items, loading, onChanged }: { changeId: string; taskId: string; items: ChangeTaskAttachment[]; loading: boolean; onChanged: () => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const upload = useMutation({ mutationFn: (file: File) => uploadServiceWorkOrderAttachment(changeId, taskId, file), onSuccess: onChanged });
+  return <div>{loading ? <p className="text-sm text-services-on-surface-variant">Loading files…</p> : items.length === 0 ? <p className="text-sm text-services-on-surface-variant">No binary evidence uploaded yet.</p> : <ul className="space-y-2">{items.map((item) => <li key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-services-border p-3 text-sm"><span className="min-w-0 truncate"><Paperclip className="mr-2 inline h-4 w-4" />{item.filename}</span><Button size="sm" variant="ghost" onClick={() => void downloadServiceWorkOrderAttachment(changeId, taskId, item)}>Download</Button></li>)}</ul>}<input ref={input} type="file" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) upload.mutate(file); event.target.value = ''; }} /><Button className="mt-3" size="sm" variant="secondary" loading={upload.isPending} onClick={() => input.current?.click()}><Paperclip className="h-4 w-4" />Upload evidence</Button>{upload.isError && <p role="alert" className="mt-2 text-xs text-status-danger-fg">{upload.error.message}</p>}</div>;
 }
 
 function Shell({ children }: { children: React.ReactNode }) {

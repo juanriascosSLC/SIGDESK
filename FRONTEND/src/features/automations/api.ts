@@ -19,10 +19,13 @@ export interface WorkflowStatusConfig {
 
 export interface WorkflowIncidentWorkConfig {
   work_key: string;
+  work_type?: 'it1_remote_troubleshooting' | 'it2_troubleshooting';
   title: string;
   instructions: string;
   required?: boolean;
   due_in_minutes?: number;
+  department_id?: string;
+  team_id?: string;
 }
 
 export interface WorkflowServiceEscalationConfig {
