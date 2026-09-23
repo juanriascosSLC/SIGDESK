@@ -27,6 +27,7 @@ const CANONICAL_TRIGGERS = [
 export function buildCatalogIncV7Draft(
   active: CatalogDefinition,
   workflow: BlueprintA3Reference,
+  supersededWorkflowFamilyIds: string[],
 ): CatalogDefinition {
   if (active.entityKey !== 'INC' || active.status !== 'published' || active.version !== 6) {
     throw new Error('Catalog INC v7 must be derived from the published INC v6 definition.');
@@ -39,12 +40,18 @@ export function buildCatalogIncV7Draft(
   if (JSON.stringify(triggers) !== JSON.stringify(CANONICAL_TRIGGERS)) {
     throw new Error('Blueprint A v3 does not expose the complete ADR-0061 trigger contract.');
   }
+  const supersededFamilies = new Set(
+    [workflow.familyId, ...supersededWorkflowFamilyIds].map((value) => value.trim()).filter(Boolean),
+  );
+  if (supersededFamilies.size !== supersededWorkflowFamilyIds.length + 1) {
+    throw new Error('Superseded workflow families must be non-empty and unique.');
+  }
 
   const specification = structuredClone(active.specification);
   const preservedBindings = (specification.bindings ?? []).filter((binding) => !(
     binding.module === 'automations'
     && binding.resourceType === 'workflow'
-    && binding.resourceId === workflow.familyId
+    && supersededFamilies.has(binding.resourceId)
   ));
   const canonicalBinding: ResourceBinding = {
     module: 'automations',

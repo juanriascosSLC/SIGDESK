@@ -97,6 +97,7 @@ test('Catalog INC v7 draft preserves v6 and replaces only the same workflow fami
       bindings: [
         { module: 'sla', resourceType: 'policy', resourceId: 'sla-inc', resourceVersion: '2', contractVersion: '1' },
         { module: 'automations', resourceType: 'workflow', resourceId: 'family-blueprint-a', resourceInstanceId: 'workflow-v2', resourceVersion: '2', contractVersion: '1' },
+        { module: 'automations', resourceType: 'workflow', resourceId: 'family-blueprint-b', resourceInstanceId: 'workflow-b-v1', resourceVersion: '1', contractVersion: '1' },
         { module: 'automations', resourceType: 'workflow', resourceId: 'family-notifications', resourceInstanceId: 'notify-v1', resourceVersion: '1', contractVersion: '1' },
       ],
     },
@@ -107,19 +108,43 @@ test('Catalog INC v7 draft preserves v6 and replaces only the same workflow fami
     triggers: ['incident_not_duplicate', 'incident_escalated_to_it2', 'incident_service_required'],
     workflowId: 'workflow-v3', familyId: 'family-blueprint-a', version: 3,
     planContractVersion: 2, selectable: false,
-  });
+  }, ['family-blueprint-b']);
 
   expect(draft.version).toBe(7);
   expect(draft.status).toBe('draft');
   expect(draft.specification.bindings).toEqual([
     active.specification.bindings![0],
-    active.specification.bindings![2],
+    active.specification.bindings![3],
     {
       module: 'automations', resourceType: 'workflow', resourceId: 'family-blueprint-a',
       resourceInstanceId: 'workflow-v3', resourceVersion: '3', contractVersion: '2', enabled: true,
     },
   ]);
   expect(active.specification.bindings![1].resourceInstanceId).toBe('workflow-v2');
+  expect(draft.specification.bindings?.some((binding) => binding.resourceId === 'family-blueprint-b')).toBe(false);
+});
+
+test('Catalog INC v7 refuses ambiguous superseded workflow family input', () => {
+  const active: CatalogDefinition = {
+    id: 'inc-v6', entityKey: 'INC', name: 'Incident', version: 6, status: 'published',
+    metamodelVersion: '1.6',
+    specification: {
+      description: 'Canonical incident',
+      identity: { prefix: 'INC' }, fields: [],
+      lifecycle: { states: [{ key: 'open', label: 'Open', initial: true }], transitions: [] },
+    },
+  };
+  const workflow = {
+    categoryId: 'INC', trigger: 'incident_escalated_to_it2',
+    triggers: ['incident_not_duplicate', 'incident_escalated_to_it2', 'incident_service_required'],
+    workflowId: 'workflow-v3', familyId: 'family-blueprint-a', version: 3 as const,
+    planContractVersion: 2 as const, selectable: false,
+  };
+
+  expect(() => buildCatalogIncV7Draft(active, workflow, ['family-blueprint-a']))
+    .toThrow('Superseded workflow families must be non-empty and unique.');
+  expect(() => buildCatalogIncV7Draft(active, workflow, ['']))
+    .toThrow('Superseded workflow families must be non-empty and unique.');
 });
 
 test('service-required compiles to an approval-gated RFC action', () => {
