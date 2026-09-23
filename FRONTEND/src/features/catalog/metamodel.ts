@@ -707,6 +707,8 @@ export interface EntityRecord {
     siteAssetId?: string;
     links: Array<{ assetId: string; role?: string; snapshot: Record<string, unknown> }>;
   };
+  /** Immutable incident/requester/asset/assignment/evidence snapshot captured for a governed Services RFC. */
+  incidentContext?: Record<string, unknown>;
 }
 
 export interface StakeholdersInput {

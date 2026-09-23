@@ -365,7 +365,8 @@ test('Create from template leaves the workflow in Draft state and never publishe
   expect(savedPayload!.categoria_id).toBe('INC');
   expect(savedPayload!.version).toBe(1);
 
-  // Verify Blueprint A assignment node has on_omitted: 'stop'
+  // Routing and mandatory troubleshooting are sibling branches. A routing
+  // omission stops only that branch and can never suppress the work item.
   const assignPlanNode = savedPayload!.execution_plan.nodes.find((n) => n.action === 'asignar_automatico');
   expect(assignPlanNode).toBeDefined();
   expect(assignPlanNode!.on_omitted).toBe('stop');
@@ -373,7 +374,10 @@ test('Create from template leaves the workflow in Draft state and never publishe
   // Verify Blueprint A has create_incident_work_item next with due_in_minutes: 30 and NO due_minutes
   const workItemPlanNode = savedPayload!.execution_plan.nodes.find((n) => n.action === 'create_incident_work_item');
   expect(workItemPlanNode).toBeDefined();
-  expect(assignPlanNode!.next).toContain(workItemPlanNode!.id);
+  const triggerPlanNode = savedPayload!.execution_plan.nodes.find((n) => !n.action);
+  expect(triggerPlanNode).toBeDefined();
+  expect(triggerPlanNode!.next).toEqual(expect.arrayContaining([assignPlanNode!.id, workItemPlanNode!.id]));
+  expect(assignPlanNode!.next).toEqual([]);
 
   const workItemRule = savedPayload!.reglas.find((r) => r.accion === 'create_incident_work_item');
   expect(workItemRule).toBeDefined();
@@ -528,5 +532,4 @@ test('Blueprint B captures exact RFC governance fields with locked request_appro
   // Verify locked approval notice in visual editor
   await expect(page.getByTestId('workflow-visual-editor')).toBeVisible();
 });
-
 

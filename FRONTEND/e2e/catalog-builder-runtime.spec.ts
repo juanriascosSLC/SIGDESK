@@ -157,6 +157,33 @@ test('canonical catalog-inc-v1.json fixture is clean of E2E markers and labels',
   expect(content).not.toContain('catalog-builder-e2e');
   expect(content).not.toContain('Entidad E2E');
   expect(content).not.toContain('ENTIDADE2E');
+
+  const fixture = JSON.parse(content) as {
+    specification: {
+      fields: Array<{ key: string; bindsTo?: string }>;
+      views?: Record<string, string[]>;
+      createPage?: unknown;
+    };
+  };
+  const collectPlacementFieldKeys = (value: unknown): string[] => {
+    if (Array.isArray(value)) {
+      return value.flatMap(collectPlacementFieldKeys);
+    }
+    if (value === null || typeof value !== 'object') {
+      return [];
+    }
+    const record = value as Record<string, unknown>;
+    return [
+      ...(typeof record.fieldKey === 'string' ? [record.fieldKey] : []),
+      ...Object.values(record).flatMap(collectPlacementFieldKeys),
+    ];
+  };
+  const assigneeFieldKeys = fixture.specification.fields
+    .filter((field) => field.bindsTo === 'agenteItId')
+    .map((field) => field.key);
+  expect(assigneeFieldKeys, 'assignment is a separate command and must not be captured during INC creation').toEqual([]);
+  expect(Object.values(fixture.specification.views ?? {}).flat()).not.toContain('asignado');
+  expect(collectPlacementFieldKeys(fixture.specification.createPage)).not.toContain('asignado');
 });
 
 test('publishes Catalog Builder changes and preserves historical ticket manifests', async ({

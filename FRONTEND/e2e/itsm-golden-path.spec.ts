@@ -149,14 +149,19 @@ async function createRelationTwice(
 
 async function transitionChange(request: APIRequestContext, changeId: string, key: string) {
   return jsonOrFailure<Entity>(
-    await request.post(`/changes/${changeId}/transitions/${key}`),
+    await request.post(`/changes/${changeId}/transitions/${key}`, {
+      headers: { 'Idempotency-Key': `playwright-change-${changeId}-${key}-${randomUUID()}` },
+    }),
     `transition RFC via ${key}`,
   );
 }
 
 async function transitionTask(request: APIRequestContext, changeId: string, taskId: string, key: string, data: Record<string, unknown> = {}) {
   return jsonOrFailure<ChangeTask>(
-    await request.post(`/changes/${changeId}/tasks/${taskId}/transitions/${key}`, { data }),
+    await request.post(`/changes/${changeId}/tasks/${taskId}/transitions/${key}`, {
+      headers: { 'Idempotency-Key': `playwright-task-${taskId}-${key}-${randomUUID()}` },
+      data,
+    }),
     `transition Task via ${key}`,
   );
 }
@@ -455,7 +460,11 @@ test('executes and traces the metadata-driven INC → PRB → RFC golden path', 
 
     await transitionTask(stack.change.isolatedRequest, change.id, inventoryTask.id, 'start');
     await transitionTask(stack.change.isolatedRequest, change.id, inventoryTask.id, 'complete', { evidence: ['Stock validated'] });
-    await transitionTask(stack.change.isolatedRequest, change.id, installationTask.id, 'mark_ready');
+    const promotedTasks = await jsonOrFailure<{ items: ChangeTask[] }>(
+      await stack.change.isolatedRequest.get(`/changes/${change.id}/tasks`),
+      'reload Tasks after dependency completion',
+    );
+    expect(promotedTasks.items.find((task) => task.id === installationTask.id)?.status).toBe('ready');
 
     // Exercise the Services workspace against the REAL isolated
     // change_service instead of finishing its task through a setup API call.

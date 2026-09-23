@@ -30,6 +30,10 @@ const serviceTask = {
   },
   priority: 'high',
   required: true,
+  workflowKey: 'services_field_work',
+  workType: 'field_work_order',
+  outcomeCode: '',
+  notes: [],
   status: 'ready',
   dependencyIds: [],
   dueAt: '2026-09-12T18:00:00Z',
@@ -39,6 +43,10 @@ const serviceTask = {
   createdAt: '2026-09-10T10:00:00Z',
   updatedAt: '2026-09-10T10:00:00Z',
   completedAt: null,
+  scheduledStart: '2026-09-12T17:00:00Z',
+  scheduledEnd: '2026-09-12T18:00:00Z',
+  scheduledBy: 'user-2',
+  revision: 1,
   assetContext: {
     siteAssetId: 'site-1',
     links: [{ assetId: 'switch-1', role: 'affected', snapshot: { displayName: 'Core Switch 01', assetType: 'switch', serial: 'SW-001', siteAssetId: 'site-1' } }],
@@ -57,9 +65,11 @@ const otherDepartmentTask = {
 const change = { id: 'change-1', humanId: 'RFC-000050', state: 'implementing', title: 'Restore connectivity at North Site' };
 
 async function stubServicesDomain(page: Page, taskSeed: typeof serviceTask = serviceTask) {
-  let currentTask = structuredClone(taskSeed) as Omit<typeof serviceTask, 'status' | 'evidence' | 'blockedReason'> & {
+  let currentTask = structuredClone(taskSeed) as Omit<typeof serviceTask, 'status' | 'evidence' | 'notes' | 'outcomeCode' | 'blockedReason'> & {
     status: string;
     evidence: string[];
+    notes: string[];
+    outcomeCode: string;
     blockedReason: string;
   };
 
@@ -67,18 +77,26 @@ async function stubServicesDomain(page: Page, taskSeed: typeof serviceTask = ser
   await page.route('**/changes/tasks/assigned*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [{ task: currentTask, change }, { task: otherDepartmentTask, change }] }) }));
   await page.route('**/changes/change-1/tasks/task-services-1/transitions/*', async (route) => {
     const key = new URL(route.request().url()).pathname.split('/').at(-1);
-    const body = route.request().postDataJSON() as { evidence?: string[]; reason?: string };
+    const body = route.request().postDataJSON() as { evidence?: string[]; notes?: string[]; outcomeCode?: string; reason?: string };
     const status = key === 'start' ? 'in_progress' : key === 'complete' ? 'completed' : key === 'block' ? 'blocked' : 'ready';
     currentTask = {
       ...currentTask,
       status,
       evidence: body.evidence ?? currentTask.evidence,
+      notes: body.notes ?? currentTask.notes,
+      outcomeCode: body.outcomeCode ?? currentTask.outcomeCode,
       blockedReason: body.reason ?? '',
       ...(key === 'start' && !currentTask.assigneeUserId
         ? { assigneeUserId: 'playwright-warehouse', assigneeName: 'Playwright Warehouse', assigneeId: 'Playwright Warehouse' }
         : {}),
     };
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(currentTask) });
+  });
+  await page.route('**/changes/change-1/tasks/task-services-1/attachments', (route) => {
+    if (route.request().method() === 'GET') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [] }) });
+    }
+    return route.fulfill({ status: 405, contentType: 'application/json', body: JSON.stringify({ message: 'Not supported by this scenario' }) });
   });
 
   await page.route('**/assets/sites*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [{ id: 'site-1', sourceSystem: 'sig_inventory', externalEntity: 'site', externalId: '101', externalKey: 'NORTH-101', kind: 'site', assetType: 'site', displayName: 'North Service Site', lifecycle: 'active', attributes: { address: '100 Main St', city: 'Atlanta' }, lastSyncedAt: '2026-09-10T12:00:00Z', deleted: false }], hasMore: false, stale: false }) }));
@@ -116,11 +134,11 @@ test('work order executes the real task lifecycle and requires completion eviden
 
   await page.getByRole('button', { name: 'Start work' }).click();
   await expect(page.getByText('In progress', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Complete with evidence' }).click();
-  const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('button', { name: 'Complete', exact: true })).toBeDisabled();
-  await dialog.getByLabel('Evidence or result').fill('Switch replaced; all cameras responding.');
-  await dialog.getByRole('button', { name: 'Complete', exact: true }).click();
+  await page.getByRole('button', { name: 'Work completed' }).click();
+  await expect(page.getByRole('button', { name: 'Record governed outcome' })).toBeDisabled();
+  await page.getByLabel('Notes (one per line)').fill('Switch replacement completed.');
+  await page.getByLabel('Evidence references (one per line)').fill('Switch replaced; all cameras responding.');
+  await page.getByRole('button', { name: 'Record governed outcome' }).click();
   await expect(page.getByText('Completed', { exact: true })).toBeVisible();
   await expect(page.getByText('Switch replaced; all cameras responding.')).toBeVisible();
 });
@@ -186,9 +204,10 @@ test('work order can be blocked, resumed, completed, and reopened through backen
   await expect(page.getByText('Ready to start', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Start work' }).click();
   await expect(page.getByText('In progress', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Complete with evidence' }).click();
-  await page.getByLabel('Evidence or result').fill('Access obtained and connectivity validated.');
-  await page.getByRole('dialog').getByRole('button', { name: 'Complete', exact: true }).click();
+  await page.getByRole('button', { name: 'Work completed' }).click();
+  await page.getByLabel('Notes (one per line)').fill('Site access obtained.');
+  await page.getByLabel('Evidence references (one per line)').fill('Access obtained and connectivity validated.');
+  await page.getByRole('button', { name: 'Record governed outcome' }).click();
   await page.getByRole('button', { name: 'Reopen' }).click();
   await expect(page.getByText('Ready to start', { exact: true })).toBeVisible();
 });
