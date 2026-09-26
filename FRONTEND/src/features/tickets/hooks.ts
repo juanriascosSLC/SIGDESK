@@ -215,6 +215,10 @@ export function useTransitionIncidentWork(ticketId: string) {
 	return useMutation({
 		mutationFn: ({ workItemId, input }: { workItemId: number; input: IncidentWorkTransitionInput }) => transitionIncidentWork(ticketId, workItemId, input),
 		onSuccess: () => {
+			// A typed `resolved` work outcome also resolves the parent incident
+			// server-side. Refresh the detail record itself, not only the work
+			// projection, so the status shown on screen changes immediately.
+			void queryClient.invalidateQueries({ queryKey: ticketKeys.detail(ticketId) });
 			void queryClient.invalidateQueries({ queryKey: ticketKeys.incidentWork(ticketId) });
 			void queryClient.invalidateQueries({ queryKey: ticketKeys.incidentCycle(ticketId) });
 			void queryClient.invalidateQueries({ queryKey: ticketKeys.activity(ticketId) });
