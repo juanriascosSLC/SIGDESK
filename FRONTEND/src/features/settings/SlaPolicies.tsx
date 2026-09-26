@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { formatDate } from '@/i18n/format';
+import { formatDateTime } from '@/i18n/format';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CalendarClock,
@@ -219,11 +219,10 @@ export default function SlaPolicies() {
                     <button
                       key={policy.id}
                       onClick={() => choosePolicy(policy)}
-                      className={`w-full rounded-xl border px-3 py-2 flex items-center justify-between text-xs font-medium transition-all ${
-                        selected.id === policy.id
+                      className={`w-full rounded-xl border px-3 py-2 flex items-center justify-between text-xs font-medium transition-all ${selected.id === policy.id
                           ? 'border-primary/60 bg-primary/15 text-primary font-bold shadow-[0_0_12px_rgba(34,211,238,0.12)]'
                           : 'border-transparent hover:bg-surface-container text-on-surface'
-                      }`}
+                        }`}
                     >
                       <span>Version {policy.version}</span>
                       <Status value={policy.status} />
@@ -260,8 +259,7 @@ export default function SlaPolicies() {
             </Field>
             <Field label="Timezone">
               <select
-                className="friendly-input rounded-xl border-border/50 focus:border-primary/50 cursor-pointer bg-[#1d2026] text-[#e1e2eb]"
-                style={{ colorScheme: 'dark' }}
+                className="friendly-input rounded-xl border-border/50 focus:border-primary/50 cursor-pointer"
                 value={selected.calendar.timezone}
                 onChange={(event) =>
                   setSelected((current) => ({
@@ -270,10 +268,10 @@ export default function SlaPolicies() {
                   }))
                 }
               >
-                <option value="America/Bogota" className="bg-[#191c22] text-[#e1e2eb]">America/Bogota</option>
-                <option value="America/Mexico_City" className="bg-[#191c22] text-[#e1e2eb]">America/Mexico_City</option>
-                <option value="America/New_York" className="bg-[#191c22] text-[#e1e2eb]">America/New_York</option>
-                <option value="UTC" className="bg-[#191c22] text-[#e1e2eb]">UTC</option>
+                <option value="America/Bogota">America/Bogota</option>
+                <option value="America/Mexico_City">America/Mexico_City</option>
+                <option value="America/New_York">America/New_York</option>
+                <option value="UTC">UTC</option>
               </select>
             </Field>
             <Field label="Calendar">
@@ -356,11 +354,10 @@ export default function SlaPolicies() {
                   return (
                     <tr key={priority} className="hover:bg-surface-container/30 transition-colors">
                       <td className="py-3.5 px-3">
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                          isCritical ? 'bg-red-500/15 text-red-400 border-red-500/30' :
-                          isHigh ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' :
-                          'bg-surface-container-high text-on-surface-variant border-border/40'
-                        }`}>
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${isCritical ? 'bg-status-danger-bg text-status-danger-fg border-status-danger-border' :
+                            isHigh ? 'bg-status-warning-bg text-status-warning-fg border-status-warning-border' :
+                              'bg-surface-container-high text-on-surface-variant border-border/40'
+                          }`}>
                           {priority}
                         </span>
                       </td>
@@ -438,9 +435,9 @@ export default function SlaPolicies() {
                 }
               />
             </Field>
-            <div className="md:col-span-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4" /> Operational escalation
+            <div className="md:col-span-3 rounded-2xl border border-status-warning-border bg-status-warning-bg p-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-status-warning-fg flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-status-warning-icon" /> Operational escalation
               </p>
               <p className="text-xs text-on-surface-variant mt-1.5">
                 Automatic alert at 75% of target time and breach notice at 100%.
@@ -449,14 +446,14 @@ export default function SlaPolicies() {
           </section>
 
           {previewMutation.data && (
-            <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-4 text-sm text-cyan-200 shadow-sm">
+            <div className="rounded-2xl border border-status-info-border bg-status-info-bg p-4 text-sm text-status-info-fg shadow-sm">
               <strong>Live calculation ({previewMutation.data.priority}):</strong> response before{' '}
               <span className="underline decoration-cyan-400 font-bold">{formatDateTime(previewMutation.data.responseDueAt)}</span> and resolution before{' '}
               <span className="underline decoration-cyan-400 font-bold">{formatDateTime(previewMutation.data.resolutionDueAt)}</span>.
             </div>
           )}
           {mutationError && (
-            <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300" role="alert">
+            <div className="rounded-2xl border border-status-danger-border bg-status-danger-bg p-4 text-sm text-status-danger-fg" role="alert">
               <p>{mutationError.message}</p>
               {policiesQuery.isError && (
                 <button type="button" onClick={() => void policiesQuery.refetch()} className="secondary-button mt-3" data-testid="sla-policies-retry">
@@ -466,8 +463,8 @@ export default function SlaPolicies() {
             </div>
           )}
           {notice && (
-            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-300 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 shrink-0" /> {notice}
+            <div className="rounded-2xl border border-status-success-border bg-status-success-bg p-4 text-sm text-status-success-fg flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-status-success-icon" /> {notice}
             </div>
           )}
         </main>
@@ -505,9 +502,9 @@ function MinutesInput({ value, onChange }: { value: number; onChange: (value: nu
 function Status({ value }: { value?: string }) {
   const classes =
     value === 'published'
-      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+      ? 'bg-status-success-bg text-status-success-fg border-status-success-border'
       : value === 'draft'
-        ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+        ? 'bg-status-warning-bg text-status-warning-fg border-status-warning-border'
         : 'bg-surface-container-high text-on-surface-variant border-border/40';
   const label = value === 'published' ? 'Active' : value === 'draft' ? 'Draft' : 'Previous';
   return <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${classes}`}>{label}</span>;

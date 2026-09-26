@@ -10,7 +10,7 @@ test.describe('Golden Path vivo SIG-Desk', () => {
     await page.goto('/login');
     await page.locator('input[name="username"]').fill(username!);
     await page.locator('input[name="password"]').fill(password!);
-    await page.getByRole('button', { name: /iniciar sesión/i }).click();
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await expect(page).not.toHaveURL(/\/login/);
     await page.goto('/app/catalog');
     await expect(page.getByText(/service catalog|catálogo/i).first()).toBeVisible();

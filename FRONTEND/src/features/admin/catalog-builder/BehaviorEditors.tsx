@@ -200,11 +200,10 @@ export function WorkflowEditor({
                         return current;
                       })
                     }
-                    className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
-                    style={{ colorScheme: 'dark' }}
+                    className="friendly-input"
                   >
                     {states.map((state) => (
-                      <option key={state.key} value={state.key} className="bg-[#191c22] text-[#e1e2eb]">{state.label}</option>
+                      <option key={state.key} value={state.key}>{state.label}</option>
                     ))}
                   </select>
                 </FriendlyField>
@@ -218,11 +217,10 @@ export function WorkflowEditor({
                         return current;
                       })
                     }
-                    className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
-                    style={{ colorScheme: 'dark' }}
+                    className="friendly-input"
                   >
                     {states.map((state) => (
-                      <option key={state.key} value={state.key} className="bg-[#191c22] text-[#e1e2eb]">{state.label}</option>
+                      <option key={state.key} value={state.key}>{state.label}</option>
                     ))}
                   </select>
                 </FriendlyField>
@@ -319,11 +317,10 @@ export function RelationsEditor({
                 <select
                   value={relation.targetEntityKey}
                   onChange={(event) => updateRelation(index, { targetEntityKey: event.target.value })}
-                  className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
-                  style={{ colorScheme: 'dark' }}
+                  className="friendly-input"
                 >
                   {entityKeys.map((entityKey) => (
-                    <option key={entityKey} value={entityKey} className="bg-[#191c22] text-[#e1e2eb]">
+                    <option key={entityKey} value={entityKey}>
                       {entityKey}
                     </option>
                   ))}
@@ -353,8 +350,7 @@ export function RelationsEditor({
                   onChange={(event) => updateRelation(index, {
                     cardinality: event.target.value as 'one' | 'many',
                   })}
-                  className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
-                  style={{ colorScheme: 'dark' }}
+                  className="friendly-input"
                 >
                   <option value="many">Multiple records</option>
                   <option value="one">Single record</option>

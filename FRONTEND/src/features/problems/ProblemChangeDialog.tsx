@@ -182,8 +182,8 @@ export function ProblemChangeDialog({
           ))}
         </div>
         {workflowMutation.isError && (
-          <div className="mx-6 mb-4 flex gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
+          <div className="mx-6 mb-4 flex gap-3 rounded-2xl border border-status-danger-border bg-status-danger-bg p-4 text-sm text-status-danger-fg">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-status-danger-icon" />
             {workflowMutation.error.message}
           </div>
         )}

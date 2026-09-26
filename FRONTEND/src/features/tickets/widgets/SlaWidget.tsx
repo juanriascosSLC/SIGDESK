@@ -10,6 +10,7 @@ type SlaMetricView = {
   completed: boolean;
   breached: boolean;
   paused: boolean;
+  unavailable: boolean;
 };
 
 function formatDuration(milliseconds: number): string {
@@ -27,17 +28,40 @@ function formatDuration(milliseconds: number): string {
 }
 
 function slaMetric(assessment: SlaAssessment, kind: 'response' | 'resolution'): SlaMetricView {
-  const dueAt = new Date(kind === 'response' ? assessment.responseDueAt : assessment.resolutionDueAt);
+  const dueValue = kind === 'response' ? assessment.responseDueAt : assessment.resolutionDueAt;
+  const dueAt = new Date(dueValue);
+  const startedAt = new Date(assessment.startedAt);
   const completedValue = kind === 'response' ? assessment.respondedAt : assessment.resolvedAt;
   const completedAt = completedValue ? new Date(completedValue) : null;
   const pausedAt = assessment.pausedAt ? new Date(assessment.pausedAt) : null;
   const effectiveNow = completedAt ?? pausedAt ?? new Date();
   const explicitTarget =
     kind === 'response' ? assessment.responseTargetMinutes : assessment.resolutionTargetMinutes;
+  const hasExplicitTarget =
+    typeof explicitTarget === 'number' && Number.isFinite(explicitTarget) && explicitTarget > 0;
   const targetMinutes =
-    explicitTarget && explicitTarget > 0
+    hasExplicitTarget
       ? explicitTarget
-      : Math.max(1, (dueAt.getTime() - new Date(assessment.startedAt).getTime()) / 60_000);
+      : Math.max(1, (dueAt.getTime() - startedAt.getTime()) / 60_000);
+
+  const invalidTiming =
+    !Number.isFinite(dueAt.getTime()) ||
+    !Number.isFinite(startedAt.getTime()) ||
+    !Number.isFinite(effectiveNow.getTime()) ||
+    !Number.isFinite(targetMinutes) ||
+    targetMinutes <= 0;
+  if (invalidTiming) {
+    return {
+      pct: 0,
+      label: 'Timing unavailable',
+      deadline: 'Unavailable',
+      completed: false,
+      breached: false,
+      paused: false,
+      unavailable: true,
+    };
+  }
+
   const remaining = dueAt.getTime() - effectiveNow.getTime();
   const breached =
     (kind === 'response' ? assessment.responseBreached : assessment.resolutionBreached) || remaining < 0;
@@ -57,29 +81,34 @@ function slaMetric(assessment: SlaAssessment, kind: 'response' | 'resolution'): 
     completed: Boolean(completedAt),
     breached,
     paused: Boolean(pausedAt && !completedAt),
+    unavailable: false,
   };
 }
 
 function SlaBar({ title, metric }: { title: string; metric: SlaMetricView }) {
   const successful = metric.completed && !metric.breached;
-  const barColor = successful
-    ? 'bg-emerald-400'
+  const barColor = metric.unavailable
+    ? 'bg-status-warning-icon'
+    : successful
+    ? 'bg-status-success-icon'
     : metric.breached
-      ? 'bg-red-500'
+      ? 'bg-status-danger-icon'
       : metric.paused
-        ? 'bg-violet-400'
+        ? 'bg-status-paused-icon'
         : metric.pct >= 75
-          ? 'bg-amber-400'
-          : 'bg-cyan-400';
-  const textColor = successful
-    ? 'text-emerald-400'
+          ? 'bg-status-warning-icon'
+          : 'bg-primary';
+  const textColor = metric.unavailable
+    ? 'text-status-warning-fg'
+    : successful
+    ? 'text-status-success-fg'
     : metric.breached
-      ? 'text-red-400'
+      ? 'text-status-danger-fg'
       : metric.paused
-        ? 'text-violet-300'
+        ? 'text-status-paused-fg'
         : metric.pct >= 75
-          ? 'text-amber-400'
-          : 'text-cyan-400';
+          ? 'text-status-warning-fg'
+          : 'text-primary';
 
   return (
     <div className="flex-1 min-w-[220px]">
@@ -94,7 +123,9 @@ function SlaBar({ title, metric }: { title: string; metric: SlaMetricView }) {
         />
       </div>
       <span className="block mt-1 text-[10px] text-on-surface-variant">
-        Deadline: {metric.deadline} · {Math.round(metric.pct)}% consumed
+        {metric.unavailable
+          ? 'Deadline data is unavailable.'
+          : `Deadline: ${metric.deadline} · ${Math.round(metric.pct)}% consumed`}
       </span>
     </div>
   );
@@ -109,13 +140,13 @@ export function SlaWidget({ context }: { context: TicketPageContext }) {
     <div className="bg-surface-container-low border border-border/40 rounded-3xl p-6">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-5 border-b border-border/40 pb-2">
         <h3 className="text-sm font-bold text-on-surface-variant uppercase tracking-wider flex items-center gap-2">
-          <Timer className="w-4 h-4 text-cyan-400" />
+          <Timer className="w-4 h-4 text-primary" />
           Service Level Agreement
         </h3>
         {assessment && (
           <div className="flex flex-wrap items-center justify-end gap-2">
             {assessment.pausedAt && !assessment.resolvedAt && (
-              <span className="text-[10px] font-black text-violet-300 bg-violet-500/10 border border-violet-500/20 rounded-full px-3 py-1">
+              <span className="text-[10px] font-black text-status-paused-fg bg-status-paused-bg border border-status-paused-border rounded-full px-3 py-1">
                 CLOCK PAUSED
               </span>
             )}
@@ -138,10 +169,10 @@ export function SlaWidget({ context }: { context: TicketPageContext }) {
           <SlaBar title="Resolution" metric={slaMetric(assessment, 'resolution')} />
         </div>
       ) : (
-        <div className="flex items-start gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
-          <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+        <div className="flex items-start gap-3 rounded-2xl border border-status-warning-border bg-status-warning-bg p-4">
+          <AlertTriangle className="w-4 h-4 text-status-warning-icon mt-0.5 shrink-0" />
           <div>
-            <p className="text-sm font-bold text-amber-300">No SLA assessment</p>
+            <p className="text-sm font-bold text-status-warning-fg">No SLA assessment</p>
             <p className="text-xs text-on-surface-variant mt-1">
               The catalog version used by this ticket didn't link an executable SLA policy.
             </p>

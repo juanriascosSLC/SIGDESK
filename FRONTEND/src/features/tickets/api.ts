@@ -3,6 +3,10 @@ import { getResolvedDefinition, type LifecycleTransitionDefinition } from '@/fea
 import { USER_UNAVAILABLE_LABEL } from './identity-labels';
 import type {
   CreateTicketInput,
+	IncidentWorkItem,
+	IncidentWorkTransitionInput,
+	IncidentOperationalCycle,
+	IncidentClientAction,
   Ticket,
   TicketActivityEntry,
   TicketAssignment,
@@ -664,6 +668,43 @@ export async function addComment(
 export async function listAttachments(ticketId: string): Promise<TicketAttachment[]> {
   const response = await apiRequest<{ items: TicketAttachment[] }>(`/tickets/${ticketId}/attachments`);
   return response.items;
+}
+
+export async function listIncidentWork(ticketId: string): Promise<IncidentWorkItem[]> {
+	const response = await apiRequest<{ items: IncidentWorkItem[] }>(`/entities/INC/${encodeURIComponent(ticketId)}/work-items`);
+	return response.items;
+}
+
+export async function transitionIncidentWork(ticketId: string, workItemId: number, input: IncidentWorkTransitionInput): Promise<IncidentWorkItem> {
+	return apiRequest<IncidentWorkItem>(`/entities/INC/${encodeURIComponent(ticketId)}/work-items/${workItemId}/transitions/${input.transition}`, {
+		method: 'POST',
+		headers: commandHeaders(),
+		body: JSON.stringify({ notes: input.notes, evidence: input.evidence, reopen_reason: input.reopenReason, outcomeCode: input.outcomeCode, notesArray: input.notesArray }),
+	});
+}
+
+export function getIncidentOperationalCycle(ticketId: string) {
+	return apiRequest<IncidentOperationalCycle>(`/entities/INC/${encodeURIComponent(ticketId)}/operational-cycle`);
+}
+
+function commandHeaders(): HeadersInit {
+	return { 'Idempotency-Key': crypto.randomUUID() };
+}
+
+export function claimIncidentIT1(ticketId: string, departmentId: string, teamId: string) {
+	return apiRequest<{ triage: IncidentOperationalCycle['triage']; replayed: boolean }>(`/entities/INC/${encodeURIComponent(ticketId)}/claim-it1`, { method: 'POST', headers: commandHeaders(), body: JSON.stringify({ departmentId, teamId }) });
+}
+
+export function decideIncidentDuplicate(ticketId: string, decision: 'duplicate' | 'not_duplicate', primaryTicketId?: number) {
+	return apiRequest<{ triage: IncidentOperationalCycle['triage']; replayed: boolean }>(`/entities/INC/${encodeURIComponent(ticketId)}/duplicate-decision`, { method: 'POST', headers: commandHeaders(), body: JSON.stringify({ decision, ...(primaryTicketId ? { primaryTicketId } : {}) }) });
+}
+
+export function createIncidentClientAction(ticketId: string, input: { it2WorkItemId: number; contactedPerson: string; instructions: string[]; performedAt: string; evidence: string[] }) {
+	return apiRequest<{ clientAction: IncidentClientAction; replayed: boolean }>(`/entities/INC/${encodeURIComponent(ticketId)}/client-actions`, { method: 'POST', headers: commandHeaders(), body: JSON.stringify(input) });
+}
+
+export function completeIncidentClientAction(ticketId: string, actionId: number, outcomeCode: 'resolved' | 'unresolved', notes: string[]) {
+	return apiRequest<{ clientAction: IncidentClientAction; replayed: boolean }>(`/entities/INC/${encodeURIComponent(ticketId)}/client-actions/${actionId}/complete`, { method: 'POST', headers: commandHeaders(), body: JSON.stringify({ outcomeCode, notes }) });
 }
 
 export async function uploadAttachment(

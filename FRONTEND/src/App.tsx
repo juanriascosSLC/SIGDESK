@@ -25,8 +25,10 @@ const MyChangeTasks = React.lazy(() => import('./features/changes/MyChangeTasks'
 const AutomationsList = React.lazy(() => import('./features/automations/AutomationsList'));
 const WorkflowBuilder = React.lazy(() => import('./features/automations/WorkflowBuilder'));
 const ServicesDashboard = React.lazy(() => import('./features/services/ServicesDashboard'));
-const DealershipView = React.lazy(() => import('./features/services/DealershipView'));
-const SrvDetail = React.lazy(() => import('./features/services/SrvDetail'));
+const WorkOrderDetail = React.lazy(() => import('./features/services/WorkOrderDetail'));
+const ServiceSiteDetail = React.lazy(() => import('./features/services/ServiceSiteDetail'));
+const ServiceRequests = React.lazy(() => import('./features/purchasing/ServiceRequests'));
+const ServiceRequestDetail = React.lazy(() => import('./features/purchasing/ServiceRequestDetail'));
 const KnowledgeBase = React.lazy(() => import('./features/knowledge/KnowledgeBase'));
 const ArticleDetail = React.lazy(() => import('./features/knowledge/ArticleDetail'));
 const KnowledgeEditor = React.lazy(() => import('./features/knowledge/KnowledgeEditor'));
@@ -127,7 +129,7 @@ function LandingRedirect() {
   // An admin keeps landing on the workspace shell, where the Administration
   // nav lives. Someone whose real grant is only over tickets lands straight
   // on their pool instead of /app: the Dashboard there is not their working
-  // surface, "Tickets & Issues" is.
+  // surface, "Incidents" is.
   if (canManageUsersAndRoles) return <Navigate to="/app" replace />;
   if (canViewTickets) return <Navigate to="/app/tickets" replace />;
   if (can(PERMISSIONS.changesView)) return <Navigate to="/app/changes" replace />;
@@ -187,6 +189,7 @@ function AppRoutes() {
             // grant es sobre `change_tasks`. Sin esta linea, el asignado de
             // una Task no podia entrar al workspace donde vive su trabajo.
             PERMISSIONS.changeTasksView,
+            PERMISSIONS.serviceRequestsView,
             PERMISSIONS.problemsView,
             PERMISSIONS.assetsView,
             PERMISSIONS.reportsView,
@@ -285,27 +288,33 @@ function AppRoutes() {
                   <ProblemDetail />
                 </ProtectedRoute>
               } />
-              {/* Services department slice (PR1) — mock-only, gated on the
-                  already-real sigdesk.changes.view until sigdesk.services.view
-                  exists in SIGTools (services-department-frontend.md,
-                  Constraints). */}
-              {/* fallbackTo="/app" is deliberate: ProtectedRoute's default is
-                  "/portal", the END-USER portal, so a staff agent who lacks
-                  the permission would be ejected from the agent workspace
-                  entirely rather than sent somewhere useful inside it. */}
+              {/* Services is a real operational projection: RFC Tasks are its
+                  work orders and Assets/CMDB is its site context. Either real
+                  capability opens the workspace; each detail route keeps its
+                  own narrower backend-mirrored guard. */}
               <Route path="/services" element={
-                <ProtectedRoute requiredPermission={PERMISSIONS.changesView} fallbackTo="/app">
+                <ProtectedRoute requiredAnyPermissions={[PERMISSIONS.changeTasksView, PERMISSIONS.assetsView]} fallbackTo="/app">
                   <ServicesDashboard />
                 </ProtectedRoute>
               } />
-              <Route path="/services/dealerships/:dealershipId" element={
-                <ProtectedRoute requiredPermission={PERMISSIONS.changesView} fallbackTo="/app">
-                  <DealershipView />
+              <Route path="/services/work-orders/:changeId/:taskId" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.changeTasksView} fallbackTo="/app/services">
+                  <WorkOrderDetail />
                 </ProtectedRoute>
               } />
-              <Route path="/services/tickets/:id" element={
-                <ProtectedRoute requiredPermission={PERMISSIONS.changesView} fallbackTo="/app">
-                  <SrvDetail />
+              <Route path="/services/sites/:siteId" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.assetsView} fallbackTo="/app/services">
+                  <ServiceSiteDetail />
+                </ProtectedRoute>
+              } />
+              <Route path="/purchasing" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.serviceRequestsView} fallbackTo="/app">
+                  <ServiceRequests />
+                </ProtectedRoute>
+              } />
+              <Route path="/purchasing/:id" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.serviceRequestsView} fallbackTo="/app/purchasing">
+                  <ServiceRequestDetail />
                 </ProtectedRoute>
               } />
               <Route path="/automations" element={

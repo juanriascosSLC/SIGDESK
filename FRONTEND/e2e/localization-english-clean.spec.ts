@@ -1213,6 +1213,23 @@ test.describe('Localization & UTF-8 Encoding Verification', () => {
     await assertPageIsCleanEnglish(page);
   });
 
+  test('Ticket Detail SLA widget: malformed timing degrades without rendering NaN', async ({ page }) => {
+    await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
+    await setupApiMocks(page, {
+      slaAssessment: {
+        startedAt: 'invalid-start',
+        responseDueAt: 'invalid-response-deadline',
+        resolutionDueAt: 'invalid-resolution-deadline',
+      },
+    });
+    await page.goto('/app/tickets/1');
+
+    await expect(page.getByText('Timing unavailable')).toHaveCount(2);
+    await expect(page.getByText('Deadline data is unavailable.')).toHaveCount(2);
+    await expect(page.getByText(/NaN/)).toHaveCount(0);
+    await expect(page.getByText(/Invalid Date/)).toHaveCount(0);
+  });
+
   test('Ticket Detail SLA widget: loading state shows Calculating SLA targets…', async ({ page }) => {
     await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
     await setupApiMocks(page, { slaLoading: true });

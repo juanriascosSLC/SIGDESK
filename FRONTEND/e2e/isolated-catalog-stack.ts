@@ -34,6 +34,7 @@ export function mintE2EJWT(
   // creadorNombre to resolve must mint a token that already carries it —
   // there is no background process to backfill it locally.
   nombre?: string,
+  permissions: string[] = ['*'],
 ): string {
   const base64Url = (input: string | Buffer) => {
     const b = Buffer.isBuffer(input) ? input : Buffer.from(input, 'utf8');
@@ -45,7 +46,7 @@ export function mintE2EJWT(
     JSON.stringify({
       sub,
       exp: Math.floor(Date.now() / 1000) + 7200,
-      permissions: ['*'],
+      permissions,
       ...(nombre ? { nombre } : {}),
     }),
   );
@@ -106,6 +107,10 @@ export type IsolatedStackOptions = {
    *  behavior exactly. */
   organizationServiceUrl?: string;
   organizationInternalSecret?: string;
+  /** Explicit resource dependency for asset resolution. An empty string
+   * deliberately selects the e2e server's in-process resolver; omitting it
+   * preserves the existing shared read-only fallback. */
+  resourceServiceUrl?: string;
 };
 
 function sleep(ms: number): Promise<void> {
@@ -470,7 +475,8 @@ export async function startIsolatedCatalogStack(
           // or mutates Assets/Resources, and support.ts's mutation auditor
           // independently rejects any mutating /assets/** or /resources/**
           // request outright regardless of what this process would do.
-          RESOURCE_SERVICE_URL: process.env.RESOURCE_SERVICE_URL || 'http://localhost:8082',
+          RESOURCE_SERVICE_URL:
+            options.resourceServiceUrl ?? process.env.RESOURCE_SERVICE_URL ?? 'http://localhost:8082',
           RESOURCE_INTERNAL_SECRET: process.env.RESOURCE_INTERNAL_SECRET || 'dev-only-resource-internal-secret-32-chars-min',
           // Organization: same read-only-dependency treatment as
           // Assets/Resources above. `options.organizationServiceUrl` lets a

@@ -147,11 +147,10 @@ export function ConditionRule({
             value={source.key}
             onChange={(event) => changeSource(event.target.value)}
             aria-label="Source field"
-            className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
-            style={{ colorScheme: 'dark' }}
+            className="friendly-input"
           >
             {sources.map((candidate) => (
-              <option key={candidate.key} value={candidate.key} className="bg-[#191c22] text-[#e1e2eb]">
+              <option key={candidate.key} value={candidate.key}>
                 {candidate.label || candidate.key}
               </option>
             ))}
@@ -160,11 +159,10 @@ export function ConditionRule({
             value={operator}
             onChange={(event) => changeOperator(event.target.value as ConditionOperator)}
             aria-label="Operator"
-            className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
-            style={{ colorScheme: 'dark' }}
+            className="friendly-input"
           >
             {availableOperators.map((candidate) => (
-              <option key={candidate.value} value={candidate.value} className="bg-[#191c22] text-[#e1e2eb]">
+              <option key={candidate.value} value={candidate.value}>
                 {candidate.label}
               </option>
             ))}
@@ -195,12 +193,11 @@ export function ConditionRule({
             onChange={(event) => changeQuantifier(event.target.value as ConditionQuantifier)}
             aria-label="Which devices the condition applies to"
             data-testid={`${testId}-quantifier`}
-            className="friendly-input bg-[#1d2026] py-1 text-[#e1e2eb]"
-            style={{ colorScheme: 'dark' }}
+            className="friendly-input py-1"
           >
-            <option value="principal" className="bg-[#191c22] text-[#e1e2eb]">the primary device</option>
-            <option value="any" className="bg-[#191c22] text-[#e1e2eb]">any of the devices</option>
-            <option value="all" className="bg-[#191c22] text-[#e1e2eb]">all devices</option>
+            <option value="principal">the primary device</option>
+            <option value="any">any of the devices</option>
+            <option value="all">all devices</option>
           </select>
         </label>
       )}
@@ -251,11 +248,10 @@ function ConditionValueEditor({
         value={String(condition.value ?? '')}
         onChange={(event) => onChange({ field: source.key, operator, value: event.target.value })}
         aria-label="Expected value"
-        className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
-        style={{ colorScheme: 'dark' }}
+        className="friendly-input"
       >
         {source.options?.map((option) => (
-          <option key={option.value} value={option.value} className="bg-[#191c22] text-[#e1e2eb]">
+          <option key={option.value} value={option.value}>
             {option.label}
           </option>
         ))}
@@ -271,11 +267,10 @@ function ConditionValueEditor({
           onChange({ field: source.key, operator, value: event.target.value === 'true' })
         }
         aria-label="Expected value"
-        className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
-        style={{ colorScheme: 'dark' }}
+        className="friendly-input"
       >
-        <option value="true" className="bg-[#191c22] text-[#e1e2eb]">Yes</option>
-        <option value="false" className="bg-[#191c22] text-[#e1e2eb]">No</option>
+        <option value="true">Yes</option>
+        <option value="false">No</option>
       </select>
     );
   }

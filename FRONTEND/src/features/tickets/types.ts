@@ -172,6 +172,97 @@ export interface TicketAttachment {
   createdAt: string;
 }
 
+export type IncidentWorkStatus = 'pending' | 'in_progress' | 'resolved' | 'service_required' | 'canceled';
+
+export interface IncidentWorkItem {
+	id: number;
+	ticketId: number;
+	workKey: string;
+	kind: string;
+	title: string;
+	instructions: string;
+	status: IncidentWorkStatus;
+	required: boolean;
+	dueAt?: string;
+	createdByType: 'user' | 'service';
+	createdById: string;
+	startedById?: string;
+	outcomeById?: string;
+	outcomeNotes?: string;
+	evidence: string[];
+	createdAt: string;
+	updatedAt: string;
+	completedAt?: string;
+	workType: 'troubleshooting' | 'it1_remote_troubleshooting' | 'it2_troubleshooting';
+	outcomeCode?: 'resolved' | 'escalate_to_it2' | 'client_action_required' | 'service_required';
+	notes: string[];
+	departmentId?: string;
+	teamId?: string;
+	assigneeUserId?: string;
+	revision: number;
+}
+
+export interface IncidentWorkTransitionInput {
+	transition: 'start' | 'complete' | 'resolve' | 'require_service' | 'cancel' | 'reopen';
+	notes?: string;
+	evidence?: string[];
+	reopenReason?: string;
+	outcomeCode?: IncidentWorkItem['outcomeCode'];
+	notesArray?: string[];
+}
+
+export interface IncidentTriage {
+	ticketId: number;
+	claimedByUserId: string;
+	claimedDepartmentId: string;
+	claimedTeamId: string;
+	claimedAt?: string;
+	duplicateDecision: '' | 'duplicate' | 'not_duplicate';
+	primaryTicketId?: number;
+	decidedByUserId: string;
+	decidedAt?: string;
+	revision: number;
+}
+
+export interface IncidentClientAction {
+	id: number;
+	ticketId: number;
+	it2WorkItemId: number;
+	contactedPerson: string;
+	instructions: string[];
+	performedAt: string;
+	responsibleUserId: string;
+	evidence: string[];
+	outcomeCode: '' | 'resolved' | 'unresolved';
+	outcomeNotes: string[];
+	createdAt: string;
+	completedAt?: string;
+	revision: number;
+}
+
+export interface IncidentServiceCycle {
+	ticketId: number;
+	changeId: string;
+	previousChangeId: string;
+	clientAction: 'pending' | 'successful' | 'failed' | 'not_required';
+	parts: 'pending' | 'successful' | 'failed' | 'not_required';
+	purchasing: 'pending' | 'successful' | 'failed' | 'not_required';
+	fieldWork: 'pending' | 'successful' | 'failed' | 'not_required';
+	restoration: 'pending' | 'successful' | 'failed' | 'not_required';
+	financial: 'pending' | 'successful' | 'failed' | 'not_required';
+	closeout: 'pending' | 'successful' | 'failed' | 'not_required';
+	additionalCycleOpen: boolean;
+	completedAt?: string;
+	revision: number;
+}
+
+export interface IncidentOperationalCycle {
+	triage: IncidentTriage;
+	workItems: IncidentWorkItem[];
+	clientActions: IncidentClientAction[];
+	serviceCycles: IncidentServiceCycle[];
+}
+
 export interface TicketWatcher {
   ticketId: string;
   watcherName: string;

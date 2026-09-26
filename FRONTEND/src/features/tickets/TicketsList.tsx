@@ -91,7 +91,7 @@ function getSlaChip(
       label: 'Unavailable',
       title: 'The SLA module could not provide an assessment.',
       icon: AlertCircle,
-      className: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+      className: 'bg-status-warning-bg text-status-warning-fg border border-status-warning-border',
       isBreaching: false,
     };
   }
@@ -100,7 +100,7 @@ function getSlaChip(
       label: 'No SLA',
       title: 'The entity definition did not produce an SLA assessment.',
       icon: Clock,
-      className: 'bg-surface-container-high text-on-surface-variant border-border/50',
+      className: 'bg-surface-container-high text-on-surface-variant border border-border/50',
       isBreaching: false,
     };
   }
@@ -111,7 +111,7 @@ function getSlaChip(
         label: 'Breached',
         title: 'The resolution objective was breached.',
         icon: AlertCircle,
-        className: 'bg-red-500/10 text-red-400 border-red-500/20',
+        className: 'bg-status-danger-bg text-status-danger-fg border border-status-danger-border',
         isBreaching: true,
       };
     }
@@ -119,7 +119,7 @@ function getSlaChip(
       label: 'Met',
       title: 'The ticket was resolved within its SLA objective.',
       icon: CheckCircle2,
-      className: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+      className: 'bg-status-success-bg text-status-success-fg border border-status-success-border',
       isBreaching: false,
     };
   }
@@ -129,7 +129,7 @@ function getSlaChip(
       label: 'Paused',
       title: 'SLA measurement is paused by the current lifecycle state.',
       icon: Clock,
-      className: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+      className: 'bg-status-paused-bg text-status-paused-fg border border-status-paused-border',
       isBreaching: false,
     };
   }
@@ -148,7 +148,7 @@ function getSlaChip(
       label: 'Breached',
       title: `${awaitingResponse ? 'Response' : 'Resolution'} objective breached.`,
       icon: AlertCircle,
-      className: 'bg-red-500/10 text-red-400 border-red-500/20 animate-pulse',
+      className: 'bg-status-danger-bg text-status-danger-fg border border-status-danger-border animate-pulse',
       isBreaching: true,
     };
   }
@@ -158,7 +158,7 @@ function getSlaChip(
       label: 'Unavailable',
       title: 'The SLA assessment contains an invalid deadline.',
       icon: AlertCircle,
-      className: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+      className: 'bg-status-warning-bg text-status-warning-fg border border-status-warning-border',
       isBreaching: false,
     };
   }
@@ -171,8 +171,8 @@ function getSlaChip(
     title: `${awaitingResponse ? 'Response' : 'Resolution'} deadline: ${new Date(dueAt).toLocaleString()}.`,
     icon: Timer,
     className: isAtRisk
-      ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-      : 'bg-surface-container-high text-on-surface-variant border-border/50',
+      ? 'bg-status-warning-bg text-status-warning-fg border border-status-warning-border'
+      : 'bg-surface-container-high text-on-surface-variant border border-border/50',
     isBreaching: isAtRisk,
   };
 }
@@ -367,11 +367,11 @@ export default function TicketsList() {
   // an explicit design still gets a neutral icon rather than nothing.
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'Open': return <AlertCircle className="w-4 h-4 text-red-400" />;
-      case 'In Progress': return <CircleDashed className="w-4 h-4 text-cyan-400" />;
-      case 'Pending Review': return <Clock className="w-4 h-4 text-amber-400" />;
-      case 'Resolved': return <CheckCircle2 className="w-4 h-4 text-emerald-400" />;
-      case 'Closed': return <Archive className="w-4 h-4 text-slate-400" />;
+      case 'Open': return <AlertCircle className="w-4 h-4 text-status-danger-icon" />;
+      case 'In Progress': return <CircleDashed className="w-4 h-4 text-status-info-icon" />;
+      case 'Pending Review': return <Clock className="w-4 h-4 text-status-warning-icon" />;
+      case 'Resolved': return <CheckCircle2 className="w-4 h-4 text-status-success-icon" />;
+      case 'Closed': return <Archive className="w-4 h-4 text-status-neutral-icon" />;
       default: return <CircleDot className="w-4 h-4 text-on-surface-variant" />;
     }
   };
@@ -417,19 +417,17 @@ export default function TicketsList() {
           value={site}
           onChange={(e) => { setSite(e.target.value); resetPage(); }}
           className="bg-surface-container/80 border border-border/50 text-sm rounded-xl px-3.5 py-2 text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 transition-all cursor-pointer"
-          style={{ colorScheme: 'dark' }}
         >
-          <option value="" className="bg-[#191c22] text-[#e1e2eb]">All Sites</option>
-          {siteOptions.map((s) => <option key={s} value={s} className="bg-[#191c22] text-[#e1e2eb]">{s}</option>)}
+          <option value="">All Sites</option>
+          {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         <select
           value={assignee}
           onChange={(e) => { setAssignee(e.target.value); resetPage(); }}
           className="bg-surface-container/80 border border-border/50 text-sm rounded-xl px-3.5 py-2 text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 transition-all cursor-pointer"
-          style={{ colorScheme: 'dark' }}
         >
-          <option value="" className="bg-[#191c22] text-[#e1e2eb]">All Assignees</option>
-          {assigneeOptions.map((a) => <option key={a.id} value={a.id} className="bg-[#191c22] text-[#e1e2eb]">{a.label}</option>)}
+          <option value="">All Assignees</option>
+          {assigneeOptions.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
         </select>
         {(site || assignee || search) && (
           <button
@@ -454,7 +452,7 @@ export default function TicketsList() {
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all border shadow-sm ${
                 isActive
                   ? isRed
-                    ? 'bg-red-500/15 border-red-500/40 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.15)]'
+                    ? 'bg-status-danger-bg border-status-danger-border text-status-danger-fg shadow-[0_0_15px_rgba(239,68,68,0.15)]'
                     : 'bg-primary/15 border-primary/40 text-primary shadow-[0_0_15px_rgba(34,211,238,0.15)]'
                   : 'bg-surface-container-low/80 border-border/40 text-on-surface-variant hover:text-on-surface hover:bg-surface-container hover:border-border/60'
               }`}
@@ -462,7 +460,7 @@ export default function TicketsList() {
               {v.label}
               <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
                 isActive
-                  ? isRed ? 'bg-red-500/25 text-red-300' : 'bg-primary/25 text-primary'
+                  ? isRed ? 'bg-status-danger-border text-status-danger-fg' : 'bg-primary/25 text-primary'
                   : 'bg-surface-container-high text-on-surface-variant'
               }`}>
                 {v.count}
@@ -600,8 +598,8 @@ export default function TicketsList() {
                     <td className="px-4 py-3 text-xs font-mono text-on-surface-variant">{ticket.assetId || '-'}</td>
                     <td className="px-4 py-3">
                       <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shadow-sm ${
-                        isCritical ? 'bg-red-500/20 text-red-400 border border-red-500/40 shadow-[0_0_10px_rgba(239,68,68,0.15)]' :
-                        ticket.priority === 'High' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' :
+                        isCritical ? 'bg-status-danger-bg text-status-danger-fg border border-status-danger-border shadow-[0_0_10px_rgba(239,68,68,0.15)]' :
+                        ticket.priority === 'High' ? 'bg-status-warning-bg text-status-warning-fg border border-status-warning-border' :
                         'bg-surface-container-high text-on-surface-variant border border-border/50'
                       }`}>
                         {ticket.priority}

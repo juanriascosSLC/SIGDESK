@@ -20,6 +20,17 @@ const FOCUSABLE_SELECTOR =
 export function useFocusTrap(open: boolean, onClose: () => void) {
   const panelRef = useRef<HTMLElement | null>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  // Consumers commonly pass an inline callback because dismissal can depend
+  // on live state (for example, a pending mutation). Re-installing the whole
+  // trap whenever that callback changes restores focus and then focuses the
+  // first control again, which used to move focus to the dialog's close button
+  // after every keystroke. Keep the listener stable while still calling the
+  // latest callback.
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -40,7 +51,7 @@ export function useFocusTrap(open: boolean, onClose: () => void) {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== 'Tab') return;
@@ -79,7 +90,7 @@ export function useFocusTrap(open: boolean, onClose: () => void) {
       document.body.style.overflow = previousOverflow;
       previouslyFocused.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   return panelRef;
 }

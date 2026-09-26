@@ -75,10 +75,8 @@ export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement
 }
 
 /**
- * Native `<select>`, styled through the design tokens instead of the
- * `bg-[#1d2026] text-[#e1e2eb]` + `colorScheme:'dark'` pattern that was
- * hand-copied into ~15 files — `color-scheme` is set once, globally, in
- * `index.css`, and this component just needs the token-based classes.
+ * Native `<select>`, styled through the design tokens — `color-scheme`
+ * is set globally in `index.css`, and this component uses token-based styling.
  */
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
   { label, help, error, id, className, required, options, placeholder, ...props },

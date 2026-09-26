@@ -175,8 +175,8 @@ test('escribir la etiqueta conserva el foco y no desplaza la tarjeta', async ({ 
   await abrirCampos(page);
 
   const titulo = tarjeta(page, 'titulo');
-  await titulo.getByRole('button', { name: /Configurar el campo/ }).click();
-  const etiqueta = page.getByLabel('Etiqueta', { exact: true });
+  await titulo.getByRole('button', { name: /Configure field/ }).click();
+  const etiqueta = page.getByLabel('Label', { exact: true });
   await etiqueta.focus();
   await etiqueta.press('End');
   await etiqueta.type(' actualizado');
@@ -189,7 +189,7 @@ test('activar bindsTo vuelve a colocar el campo en Crear', async ({ page }) => {
   await abrirCampos(page, conPaginaDeCreacion);
 
   const cantidad = tarjeta(page, 'cantidad');
-  await cantidad.getByRole('button', { name: /Configurar el campo/ }).click();
+  await cantidad.getByRole('button', { name: /Configure field/ }).click();
   await page.getByTestId('catalog-field-bindsto-cantidad').selectOption('assetId');
 
   const spec = await leerSpec(page);
@@ -217,7 +217,7 @@ test('un campo nuevo se abre solo: sin configurar no sirve de nada', async ({ pa
 test('Dispositivo del sitio agrega el sitio necesario antes del dispositivo', async ({ page }) => {
   await abrirCampos(page);
 
-  await page.getByTitle('Crear tipo específico').click();
+  await page.getByTitle('Create specific type').click();
   // Renamed on merge: this branch's quick-field palette is in English, so
   // "Dispositivo del sitio" is "Site Device" and the site field it
   // materializes is labelled "Affected Site".
@@ -230,7 +230,7 @@ test('Dispositivo del sitio agrega el sitio necesario antes del dispositivo', as
   expect(deviceIndex).toBe(siteIndex + 1);
   expect(spec.fields[siteIndex]).toMatchObject({ label: 'Affected Site', required: false });
   expect(spec.fields[deviceIndex]).toMatchObject({
-    label: 'Dispositivo del sitio', required: false,
+    label: 'Site Device', required: false,
   });
   expect(spec.views?.create?.slice(-2)).toEqual([
     spec.fields[siteIndex].key,

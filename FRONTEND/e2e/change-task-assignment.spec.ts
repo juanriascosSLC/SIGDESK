@@ -78,6 +78,18 @@ async function stubAssignedTasks(page: Page, items: unknown[]) {
   return requested;
 }
 
+async function stubExternalFonts(page: Page) {
+  // The product stylesheet imports Google Fonts. These UI tests intentionally
+  // run without Internet access, so provide an empty stylesheet locally: the
+  // browser still exercises the application while console-clean assertions do
+  // not depend on an unrelated third-party network request.
+  await page.route('https://fonts.googleapis.com/**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'text/css',
+    body: '',
+  }));
+}
+
 test('el asignado entra a su bandeja aunque no pueda leer las RFC', async ({ page }) => {
   await mockAuthenticatedTaskExecutor(page, { forwardUnmatched: false });
   await stubAssignedTasks(page, [warehouseTask]);
@@ -88,7 +100,7 @@ test('el asignado entra a su bandeja aunque no pueda leer las RFC', async ({ pag
 
   const nav = page.locator('#app-nav');
   await expect(nav.getByText('My Tasks')).toBeVisible();
-  await expect(nav.getByText('Change Mgmt')).toHaveCount(0);
+  await expect(nav.getByText('Changes', { exact: true })).toHaveCount(0);
 });
 
 test('la tarjeta muestra nombres del snapshot y solo el contexto minimo de la RFC', async ({ page }) => {
@@ -113,12 +125,34 @@ test('la tarjeta muestra nombres del snapshot y solo el contexto minimo de la RF
   await expect(card.getByText('implementing')).toBeVisible();
 });
 
+test('una tarea historica con evidence null no derriba la bandeja', async ({ page }) => {
+  const consoleErrors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  const taskWithNullEvidence = {
+    ...warehouseTask,
+    task: { ...warehouseTask.task, evidence: null },
+  };
+
+  await stubExternalFonts(page);
+  await mockAuthenticatedTaskExecutor(page, { forwardUnmatched: false });
+  await stubAssignedTasks(page, [taskWithNullEvidence]);
+
+  await page.goto('/app/changes/my-tasks');
+  const card = page.locator('article').filter({ hasText: 'TSK-000009' });
+  await expect(card).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Complete with evidence' })).toBeVisible();
+  expect(consoleErrors).toEqual([]);
+});
+
 test('completar exige evidencia y la envia en la transicion', async ({ page }) => {
   const consoleErrors: string[] = [];
   page.on('console', (msg) => {
     if (msg.type() === 'error') consoleErrors.push(msg.text());
   });
 
+  await stubExternalFonts(page);
   await mockAuthenticatedTaskExecutor(page, { forwardUnmatched: false });
   await stubAssignedTasks(page, [warehouseTask]);
 
@@ -162,7 +196,11 @@ test('completar exige evidencia y la envia en la transicion', async ({ page }) =
   await dialog.getByRole('button', { name: 'Complete' }).click();
 
   expect(requestCount).toBe(1);
-  expect(sent).toEqual({ evidence: ['Stock alistado'] });
+  expect(sent).toEqual({
+    evidence: ['Stock alistado'],
+    notes: [],
+    parts: [],
+  });
 
   // 4. Successful completion displays the English success message
   await expect(page.getByText(/TSK-000009 is now completed/i)).toBeVisible();
@@ -197,5 +235,5 @@ test('un administrador global ve la bandeja y tambien el tablero de RFC', async 
 
   await page.goto('/app/changes/my-tasks');
   await expect(page.locator('article').filter({ hasText: 'TSK-000009' })).toBeVisible();
-  await expect(page.locator('#app-nav').getByText('Change Mgmt')).toBeVisible();
+  await expect(page.locator('#app-nav').getByText('Changes')).toBeVisible();
 });

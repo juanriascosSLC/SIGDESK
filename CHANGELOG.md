@@ -2,6 +2,29 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
 
+## [0.3.0-beta] - 2026-09-26
+
+### Agregado
+
+- Panel de trabajo de incidente (`IncidentWorkPanel`): checklist operativo del INC, búsqueda real de incidente primario para marcar duplicados, y resolución automática del INC padre al completar un paso con desenlace `resolved` (ADR-0061/ADR-0062, ver PR del backend).
+- Hook de focus trap reutilizable para diálogos accesibles, corrigiendo pérdida de foco en los modales de trabajo de incidente.
+- Suite de smoke tests e2e para el flujo de remediación de auditoría y activación beta de ADR-0061.
+- Módulos de funcionalidad frontend adicionales (tickets, automations, auth, catalog) con sus propios hooks y specs e2e.
+
+### Corregido
+
+- Defecto de encoding (mojibake, doble codificación UTF-8) en los placeholders "Search by INC number or title…" y "Searching…" del panel de duplicados de incidente.
+- Retirado un binding de workflow de servicio heredado en INC v7 que quedó obsoleto tras la activación de ADR-0061.
+
+## [0.2.1-beta] - 2026-09-10
+
+### Cambiado
+
+- Sidebar del workspace reagrupado por función real, no por framework: "Cases" reúne los pools de creación de caso (Incidents, Problems, Changes, New Case) que antes estaban repartidos entre "Service Desk (ITSM)" y "Change & Config (ITIL)"; "Reference" separa lo que se consulta (Knowledge Base, Assets/CMDB) de lo que se crea.
+- "Service Catalog" renombrado a "New Case" (workspace) y "Home" (portal): la pantalla es el selector de definiciones publicadas para crear un caso, no un catálogo de servicios — "Catálogo" fue deprecado de cara al usuario el 2026-09-08 junto con el rename Catalog Builder → Entity Builder.
+- "Tickets & Issues" → "Incidents", "Change Mgmt" → "Changes", "Problem Mgmt" → "Problems", "Mis tareas" → "My Tasks": los tres pools de caso ahora se leen en paralelo, sin abreviaturas ni idiomas mezclados.
+- Íconos duplicados de nav eliminados; "Assistant Feedback" movido al final de Administration con ícono propio.
+
 ## [0.2.0-beta] - 2026-09-05
 
 ### Agregado

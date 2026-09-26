@@ -612,10 +612,23 @@ export interface ResourceReference {
   required: boolean;
 }
 
+export interface AutomationCapabilityMetadata {
+  categoryId: string;
+  trigger: string;
+  /** Complete typed trigger set for plan contract v2. `trigger` remains the
+   * backward-compatible summary returned for v1 servers. */
+  triggers?: string[];
+  workflowId: string;
+  familyId: string;
+  version: number;
+  selectable: boolean;
+}
+
 export interface AvailableResource {
   reference: ResourceReference;
   displayName: string;
   description?: string;
+  automationCapability?: AutomationCapabilityMetadata;
 }
 
 export interface ExecutableDefinitionManifest {
@@ -694,6 +707,8 @@ export interface EntityRecord {
     siteAssetId?: string;
     links: Array<{ assetId: string; role?: string; snapshot: Record<string, unknown> }>;
   };
+  /** Immutable incident/requester/asset/assignment/evidence snapshot captured for a governed Services RFC. */
+  incidentContext?: Record<string, unknown>;
 }
 
 export interface StakeholdersInput {

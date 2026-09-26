@@ -273,3 +273,263 @@ test('quien solo puede leer no ve los controles de edición del canvas', async (
   await expect(page.getByTestId('canvas-undo')).toHaveCount(0);
   await expect(page.getByTestId('canvas-dirty')).toHaveCount(0);
 });
+
+test('Create from template leaves the workflow in Draft state and never publishes', async ({ page }) => {
+  await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
+  await page.route('**/organization/assignment-directory**', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(directorio) }));
+
+  let publishedCalled = false;
+  await page.route('**/workflows', (route) => {
+    if (route.request().method() === 'POST') {
+      publishedCalled = true;
+      return route.fulfill({ status: 500, body: 'POST /workflows should not be called by templates!' });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [] }) });
+  });
+
+  let draftSaved = false;
+  let savedPayload: {
+    categoria_id: string;
+    version: number;
+    reglas: Array<{ id: string; accion: string; condicion?: string; config: Record<string, unknown> }>;
+    layout: unknown;
+    execution_plan: { nodes: Array<{ id: string; action?: string; on_omitted?: string; next: string[] }> };
+  } | null = null;
+  const draftId = 'draft-blueprint-a-unit';
+
+  await page.route('**/workflows/drafts', async (route) => {
+    expect(route.request().method()).toBe('POST');
+    draftSaved = true;
+    savedPayload = JSON.parse(route.request().postData() || '{}');
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: draftId,
+        categoria_id: savedPayload?.categoria_id,
+        version: savedPayload?.version,
+        estado: 'borrador',
+        reglas: savedPayload?.reglas,
+        layout: savedPayload?.layout,
+        execution_plan: savedPayload?.execution_plan,
+      }),
+    });
+  });
+
+  await page.route(`**/workflows/${draftId}`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      id: draftId,
+      categoria_id: 'INC',
+      version: 1,
+      estado: 'borrador',
+      reglas: savedPayload?.reglas ?? [],
+      layout: savedPayload?.layout ?? { nodes: [], edges: [] },
+      execution_plan: savedPayload?.execution_plan,
+    }),
+  }));
+
+  await page.goto('/app/automations');
+  await expect(page.getByTestId('automations-list')).toBeVisible();
+
+  // Click "Guided blueprints"
+  await page.getByTestId('create-from-template-button').click();
+  await expect(page.getByTestId('template-selection-modal')).toBeVisible();
+
+  // Check Blueprint A & B cards are present
+  await expect(page.getByTestId('blueprint-a-card')).toBeVisible();
+  await expect(page.getByTestId('blueprint-b-card')).toBeVisible();
+
+  // Initially Blueprint A button is disabled because department and team are not selected
+  await expect(page.getByTestId('create-blueprint-a-btn')).toBeDisabled();
+
+  // Select department
+  await page.getByTestId('blueprint-a-dept-select').selectOption('department-it');
+  // Team is still unselected; button remains disabled
+  await expect(page.getByTestId('create-blueprint-a-btn')).toBeDisabled();
+
+  // Select team
+  await page.getByTestId('blueprint-a-team-select').selectOption('team-it');
+  // Now button is enabled
+  await expect(page.getByTestId('create-blueprint-a-btn')).toBeEnabled();
+
+  // Create Blueprint A draft
+  await page.getByTestId('create-blueprint-a-btn').click();
+
+  // Verify POST /workflows was NEVER called, and POST /workflows/drafts WAS called
+  expect(publishedCalled).toBe(false);
+  expect(draftSaved).toBe(true);
+  expect(savedPayload).not.toBeNull();
+  expect(savedPayload!.categoria_id).toBe('INC');
+  expect(savedPayload!.version).toBe(1);
+
+  // Routing and mandatory troubleshooting are sibling branches. A routing
+  // omission stops only that branch and can never suppress the work item.
+  const assignPlanNode = savedPayload!.execution_plan.nodes.find((n) => n.action === 'asignar_automatico');
+  expect(assignPlanNode).toBeDefined();
+  expect(assignPlanNode!.on_omitted).toBe('stop');
+
+  // Verify Blueprint A has create_incident_work_item next with due_in_minutes: 30 and NO due_minutes
+  const workItemPlanNode = savedPayload!.execution_plan.nodes.find((n) => n.action === 'create_incident_work_item');
+  expect(workItemPlanNode).toBeDefined();
+  const triggerPlanNode = savedPayload!.execution_plan.nodes.find((n) => !n.action);
+  expect(triggerPlanNode).toBeDefined();
+  expect(triggerPlanNode!.next).toEqual(expect.arrayContaining([assignPlanNode!.id, workItemPlanNode!.id]));
+  expect(assignPlanNode!.next).toEqual([]);
+
+  const workItemRule = savedPayload!.reglas.find((r) => r.accion === 'create_incident_work_item');
+  expect(workItemRule).toBeDefined();
+  expect(workItemRule!.config.work_key).toBe('initial_troubleshooting');
+  expect(workItemRule!.config.due_in_minutes).toBe(30);
+  expect(workItemRule!.config.due_minutes).toBeUndefined();
+
+  // Verify navigation to the draft editor and draft controls (Save Draft visible)
+  await expect(page.getByTestId('workflow-visual-editor')).toBeVisible();
+  await expect(page.getByTestId('canvas-save-draft')).toBeVisible();
+});
+
+test('Organizational selection handles loading, error, empty, department without teams, and zero active members honestly', async ({ page }) => {
+  await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
+  await page.route('**/workflows', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [] }) }));
+
+  // Test 1: Directory error handling
+  await page.route('**/organization/assignment-directory**', (route) =>
+    route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'service unavailable' }) }));
+
+  await page.goto('/app/automations');
+  await page.getByTestId('create-from-template-button').click();
+  await expect(page.getByTestId('directory-error')).toBeVisible();
+  await expect(page.getByTestId('create-blueprint-a-btn')).toBeDisabled();
+
+  // Test 2: Retry with empty departments
+  await page.route('**/organization/assignment-directory**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ departments: [], teams: [], assignees: [] }),
+    }));
+  await page.getByTestId('directory-retry').click();
+  await expect(page.getByTestId('directory-empty')).toBeVisible();
+  await expect(page.getByTestId('create-blueprint-a-btn')).toBeDisabled();
+
+  // Test 3: Directory with department without teams and zero members warning
+  const customDirectory = {
+    departments: [
+      { id: 'dept-empty', nombre: 'Empty Department' },
+      { id: 'dept-services', nombre: 'Services Area' },
+    ],
+    teams: [
+      { id: 'team-field', nombre: 'Field Services', department_id: 'dept-services' },
+    ],
+    assignees: [], // zero active assignees
+  };
+
+  await page.route('**/organization/assignment-directory**', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(customDirectory) }));
+
+  // Close and reopen modal to reload directory
+  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByTestId('create-from-template-button').click();
+
+  // Department without teams
+  await page.getByTestId('blueprint-a-dept-select').selectOption('dept-empty');
+  await expect(page.getByTestId('no-teams-in-dept')).toBeVisible();
+  await expect(page.getByTestId('create-blueprint-a-btn')).toBeDisabled();
+
+  // Change to department with team
+  await page.getByTestId('blueprint-a-dept-select').selectOption('dept-services');
+  await expect(page.getByTestId('blueprint-a-team-select')).toBeVisible();
+  // Team selection starts empty on department change
+  await expect(page.getByTestId('create-blueprint-a-btn')).toBeDisabled();
+
+  // Select team that has zero members
+  await page.getByTestId('blueprint-a-team-select').selectOption('team-field');
+  // Visible warning rendered and team is NOT silently changed
+  await expect(page.getByTestId('zero-members-warning')).toBeVisible();
+  await expect(page.getByTestId('create-blueprint-a-btn')).toBeEnabled();
+});
+
+test('Blueprint B captures exact RFC governance fields with locked request_approval and no change_* aliases', async ({ page }) => {
+  await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
+  await page.route('**/workflows', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [] }) }));
+
+  let capturedPayload: {
+    categoria_id: string;
+    version: number;
+    reglas: Array<{ id: string; accion: string; config: Record<string, unknown> }>;
+    layout: unknown;
+    execution_plan: unknown;
+  } | null = null;
+  const draftId = 'draft-blueprint-b-unit';
+
+  await page.route('**/workflows/drafts', async (route) => {
+    capturedPayload = JSON.parse(route.request().postData() || '{}');
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: draftId,
+        categoria_id: 'INC',
+        version: 1,
+        estado: 'borrador',
+        reglas: capturedPayload?.reglas,
+        layout: capturedPayload?.layout,
+        execution_plan: capturedPayload?.execution_plan,
+      }),
+    });
+  });
+
+  await page.route(`**/workflows/${draftId}`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      id: draftId,
+      categoria_id: 'INC',
+      version: 1,
+      estado: 'borrador',
+      reglas: capturedPayload?.reglas ?? [],
+      layout: capturedPayload?.layout ?? { nodes: [], edges: [] },
+      execution_plan: capturedPayload?.execution_plan,
+    }),
+  }));
+
+  await page.goto('/app/automations');
+  await page.getByTestId('create-from-template-button').click();
+  await page.getByTestId('create-blueprint-b-btn').click();
+
+  expect(capturedPayload).not.toBeNull();
+  expect(capturedPayload!.categoria_id).toBe('INC');
+  expect(capturedPayload!.version).toBe(1);
+
+  const rfcRule = capturedPayload!.reglas.find((r) => r.accion === 'create_service_rfc');
+  expect(rfcRule).toBeDefined();
+  const cfg = rfcRule!.config;
+
+  // Exact canonical fields
+  expect(cfg.service_affected).toBe('Field Services');
+  expect(cfg.change_type).toBe('normal');
+  expect(cfg.impact).toBe('medium');
+  expect(cfg.probability).toBe('low');
+  expect(cfg.urgency).toBe('medium');
+  expect(cfg.lead_time_minutes).toBe(60);
+  expect(cfg.duration_minutes).toBe(120);
+  expect(cfg.request_approval).toBe(true);
+  expect(cfg.implementation_plan).toContain('Services will inspect');
+  expect(cfg.rollback_plan).toContain('Stop work');
+  expect(cfg.validation_plan).toContain('IT validates');
+
+  // Verify NONE of the incorrect legacy aliases exist
+  expect(cfg.change_impact).toBeUndefined();
+  expect(cfg.change_probability).toBeUndefined();
+  expect(cfg.change_urgency).toBeUndefined();
+  expect(cfg.change_lead_minutes).toBeUndefined();
+  expect(cfg.change_duration_minutes).toBeUndefined();
+
+  // Verify locked approval notice in visual editor
+  await expect(page.getByTestId('workflow-visual-editor')).toBeVisible();
+});
+

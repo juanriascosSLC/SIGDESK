@@ -37,7 +37,7 @@ function ChromeButton({
         onClick();
       }}
       className={`rounded-md p-1 transition-colors disabled:opacity-25 ${
-        danger ? 'text-on-surface-variant hover:bg-red-500/15 hover:text-red-300' : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
+        danger ? 'text-on-surface-variant hover:bg-status-danger-bg hover:text-status-danger-fg' : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
       }`}
     >
       {children}

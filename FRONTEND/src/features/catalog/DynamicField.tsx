@@ -64,7 +64,7 @@ export function DynamicField({
   const displayLabel = fieldDisplayLabel(field);
   const label = (
     <span className="block text-sm font-bold text-on-surface-variant uppercase tracking-wider mb-2">
-      {displayLabel} {required && <span className="text-red-400">*</span>}
+      {displayLabel} {required && <span className="text-status-danger-fg">*</span>}
     </span>
   );
   // La ayuda va DEBAJO del control y se queda: el placeholder desaparece en
@@ -96,7 +96,7 @@ export function DynamicField({
     return (
       <fieldset data-testid={`catalog-input-${field.key}`} disabled={field.readOnly}>
         <legend className="block text-sm font-bold text-on-surface-variant uppercase tracking-wider mb-2">
-          {displayLabel} {required && <span className="text-red-400">*</span>}
+          {displayLabel} {required && <span className="text-status-danger-fg">*</span>}
         </legend>
         <div className="space-y-2">
           {field.options?.map((option) => (
@@ -154,12 +154,11 @@ export function DynamicField({
           disabled={field.readOnly}
           value={String(value ?? '')}
           onChange={(event) => onChange(event.target.value)}
-          className={`${classes} bg-[#1d2026] text-[#e1e2eb]`}
-          style={{ colorScheme: 'dark' }}
+          className={classes}
         >
-          <option value="" className="bg-[#191c22] text-[#e1e2eb]">Select an option…</option>
+          <option value="">Select an option…</option>
           {field.options?.map((option) => (
-            <option key={option.value} value={option.value} className="bg-[#191c22] text-[#e1e2eb]">
+            <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}

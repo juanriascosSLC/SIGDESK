@@ -9,7 +9,12 @@ export default defineConfig({
   timeout: 60_000,
   expect: {
     timeout: 10_000,
+    toHaveScreenshot: {
+      maxDiffPixelRatio: 0.02,
+      animations: 'disabled',
+    },
   },
+  snapshotPathTemplate: '{testDir}/__snapshots__/{testFileName}/{arg}{ext}',
   reporter: [
     ['list'],
     ['html', { open: 'never' }],

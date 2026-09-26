@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Route } from '@playwright/test';
 import { mockAuthenticatedAdmin } from './support';
 
 async function mockJSON(page: Page, predicate: (url: URL) => boolean, body: unknown, status = 200) {
@@ -6,6 +6,85 @@ async function mockJSON(page: Page, predicate: (url: URL) => boolean, body: unkn
     (url) => url.port === '8000' && predicate(url),
     (route) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) }),
   );
+}
+
+const incidentWorkNow = '2026-09-23T12:00:00Z';
+
+function fulfillJSON(route: Route, body: unknown, status = 200) {
+  return route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+}
+
+function incidentRecord(id: string, humanId: string, title: string) {
+  return {
+    id,
+    humanId,
+    entityKey: 'INC',
+    state: 'en_progreso',
+    data: { title, description: 'Focused incident-work UI regression fixture.' },
+    createdAt: incidentWorkNow,
+    updatedAt: incidentWorkNow,
+    creadorId: 'requester-1',
+    creadorNombre: 'Requester One',
+    prioridad: 'media',
+  };
+}
+
+async function stubIncidentWorkScreen(page: Page) {
+  await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
+  await page.route((url) => url.port === '8000', async (route) => {
+    const url = new URL(route.request().url());
+    const path = url.pathname;
+    if (path === '/entities/INC/11') return fulfillJSON(route, incidentRecord('11', 'INC-000011', 'Camera offline'));
+    if (path === '/entities/INC/11/operational-cycle') {
+      return fulfillJSON(route, {
+        triage: {
+          ticketId: 11,
+          claimedByUserId: 'it1-user',
+          claimedDepartmentId: 'it',
+          claimedTeamId: 'it1',
+          claimedAt: incidentWorkNow,
+          duplicateDecision: '',
+          decidedByUserId: '',
+          revision: 1,
+        },
+        workItems: [{
+          id: 91,
+          ticketId: 11,
+          workKey: 'it1_remote_troubleshooting',
+          kind: 'operational',
+          title: 'Remote troubleshooting',
+          instructions: 'Diagnose remotely.',
+          status: 'in_progress',
+          required: true,
+          createdByType: 'service',
+          createdById: 'workflow_service',
+          startedById: 'it1-user',
+          evidence: [],
+          notes: [],
+          createdAt: incidentWorkNow,
+          updatedAt: incidentWorkNow,
+          workType: 'it1_remote_troubleshooting',
+          revision: 2,
+        }],
+        clientActions: [],
+        serviceCycles: [],
+      });
+    }
+    if (path === '/entities/INC' && url.searchParams.has('q')) {
+      return fulfillJSON(route, { items: [incidentRecord('22', 'INC-000022', 'Primary camera incident')], hasMore: false });
+    }
+    if (path === '/tickets/11/comments' || path === '/tickets/11/attachments' ||
+        path === '/tickets/11/watchers' || path === '/tickets/11/activity') {
+      return fulfillJSON(route, { items: [] });
+    }
+    if (path === '/relationships/INC/11') return fulfillJSON(route, { items: [] });
+    if (path === '/notifications') return fulfillJSON(route, { items: [] });
+    if (path === '/sla/assessments/11' || path === '/entities/INC/11/manifest' ||
+        path === '/entities/INC/11/resolved-definition') {
+      return fulfillJSON(route, { error_code: 'NOT_FOUND', message: 'not needed by this focused control test' }, 404);
+    }
+    return route.fallback();
+  });
 }
 
 test.describe('Audit Remediation Smoke Suite', () => {
@@ -252,5 +331,32 @@ test.describe('Audit Remediation Smoke Suite', () => {
 
     // 6. No console errors
     expect(consoleErrors).toEqual([]);
+  });
+});
+
+test.describe('Incident work regressions', () => {
+  test('dialog keeps focus while typing and duplicate selection searches real incidents', async ({ page }) => {
+    await stubIncidentWorkScreen(page);
+    await page.goto('/app/tickets/11');
+    const panel = page.getByTestId('incident-operational-cycle');
+    await expect(panel).toBeVisible();
+
+    await panel.getByRole('button', { name: 'Resolved', exact: true }).click();
+    const workDialog = page.getByRole('dialog');
+    const notes = workDialog.getByLabel('Documented notes');
+    await notes.pressSequentially('Remote service restored');
+    await expect(notes).toHaveValue('Remote service restored');
+    await expect(notes).toBeFocused();
+    await workDialog.getByRole('button', { name: 'Cancel' }).click();
+
+    await panel.getByRole('button', { name: 'Duplicate of another incident' }).click();
+    const duplicateDialog = page.getByRole('dialog');
+    const search = duplicateDialog.getByLabel('Primary incident');
+    await search.pressSequentially('INC-000022');
+    await expect(search).toHaveValue('INC-000022');
+    await expect(search).toBeFocused();
+    await duplicateDialog.getByRole('button', { name: /INC-000022.*Primary camera incident/ }).click();
+    await expect(duplicateDialog.getByText('INC-000022', { exact: true })).toBeVisible();
+    await expect(duplicateDialog.getByRole('button', { name: 'Confirm' })).toBeEnabled();
   });
 });

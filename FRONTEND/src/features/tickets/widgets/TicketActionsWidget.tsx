@@ -69,7 +69,7 @@ export function TicketActionsWidget({ context }: { context: TicketPageContext })
           size="sm"
           onClick={actions.onOpenChangeDialog}
           leadingIcon={<GitPullRequest className="h-3.5 w-3.5" />}
-          className="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300 hover:bg-amber-500/20"
+          className="border-status-warning-border bg-status-warning-bg text-status-warning-fg hover:opacity-90"
         >
           Create RFC
         </Button>
@@ -79,9 +79,9 @@ export function TicketActionsWidget({ context }: { context: TicketPageContext })
         size="sm"
         onClick={actions.onToggleWatch}
         leadingIcon={
-          actions.isWatching ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5 text-on-surface-variant" />
+          actions.isWatching ? <Eye className="w-3.5 h-3.5 text-primary" /> : <EyeOff className="w-3.5 h-3.5 text-on-surface-variant" />
         }
-        className={actions.isWatching ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/20' : undefined}
+        className={actions.isWatching ? 'border-primary/40 bg-primary/10 text-primary hover:bg-primary/20' : undefined}
       >
         {actions.isWatching ? `Watching (${actions.watchersCount})` : 'Watch'}
       </Button>

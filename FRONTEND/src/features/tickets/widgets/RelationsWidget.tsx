@@ -64,7 +64,7 @@ export function RelationsWidget({ context }: { context: TicketPageContext }) {
                   type="button"
                   onClick={() => relations.onDelete?.(relation.id)}
                   aria-label={`Remove relation with ${humanId}`}
-                  className="rounded-lg p-2 text-on-surface-variant hover:bg-red-500/10 hover:text-red-300"
+                  className="rounded-lg p-2 text-on-surface-variant hover:bg-status-danger-bg hover:text-status-danger-fg"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>

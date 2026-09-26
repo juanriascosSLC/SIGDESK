@@ -36,7 +36,7 @@ export function MergedTicketsWidget({ context }: { context: TicketPageContext })
               {mergedTickets.canUnmerge && (
                 <button
                   onClick={() => mergedTickets.onUnmerge(merged.id)}
-                  className="px-3 py-1 rounded-lg border border-border/50 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider opacity-0 group-hover:opacity-100 hover:text-red-400 hover:border-red-500/30 transition-all shrink-0"
+                  className="px-3 py-1 rounded-lg border border-border/50 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider opacity-0 group-hover:opacity-100 hover:text-status-danger-fg hover:border-status-danger-border transition-all shrink-0"
                 >
                   Unmerge
                 </button>
@@ -44,7 +44,7 @@ export function MergedTicketsWidget({ context }: { context: TicketPageContext })
             </div>
           ))}
           {mergedTickets.items.length === 0 && (
-            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-300">
+            <div className="rounded-xl border border-status-warning-border bg-status-warning-bg p-3 text-sm text-status-warning-fg">
               The counter shows merged tickets, but the relation didn't return any records.
             </div>
           )}

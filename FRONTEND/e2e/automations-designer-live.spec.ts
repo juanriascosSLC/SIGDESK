@@ -442,4 +442,131 @@ test.describe('diseñador de Automations sobre la pila real', () => {
     // ── Consola limpia ───────────────────────────────────────────────────
     expect(problemas, `la consola del navegador debe quedar limpia:\n${problemas.join('\n')}`).toEqual([]);
   });
+
+  test('Create Draft from Blueprint A and Blueprint B: browser captures real frontend payload, sends to live workflow_service, saves, reloads, validates and publishes without manual modification', async ({ page }) => {
+    test.setTimeout(180_000);
+    const marca = `LIVE${Date.now().toString().slice(-6)}`;
+    marcaActual = marca;
+    const destino = await sembrarDestino(marca);
+
+    await prepararSesion(page);
+    await page.goto('/app/automations');
+    await expect(page.getByTestId('automations-list')).toBeVisible();
+
+    // ── 1. BLUEPRINT A ────────────────────────────────────────────────────────
+    await page.getByTestId('create-from-template-button').click();
+    await expect(page.getByTestId('template-selection-modal')).toBeVisible();
+
+    // Explicit selection
+    await page.getByTestId('blueprint-a-dept-select').selectOption({ label: destino.depto.nombre });
+    await page.getByTestId('blueprint-a-team-select').selectOption({ label: destino.equipo.nombre });
+    await expect(page.getByTestId('create-blueprint-a-btn')).toBeEnabled();
+
+    // Capture the exact wire payload produced by the frontend builder
+    const [requestA] = await Promise.all([
+      page.waitForRequest((req) => req.url().includes('/workflows/drafts') && req.method() === 'POST'),
+      page.getByTestId('create-blueprint-a-btn').click(),
+    ]);
+
+    const payloadA = JSON.parse(requestA.postData() || '{}');
+    expect(payloadA.categoria_id).toBe('INC');
+
+    await page.waitForURL(/\/app\/automations\/[0-9a-f-]{36}$/, { timeout: 30_000 });
+    const draftIdA = page.url().split('/').pop()!;
+    workflowsCreados.push(draftIdA);
+
+    // Reload from real workflow_service
+    const reloadedA = await llamarAPI<{
+      id: string;
+      estado: string;
+      version: number;
+      reglas: Array<{ accion: string; config: Record<string, unknown> }>;
+      execution_plan: { nodes: Array<{ action?: string; on_omitted?: string }> };
+    }>('GET', `/workflows/${draftIdA}`);
+    expect(reloadedA.estado).toBe('borrador');
+    expect(reloadedA.version).toBe(1);
+
+    // Strict contract drift checks on Blueprint A saved payload
+    const workItemRuleA = reloadedA.reglas.find((r) => r.accion === 'create_incident_work_item');
+    expect(workItemRuleA, 'create_incident_work_item must exist').toBeDefined();
+    expect(workItemRuleA!.config.due_in_minutes).toBe(30);
+    expect(workItemRuleA!.config.due_minutes).toBeUndefined();
+
+    // Validate in designer UI
+    await page.getByTestId('canvas-validate').click();
+    await expect(page.getByTestId('validation-issue-anchored')).toHaveCount(0);
+    await page.getByTestId('modal-close').click();
+
+    // Publish without manual modification
+    await page.getByTestId('canvas-publish').click();
+    await expect(page.getByTestId('canvas-estado')).toContainText('Published', { timeout: 30_000 });
+
+    // Verify published state on backend
+    const publishedA = await llamarAPI<{ estado: string; revision: number }>('GET', `/workflows/${draftIdA}`);
+    expect(publishedA.estado).toBe('publicado');
+    expect(publishedA.revision).toBeGreaterThan(1);
+
+    // ── 2. BLUEPRINT B ────────────────────────────────────────────────────────
+    await page.goto('/app/automations');
+    await expect(page.getByTestId('automations-list')).toBeVisible();
+
+    await page.getByTestId('create-from-template-button').click();
+    await expect(page.getByTestId('template-selection-modal')).toBeVisible();
+
+    // Capture the exact wire payload produced by the frontend builder
+    const [requestB] = await Promise.all([
+      page.waitForRequest((req) => req.url().includes('/workflows/drafts') && req.method() === 'POST'),
+      page.getByTestId('create-blueprint-b-btn').click(),
+    ]);
+
+    const payloadB = JSON.parse(requestB.postData() || '{}');
+    expect(payloadB.categoria_id).toBe('INC');
+
+    await page.waitForURL(/\/app\/automations\/[0-9a-f-]{36}$/, { timeout: 30_000 });
+    const draftIdB = page.url().split('/').pop()!;
+    workflowsCreados.push(draftIdB);
+
+    // Reload from real workflow_service
+    const reloadedB = await llamarAPI<{
+      id: string;
+      estado: string;
+      version: number;
+      reglas: Array<{ accion: string; config: Record<string, unknown> }>;
+    }>('GET', `/workflows/${draftIdB}`);
+    expect(reloadedB.estado).toBe('borrador');
+
+    // Strict contract drift checks on Blueprint B saved payload
+    const rfcRuleB = reloadedB.reglas.find((r) => r.accion === 'create_service_rfc');
+    expect(rfcRuleB, 'create_service_rfc must exist').toBeDefined();
+    const cfgB = rfcRuleB!.config;
+    expect(cfgB.service_affected).toBe('Field Services');
+    expect(cfgB.change_type).toBe('normal');
+    expect(cfgB.impact).toBe('medium');
+    expect(cfgB.probability).toBe('low');
+    expect(cfgB.urgency).toBe('medium');
+    expect(cfgB.lead_time_minutes).toBe(60);
+    expect(cfgB.duration_minutes).toBe(120);
+    expect(cfgB.request_approval).toBe(true);
+
+    // None of the invalid aliases allowed
+    expect(cfgB.change_impact).toBeUndefined();
+    expect(cfgB.change_probability).toBeUndefined();
+    expect(cfgB.change_urgency).toBeUndefined();
+    expect(cfgB.change_lead_minutes).toBeUndefined();
+    expect(cfgB.change_duration_minutes).toBeUndefined();
+
+    // Validate in designer UI
+    await page.getByTestId('canvas-validate').click();
+    await expect(page.getByTestId('validation-issue-anchored')).toHaveCount(0);
+    await page.getByTestId('modal-close').click();
+
+    // Publish without manual modification
+    await page.getByTestId('canvas-publish').click();
+    await expect(page.getByTestId('canvas-estado')).toContainText('Published', { timeout: 30_000 });
+
+    const publishedB = await llamarAPI<{ estado: string; revision: number }>('GET', `/workflows/${draftIdB}`);
+    expect(publishedB.estado).toBe('publicado');
+    expect(publishedB.revision).toBeGreaterThan(1);
+  });
 });
+

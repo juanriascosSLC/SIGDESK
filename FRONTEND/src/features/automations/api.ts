@@ -17,7 +17,32 @@ export interface WorkflowStatusConfig {
   transition_key: string;
 }
 
-export type WorkflowRuleConfig = WorkflowAssignmentConfig | WorkflowStatusConfig | Record<string, unknown>;
+export interface WorkflowIncidentWorkConfig {
+  work_key: string;
+  work_type?: 'it1_remote_troubleshooting' | 'it2_troubleshooting';
+  title: string;
+  instructions: string;
+  required?: boolean;
+  due_in_minutes?: number;
+  department_id?: string;
+  team_id?: string;
+}
+
+export interface WorkflowServiceEscalationConfig {
+  service_affected: string;
+  change_type: 'standard' | 'normal' | 'emergency';
+  impact: 'low' | 'medium' | 'high' | 'critical';
+  probability: 'low' | 'medium' | 'high';
+  urgency: 'low' | 'medium' | 'high';
+  lead_time_minutes: number;
+  duration_minutes: number;
+  implementation_plan: string;
+  rollback_plan: string;
+  validation_plan: string;
+  request_approval: true;
+}
+
+export type WorkflowRuleConfig = WorkflowAssignmentConfig | WorkflowStatusConfig | WorkflowIncidentWorkConfig | WorkflowServiceEscalationConfig | Record<string, unknown>;
 
 /** Plan ejecutable: el contrato que gobierna el ORDEN de ejecución.
  *
@@ -153,7 +178,7 @@ export interface WorkflowDefinition {
   revision?: number;
   categoria_id: string;
   version: number;
-  estado: 'borrador' | 'publicado' | 'desactivado';
+  estado: 'borrador' | 'publicado' | 'reemplazado' | 'desactivado';
   fecha_publicacion?: string;
   reglas?: WorkflowRule[];
   layout?: WorkflowVisualLayout;

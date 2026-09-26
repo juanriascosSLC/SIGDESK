@@ -77,7 +77,7 @@ export function LayoutSectionCard({
             type="button"
             onClick={onRemoveSection}
             aria-label="Delete section"
-            className="rounded-lg p-1.5 text-on-surface-variant hover:bg-red-500/10 hover:text-red-400"
+            className="rounded-lg p-1.5 text-on-surface-variant hover:bg-status-danger-bg hover:text-status-danger-fg"
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>

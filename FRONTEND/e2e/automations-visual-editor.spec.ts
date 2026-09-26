@@ -472,6 +472,19 @@ test('dos versiones publicadas conservan por separado condición y posición del
   await expect(page.locator('.react-flow__node').filter({ hasText: 'Priority = High' })).toHaveCount(0);
 });
 
+test('una versión reemplazada se identifica sin confundirla con una desactivación manual', async ({ page }) => {
+  await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
+  const superseded = { ...historicalDefinition('workflow-superseded', 1, 'critica', 420, 190), estado: 'reemplazado' };
+  await stubWorkflowAPI(page, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(superseded) });
+  });
+
+  await page.goto('/app/automations/workflow-superseded');
+  await expect(page.getByTestId('canvas-estado')).toHaveText('Superseded · v1');
+  await expect(page.getByRole('button', { name: 'Deactivate' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Create new draft from this version' })).toBeVisible();
+});
+
 test('lectura y administración de Automations respetan permisos distintos', async ({ page }) => {
   await mockAuthenticatedSupervisor(page, { forwardUnmatched: false });
   const readable = historicalDefinition('workflow-readable', 1, 'critica', 420, 190);

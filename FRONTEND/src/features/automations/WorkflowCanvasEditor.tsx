@@ -42,6 +42,7 @@ import {
   Save,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useResolvedTheme } from '@/store/themeStore';
 import { getWorkflowAssignmentDirectory, type PublishWorkflowInput, type SaveDraftInput, type WorkflowDefinition } from './api';
 import AssignmentActionEditor from './AssignmentActionEditor';
 import StatusActionEditor from './StatusActionEditor';
@@ -103,12 +104,13 @@ function initialGraph(definition?: WorkflowDefinition) {
   };
 }
 
-function edgeStyle(edge: Edge): Edge {
+function edgeStyle(edge: Edge, resolvedTheme: 'light' | 'dark' = 'dark'): Edge {
+  const edgeColor = resolvedTheme === 'dark' ? '#06b6d4' : '#0891b2';
   return {
     ...edge,
     animated: true,
-    markerEnd: { type: MarkerType.ArrowClosed, color: '#22d3ee' },
-    style: { stroke: '#22d3ee', strokeWidth: 2 },
+    markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
+    style: { stroke: edgeColor, strokeWidth: 2 },
   };
 }
 
@@ -154,9 +156,10 @@ function CanvasEditor({
 }: WorkflowCanvasEditorProps) {
   const navigate = useNavigate();
   const basePath = useAutomationsBasePath();
+  const { resolvedTheme } = useResolvedTheme();
   const start = useMemo(() => initialGraph(definition), [definition]);
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>(start.nodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(start.edges.map(edgeStyle));
+  const [edges, setEdges, onEdgesChange] = useEdgesState(start.edges.map((e) => edgeStyle(e, resolvedTheme)));
   const [version, setVersion] = useState(definition?.version ?? 1);
   const [query, setQuery] = useState('');
   const [selectedID, setSelectedID] = useState<string>();
@@ -164,6 +167,10 @@ function CanvasEditor({
   const [showValidation, setShowValidation] = useState(false);
   const [showJSON, setShowJSON] = useState(false);
   const { screenToFlowPosition, fitView, setCenter } = useReactFlow();
+
+  useEffect(() => {
+    setEdges((current) => current.map((e) => edgeStyle(e, resolvedTheme)));
+  }, [resolvedTheme, setEdges]);
 
   // Deshacer/rehacer sobre instantáneas del grafo.
   //
@@ -228,10 +235,10 @@ function CanvasEditor({
     setSinGuardar(true);
   }, [edges, futuro, nodes, pasado, setEdges, setNodes]);
 
-  // El directorio se consulta también aquí, no solo en el panel: es lo que
-  // permite detectar que un destino guardado ya no existe ANTES de publicar.
-  // React Query comparte la misma clave con el panel, así que no hay dos
-  // llamadas.
+  // El canvas es el único dueño de esta consulta: valida las referencias
+  // guardadas antes de publicar y entrega el mismo resultado al panel. Montar
+  // un segundo observador sobre un error disparaba un reintento adicional y
+  // ocultaba el fallo antes de que la persona pudiera decidir reintentarlo.
   const directorio = useQuery({
     queryKey: ['organization', 'assignment-directory', 'tickets'],
     queryFn: getWorkflowAssignmentDirectory,
@@ -327,8 +334,8 @@ function CanvasEditor({
   const onConnect = useCallback((connection: Connection) => {
     if (readOnly) return;
     recordar();
-    setEdges((current) => addEdge(edgeStyle({ ...connection, id: crypto.randomUUID() } as Edge), current));
-  }, [readOnly, recordar, setEdges]);
+    setEdges((current) => addEdge(edgeStyle({ ...connection, id: crypto.randomUUID() } as Edge, resolvedTheme), current));
+  }, [readOnly, recordar, setEdges, resolvedTheme]);
 
   const onNodeClick: NodeMouseHandler<WorkflowNode> = useCallback((_event, node) => {
     setSelectedID(node.id);
@@ -403,12 +410,12 @@ function CanvasEditor({
                 <span
                   data-testid="canvas-estado"
                   className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase ${definition.estado === 'publicado'
-                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                     : definition.estado === 'borrador'
-                      ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
-                      : 'border-slate-500/30 bg-slate-500/10 text-slate-300'}`}
+                      ? 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300'
+                      : 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-300'}`}
                 >
-                  {(definition.estado === 'publicado' ? 'Published' : definition.estado === 'borrador' ? 'Draft' : 'Disabled')} · v{definition.version}
+                  {(definition.estado === 'publicado' ? 'Published' : definition.estado === 'borrador' ? 'Draft' : definition.estado === 'reemplazado' ? 'Superseded' : 'Disabled')} · v{definition.version}
                 </span>
               )}
             </div>
@@ -431,15 +438,15 @@ function CanvasEditor({
               <span
                 data-testid="canvas-dirty"
                 className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase ${sinGuardar
-                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
-                  : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}
+                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300'
+                  : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'}`}
               >
                 {sinGuardar ? 'Unsaved changes' : 'Saved'}
               </span>
             </>
           )}
           <button type="button" data-testid="canvas-validate" onClick={() => setShowValidation(true)} className="secondary-button">
-            {compilation.errors.length ? <AlertTriangle className="h-4 w-4 text-amber-300" /> : <CheckCircle2 className="h-4 w-4 text-emerald-300" />}
+            {compilation.errors.length ? <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-300" /> : <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />}
             Validate {compilation.errors.length ? `(${compilation.errors.length})` : ''}
           </button>
           <button type="button" onClick={() => setShowJSON(true)} className="secondary-button"><Braces className="h-4 w-4" /> Contract</button>
@@ -493,8 +500,8 @@ function CanvasEditor({
       {/* Los errores del BACKEND se muestran tal cual: la validación del canvas
           no lo sustituye. Un 422 dice cosas que el frontend no puede saber, como
           que el equipo dejó de pertenecer al área. */}
-      {publishError && <div data-testid="canvas-publish-error" className="border-b border-red-500/30 bg-red-500/10 px-5 py-2 text-sm text-red-300">{publishError}</div>}
-      {saveError && <div data-testid="canvas-save-error" className="border-b border-red-500/30 bg-red-500/10 px-5 py-2 text-sm text-red-300">{saveError}</div>}
+      {publishError && <div data-testid="canvas-publish-error" className="border-b border-status-danger-border bg-status-danger-bg px-5 py-2 text-sm text-status-danger-fg">{publishError}</div>}
+      {saveError && <div data-testid="canvas-save-error" className="border-b border-status-danger-border bg-status-danger-bg px-5 py-2 text-sm text-status-danger-fg">{saveError}</div>}
 
       <div className="flex min-h-0 flex-1">
         <aside className="z-10 flex w-[290px] shrink-0 flex-col border-r border-border/50 bg-surface-container-low">
@@ -505,8 +512,8 @@ function CanvasEditor({
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search block…" className="min-w-0 flex-1 bg-transparent text-xs text-on-surface outline-none" />
             </label>
             <div className="mt-3 flex gap-2 text-[9px] font-black uppercase">
-              <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-emerald-300">{operationalCount} operational</span>
-              <span className="rounded-full bg-slate-500/10 px-2 py-1 text-slate-300">{workflowCatalog.length - operationalCount} planned</span>
+              <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-emerald-700 dark:text-emerald-300">{operationalCount} operational</span>
+              <span className="rounded-full bg-slate-500/10 px-2 py-1 text-slate-700 dark:text-slate-300">{workflowCatalog.length - operationalCount} planned</span>
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -544,7 +551,7 @@ function CanvasEditor({
                       >
                         <div className="flex items-start justify-between gap-2">
                           <span className="text-xs font-black text-on-surface">{item.title}</span>
-                          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[7px] font-black uppercase ${item.support === 'operational' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-slate-500/10 text-slate-300'}`}>{item.support === 'operational' ? 'Ready' : 'Planned'}</span>
+                          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[7px] font-black uppercase ${item.support === 'operational' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-slate-500/10 text-slate-700 dark:text-slate-300'}`}>{item.support === 'operational' ? 'Ready' : 'Planned'}</span>
                         </div>
                         <p className="mt-1 text-[10px] leading-relaxed text-on-surface-variant">{item.description}</p>
                       </button>
@@ -578,12 +585,22 @@ function CanvasEditor({
             defaultEdgeOptions={{ animated: true, markerEnd: { type: MarkerType.ArrowClosed } }}
             proOptions={{ hideAttribution: true }}
           >
-            <Background color="var(--outline-variant)" gap={24} size={1.2} variant={BackgroundVariant.Dots} />
+            <Background color={resolvedTheme === 'dark' ? '#334155' : '#cbd5e1'} gap={24} size={1.2} variant={BackgroundVariant.Dots} />
             <Controls position="bottom-left" />
-            <MiniMap position="bottom-right" pannable zoomable nodeColor={(node) => node.data.supportStatus === 'planned' ? '#64748b' : '#06b6d4'} maskColor="rgba(2, 6, 23, 0.72)" />
+            <MiniMap
+              position="bottom-right"
+              pannable
+              zoomable
+              nodeColor={(node) =>
+                node.data.supportStatus === 'planned'
+                  ? (resolvedTheme === 'dark' ? '#64748b' : '#94a3b8')
+                  : (resolvedTheme === 'dark' ? '#06b6d4' : '#0891b2')
+              }
+              maskColor={resolvedTheme === 'dark' ? 'rgba(2, 6, 23, 0.72)' : 'rgba(241, 245, 249, 0.75)'}
+            />
             <div className="absolute left-4 top-4 z-10 flex gap-2">
               <button type="button" onClick={() => { recordar(); setNodes((current) => autoLayout(current, edges)); window.setTimeout(() => void fitView({ duration: 350, padding: 0.18 }), 20); }} className="secondary-button bg-surface-container-low/95 px-3"><Grid3X3 className="h-4 w-4" /> Arrange</button>
-              <div className={`flex items-center gap-2 rounded-xl border bg-surface-container-low/95 px-3 py-2 text-xs font-bold ${compilation.errors.length ? 'border-amber-500/30 text-amber-300' : 'border-emerald-500/30 text-emerald-300'}`}>
+              <div className={`flex items-center gap-2 rounded-xl border bg-surface-container-low/95 px-3 py-2 text-xs font-bold ${compilation.errors.length ? 'border-amber-500/30 text-amber-700 dark:text-amber-300' : 'border-emerald-500/30 text-emerald-700 dark:text-emerald-300'}`}>
                 {compilation.errors.length ? <AlertTriangle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
                 {compilation.errors.length ? 'Incomplete design' : 'Ready to publish'}
               </div>
@@ -597,12 +614,12 @@ function CanvasEditor({
               <div><p className="text-[9px] font-black uppercase tracking-[0.18em] text-primary">Properties</p><h2 className="mt-1 font-black text-on-surface">{String(selectedNode.data.label)}</h2></div>
               <button type="button" onClick={() => setSelectedID(undefined)} className="rounded-lg p-2 text-on-surface-variant hover:bg-on-surface/5"><X className="h-4 w-4" /></button>
             </div>
-            <div className={`mt-4 rounded-xl border p-3 text-xs ${selectedNode.data.supportStatus === 'planned' ? 'border-amber-500/30 bg-amber-500/10 text-amber-200' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'}`}>
+            <div className={`mt-4 rounded-xl border p-3 text-xs ${selectedNode.data.supportStatus === 'planned' ? 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'}`}>
               <p className="font-black">{selectedNode.data.supportStatus === 'planned' ? 'Planned capability' : 'Operational capability'}</p>
               <p className="mt-1 opacity-75">{selectedNode.data.supportStatus === 'planned'
                 ? ((selectedNode.data.catalogKey === 'action.assign_user' || selectedNode.data.catalogKey === 'action.assign_team')
-                    ? 'Target can be configured with Organization. The branch will be enabled for publishing once live execution in Tickets is finished.'
-                    : 'You can design with this, but a branch using it cannot be published until its backend contract is implemented.')
+                  ? 'Target can be configured with Organization. The branch will be enabled for publishing once live execution in Tickets is finished.'
+                  : 'You can design with this, but a branch using it cannot be published until its backend contract is implemented.')
                 : 'This block compiles to a rule that the engine executes live.'}</p>
             </div>
             <label className="mt-5 block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Block name
@@ -648,6 +665,7 @@ function CanvasEditor({
               <AssignmentActionEditor
                 data={selectedNode.data}
                 readOnly={readOnly}
+                directory={directorio}
                 onChange={updateSelected}
               />
             )}
@@ -661,9 +679,85 @@ function CanvasEditor({
               />
             )}
 
+            {selectedNode.data.catalogKey === 'action.create_incident_work' && (
+              <div className="mt-5 space-y-4" data-testid="incident-work-action-editor">
+                <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Work key
+                  <input disabled={readOnly} value={String(selectedNode.data.workKey ?? '')} onChange={(event) => updateSelected({ workKey: event.target.value })} className="input-field mt-2 w-full normal-case" placeholder="initial_troubleshooting" />
+                  <span className="mt-1 block text-[10px] font-medium normal-case tracking-normal">Stable lowercase identifier. It preserves idempotency across retries.</span>
+                </label>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Work title
+                  <input disabled={readOnly} value={String(selectedNode.data.workTitle ?? '')} onChange={(event) => updateSelected({ workTitle: event.target.value })} className="input-field mt-2 w-full normal-case" />
+                </label>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Instructions
+                  <textarea disabled={readOnly} rows={6} value={String(selectedNode.data.workInstructions ?? '')} onChange={(event) => updateSelected({ workInstructions: event.target.value })} className="input-field mt-2 w-full resize-y normal-case" />
+                </label>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Due in minutes
+                  <input disabled={readOnly} type="number" min={0} max={43200} step={1} value={String(selectedNode.data.workDueMinutes ?? '0')} onChange={(event) => updateSelected({ workDueMinutes: event.target.value })} className="input-field mt-2 w-full normal-case" />
+                  <span className="mt-1 block text-[10px] font-medium normal-case tracking-normal">Use 0 for no dedicated deadline. The ticket SLA still applies.</span>
+                </label>
+                <label className="flex items-center gap-3 rounded-xl border border-border/40 bg-on-surface/5 p-3 text-xs font-bold text-on-surface">
+                  <input disabled={readOnly} type="checkbox" checked={selectedNode.data.workRequired !== false} onChange={(event) => updateSelected({ workRequired: event.target.checked })} className="h-4 w-4 accent-primary" />
+                  Required before the incident can be operationally completed
+                </label>
+                <p className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs leading-relaxed text-on-surface-variant">If troubleshooting does not resolve the incident, the agent must record notes and evidence and choose <strong>Service required</strong>. That decision starts the approval and field-work path; this block does not create an unapproved RFC Task.</p>
+              </div>
+            )}
+
+            {selectedNode.data.catalogKey === 'action.create_service_rfc' && (
+              <div className="mt-5 space-y-4" data-testid="service-rfc-action-editor">
+                <p className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs leading-relaxed text-on-surface-variant">
+                  This action only runs after IT records a <strong>Service required</strong> troubleshooting outcome. It creates an RFC in <strong>Pending approval</strong>; it never creates or starts field work before approval.
+                </p>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Service affected
+                  <input disabled={readOnly} value={String(selectedNode.data.serviceAffected ?? '')} onChange={(event) => updateSelected({ serviceAffected: event.target.value })} className="input-field mt-2 w-full normal-case" placeholder="Field Services" />
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Change type
+                    <select disabled={readOnly} value={String(selectedNode.data.changeType ?? 'normal')} onChange={(event) => updateSelected({ changeType: event.target.value as 'standard' | 'normal' | 'emergency' })} className="input-field mt-2 w-full normal-case">
+                      <option value="standard">Standard</option><option value="normal">Normal</option><option value="emergency">Emergency</option>
+                    </select>
+                  </label>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Impact
+                    <select disabled={readOnly} value={String(selectedNode.data.impact ?? selectedNode.data.changeImpact ?? 'medium')} onChange={(event) => updateSelected({ impact: event.target.value as 'low' | 'medium' | 'high' | 'critical', changeImpact: event.target.value as 'low' | 'medium' | 'high' | 'critical' })} className="input-field mt-2 w-full normal-case">
+                      <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option>
+                    </select>
+                  </label>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Probability
+                    <select disabled={readOnly} value={String(selectedNode.data.probability ?? selectedNode.data.changeProbability ?? 'low')} onChange={(event) => updateSelected({ probability: event.target.value as 'low' | 'medium' | 'high', changeProbability: event.target.value as 'low' | 'medium' | 'high' })} className="input-field mt-2 w-full normal-case">
+                      <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+                    </select>
+                  </label>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Urgency
+                    <select disabled={readOnly} value={String(selectedNode.data.urgency ?? selectedNode.data.changeUrgency ?? 'medium')} onChange={(event) => updateSelected({ urgency: event.target.value as 'low' | 'medium' | 'high', changeUrgency: event.target.value as 'low' | 'medium' | 'high' })} className="input-field mt-2 w-full normal-case">
+                      <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+                    </select>
+                  </label>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Lead time (minutes)
+                    <input disabled={readOnly} type="number" min={0} max={43200} step={1} value={String(selectedNode.data.leadTimeMinutes ?? selectedNode.data.changeLeadMinutes ?? '60')} onChange={(event) => updateSelected({ leadTimeMinutes: event.target.value, changeLeadMinutes: event.target.value })} className="input-field mt-2 w-full normal-case" />
+                  </label>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Duration (minutes)
+                    <input disabled={readOnly} type="number" min={1} max={43200} step={1} value={String(selectedNode.data.durationMinutes ?? selectedNode.data.changeDurationMinutes ?? '120')} onChange={(event) => updateSelected({ durationMinutes: event.target.value, changeDurationMinutes: event.target.value })} className="input-field mt-2 w-full normal-case" />
+                  </label>
+                </div>
+                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-emerald-300 flex items-center justify-between" data-testid="service-rfc-approval-lock">
+                  <span className="font-bold">Human Approval Policy:</span>
+                  <span className="font-mono text-[11px] bg-emerald-500/20 px-2 py-0.5 rounded text-emerald-200">Mandatory (request_approval: true)</span>
+                </div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Implementation plan
+                  <textarea disabled={readOnly} rows={5} value={String(selectedNode.data.implementationPlan ?? '')} onChange={(event) => updateSelected({ implementationPlan: event.target.value })} className="input-field mt-2 w-full resize-y normal-case" />
+                </label>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Rollback plan
+                  <textarea disabled={readOnly} rows={4} value={String(selectedNode.data.rollbackPlan ?? '')} onChange={(event) => updateSelected({ rollbackPlan: event.target.value })} className="input-field mt-2 w-full resize-y normal-case" />
+                </label>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Validation plan
+                  <textarea disabled={readOnly} rows={4} value={String(selectedNode.data.validationPlan ?? '')} onChange={(event) => updateSelected({ validationPlan: event.target.value })} className="input-field mt-2 w-full resize-y normal-case" />
+                </label>
+              </div>
+            )}
+
             {!readOnly && <div className="mt-6 grid grid-cols-2 gap-2 border-t border-border/40 pt-5">
               <button type="button" onClick={duplicateSelected} className="secondary-button"><Copy className="h-4 w-4" /> Duplicate</button>
-              <button type="button" onClick={removeSelected} className="secondary-button text-red-300"><Trash2 className="h-4 w-4" /> Delete</button>
+              <button type="button" onClick={removeSelected} className="secondary-button text-status-danger-fg"><Trash2 className="h-4 w-4" /> Delete</button>
             </div>}
           </aside>
         )}
@@ -677,10 +771,10 @@ function CanvasEditor({
                 <h2 className="flex items-center gap-2 text-lg font-black text-on-surface">{showJSON ? <Braces className="h-5 w-5 text-primary" /> : <CheckCircle2 className="h-5 w-5 text-primary" />} {showJSON ? 'Executable contract and layout' : 'Pre-validation'}</h2>
                 <p className="mt-1 text-sm text-on-surface-variant">{showJSON ? 'Runtime executes rules; the editor preserves exact layout.' : 'Only fully operational branches can be published.'}</p>
               </div>
-              <button type="button" onClick={() => { setShowValidation(false); setShowJSON(false); }} className="rounded-lg p-2 text-on-surface-variant hover:bg-on-surface/5"><X className="h-4 w-4" /></button>
+              <button type="button" data-testid="modal-close" onClick={() => { setShowValidation(false); setShowJSON(false); }} className="rounded-lg p-2 text-on-surface-variant hover:bg-on-surface/5"><X className="h-4 w-4" /></button>
             </div>
             {showJSON ? (
-              <pre className="mt-5 max-h-[60vh] overflow-auto rounded-2xl bg-[#070b12] p-5 text-xs text-emerald-300">{JSON.stringify(compilation.payload ?? { errors: compilation.errors }, null, 2)}</pre>
+              <pre className="mt-5 max-h-[60vh] overflow-auto rounded-2xl bg-surface-container-high border border-border/40 p-5 text-xs text-status-success-fg">{JSON.stringify(compilation.payload ?? { errors: compilation.errors }, null, 2)}</pre>
             ) : (
               <div className="mt-5 space-y-3">
                 {compilation.errors.length === 0 && <div className="flex gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200"><CheckCircle2 className="h-5 w-5 shrink-0" /><div><p className="font-black">Valid workflow</p><p className="mt-1 opacity-75">Definition can be published and executed.</p></div></div>}

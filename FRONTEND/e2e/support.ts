@@ -213,7 +213,7 @@ type AuthMockOptions = {
    *  problem_service centrally hosts) are forwarded here instead of Kong. */
   problemApiUrl?: string;
   /** Isolated change_service base URL. When provided, routes to /changes**
-   *  are forwarded here instead of Kong. */
+   *  and /change-relationships/** are forwarded here instead of Kong. */
   changeApiUrl?: string;
   /** Cryptographically signed JWT token to return in POST /v1/session. */
   sessionToken?: string;
@@ -327,13 +327,20 @@ async function mockAuthenticatedIdentity(
       // por Kong incluso con todos los *ApiUrl configurados.
       const p = requestURL.pathname;
       const isolatedTarget: { label: string; baseUrl: string } | null = (() => {
-        // problem_service posee /entities/PRB/** Y TODO /relationships/**
-        // (incluyendo lecturas para INC/RFC — el grafo de relaciones vive
-        // centralizado ahí, no en tickets_service ni en change_service).
+        // problem_service owns /entities/PRB/** and /relationships/**.
+        // change_service owns its separate /change-relationships/** view;
+        // INC/RFC details query both, so both must remain in the isolated
+        // multi-service stack.
         if (problemApiUrl && (p === '/entities/PRB' || p.startsWith('/entities/PRB/') || p === '/relationships' || p.startsWith('/relationships/'))) {
           return { label: 'problem', baseUrl: problemApiUrl };
         }
-        if (changeApiUrl && (p === '/changes' || p.startsWith('/changes/') || p === '/changes')) {
+        if (
+          changeApiUrl &&
+          (p === '/changes' ||
+            p.startsWith('/changes/') ||
+            p === '/change-relationships' ||
+            p.startsWith('/change-relationships/'))
+        ) {
           return { label: 'change', baseUrl: changeApiUrl };
         }
         if (
@@ -357,6 +364,21 @@ async function mockAuthenticatedIdentity(
         try {
           const response = await route.fetch({
             url: destUrl,
+            // The release gate configures PLAYWRIGHT_SIGDESK_TOKEN as a
+            // context-wide administrator header. Chromium applies that
+            // header after the application's fetch() headers, so it can
+            // otherwise replace the scoped token returned by our mocked
+            // /v1/session. That made a Services operator query the isolated
+            // backend as the gate administrator and receive an empty "mine"
+            // inbox. For isolated routes, the explicit sessionToken is the
+            // authenticated identity under test and must therefore be the
+            // credential forwarded to the isolated service.
+            headers: sessionToken
+              ? {
+                  ...route.request().headers(),
+                  authorization: `Bearer ${sessionToken}`,
+                }
+              : undefined,
           });
           // Recorded AFTER the fetch, not before: the response — and
           // specifically its X-E2E-Run-Token header — is what the

@@ -25,9 +25,11 @@ import { EmptyMessage, IconButton, SectionHeading } from './ui';
 export function AutomationsBindingsEditor({
   specification,
   updateSpecification,
+  entityKey = 'INC',
 }: {
   specification: CatalogSpecification;
   updateSpecification: (updater: (current: CatalogSpecification) => CatalogSpecification) => void;
+  entityKey?: string;
 }) {
   const recursos = useQuery({
     queryKey: ['catalog-resources'],
@@ -35,8 +37,22 @@ export function AutomationsBindingsEditor({
   });
 
   const disponibles = useMemo(
-    () => (recursos.data ?? []).filter((recurso) => recurso.reference.module === 'automations'),
-    [recursos.data],
+    () =>
+      (recursos.data ?? []).filter((recurso) => {
+        if (recurso.reference.module !== 'automations') return false;
+        const cap = recurso.automationCapability;
+        if (!cap) return true;
+        if (cap.selectable === false) return false;
+        if (entityKey && cap.categoryId !== entityKey) return false;
+        const triggers = cap.triggers?.length ? cap.triggers : [cap.trigger].filter(Boolean);
+        if (triggers.some((trigger) => [
+          'incident_not_duplicate',
+          'incident_escalated_to_it2',
+          'incident_service_required',
+        ].includes(trigger)) && entityKey !== 'INC') return false;
+        return true;
+      }),
+    [recursos.data, entityKey],
   );
 
   const vinculadas = useMemo(
@@ -55,18 +71,29 @@ export function AutomationsBindingsEditor({
     const recurso = disponibles.find((candidato) => candidato.reference.resourceInstanceId === workflowID);
     if (!recurso) return;
     updateSpecification((current) => {
-      current.bindings = [
-        ...(current.bindings ?? []),
-        {
-          module: 'automations',
-          resourceType: 'workflow',
-          resourceId: recurso.reference.resourceId,
-          resourceInstanceId: recurso.reference.resourceInstanceId,
-          resourceVersion: recurso.reference.resourceVersion,
-          contractVersion: recurso.reference.contractVersion,
-          enabled: true,
-        } satisfies ResourceBinding,
-      ];
+      const existingBindings = current.bindings ?? [];
+      const sameFamilyIndex = existingBindings.findIndex(
+        (b) =>
+          b.module === 'automations' &&
+          b.resourceType === 'workflow' &&
+          b.resourceId === recurso.reference.resourceId,
+      );
+      const newBinding: ResourceBinding = {
+        module: 'automations',
+        resourceType: 'workflow',
+        resourceId: recurso.reference.resourceId,
+        resourceInstanceId: recurso.reference.resourceInstanceId,
+        resourceVersion: recurso.reference.resourceVersion,
+        contractVersion: recurso.reference.contractVersion,
+        enabled: true,
+      };
+      if (sameFamilyIndex >= 0) {
+        const updated = [...existingBindings];
+        updated[sameFamilyIndex] = newBinding;
+        current.bindings = updated;
+      } else {
+        current.bindings = [...existingBindings, newBinding];
+      }
       return current;
     });
   }
@@ -135,9 +162,9 @@ export function AutomationsBindingsEditor({
                     {ausente && (
                       <p
                         data-testid="automation-binding-missing"
-                        className="mt-2 flex items-center gap-2 text-xs font-bold text-red-200"
+                        className="mt-2 flex items-center gap-2 text-xs font-bold text-status-danger-fg"
                       >
-                        <AlertTriangle className="h-4 w-4 shrink-0" />
+                        <AlertTriangle className="h-4 w-4 shrink-0 text-status-danger-icon" />
                         No longer published or was archived. Publishing this definition will be rejected
                         until another version is selected.
                       </p>
@@ -188,10 +215,9 @@ export function AutomationsBindingsEditor({
             onChange={(event) => {
               if (event.target.value) vincular(event.target.value);
             }}
-            className="friendly-input mt-2 w-full bg-[#1d2026] text-[#e1e2eb]"
-            style={{ colorScheme: 'dark' }}
+            className="friendly-input mt-2 w-full"
           >
-            <option value="" className="bg-[#191c22] text-[#e1e2eb]">
+            <option value="">
               {recursos.isPending
                 ? 'Loading automations…'
                 : seleccionables.length === 0
@@ -202,7 +228,6 @@ export function AutomationsBindingsEditor({
               <option
                 key={recurso.reference.resourceInstanceId}
                 value={recurso.reference.resourceInstanceId}
-                className="bg-[#191c22] text-[#e1e2eb]"
               >
                 {recurso.displayName} · v{recurso.reference.resourceVersion}
               </option>

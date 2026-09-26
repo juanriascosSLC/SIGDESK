@@ -14,15 +14,18 @@ import {
   listActivity,
   listAttachments,
   listComments,
+	listIncidentWork,
   listTickets,
   listWatchers,
   mergeTickets,
   removeWatcher,
   unmergeTicket,
   updateTicketStatus,
+	transitionIncidentWork,
+	getIncidentOperationalCycle,
   uploadAttachment,
 } from './api';
-import type { CreateTicketInput, TicketFilters, TicketStatus } from './types';
+import type { CreateTicketInput, IncidentWorkTransitionInput, TicketFilters, TicketStatus } from './types';
 
 export const ticketKeys = {
   all: ['tickets'] as const,
@@ -32,6 +35,8 @@ export const ticketKeys = {
   attachments: (id: string) => ['tickets', id, 'attachments'] as const,
   watchers: (id: string) => ['tickets', id, 'watchers'] as const,
   activity: (id: string) => ['tickets', id, 'activity'] as const,
+	incidentWork: (id: string) => ['tickets', id, 'incident-work'] as const,
+	incidentCycle: (id: string) => ['tickets', id, 'incident-cycle'] as const,
 };
 
 export function useTickets(filters: TicketFilters = {}) {
@@ -187,6 +192,38 @@ export function useAttachments(ticketId?: string) {
     queryFn: () => listAttachments(ticketId!),
     enabled: Boolean(ticketId),
   });
+}
+
+export function useIncidentWork(ticketId?: string) {
+	return useQuery({
+		queryKey: ticketKeys.incidentWork(ticketId || ''),
+		queryFn: () => listIncidentWork(ticketId!),
+		enabled: Boolean(ticketId),
+	});
+}
+
+export function useIncidentOperationalCycle(ticketId?: string) {
+	return useQuery({
+		queryKey: ticketKeys.incidentCycle(ticketId || ''),
+		queryFn: () => getIncidentOperationalCycle(ticketId!),
+		enabled: Boolean(ticketId),
+	});
+}
+
+export function useTransitionIncidentWork(ticketId: string) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: ({ workItemId, input }: { workItemId: number; input: IncidentWorkTransitionInput }) => transitionIncidentWork(ticketId, workItemId, input),
+		onSuccess: () => {
+			// A typed `resolved` work outcome also resolves the parent incident
+			// server-side. Refresh the detail record itself, not only the work
+			// projection, so the status shown on screen changes immediately.
+			void queryClient.invalidateQueries({ queryKey: ticketKeys.detail(ticketId) });
+			void queryClient.invalidateQueries({ queryKey: ticketKeys.incidentWork(ticketId) });
+			void queryClient.invalidateQueries({ queryKey: ticketKeys.incidentCycle(ticketId) });
+			void queryClient.invalidateQueries({ queryKey: ticketKeys.activity(ticketId) });
+		},
+	});
 }
 
 export function useUploadAttachment(ticketId: string) {

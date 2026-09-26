@@ -5,8 +5,6 @@ import { bindingIsMultiple, fieldTypeIsText } from '@/features/catalog/metamodel
 import { textFormatOptions } from '../config';
 import { FriendlyField, Toggle } from '../ui';
 
-const selectClasses = 'friendly-input bg-[#1d2026] text-[#e1e2eb]';
-
 const PATTERN_PRESETS = [
   { label: 'Code (ABC-123)', pattern: '^[A-Z]{3}-[0-9]{3}$', message: 'Use the ABC-123 format' },
   { label: 'Alphanumeric', pattern: '^[a-zA-Z0-9_-]+$', message: 'Only letters, numbers, hyphens and underscores' },
@@ -60,8 +58,7 @@ function DateLimitInput({
           value={isToday ? '' : (value ?? '')}
           disabled={isToday}
           onChange={(event) => onChange(event.target.value || undefined)}
-          className={`friendly-input ${selectClasses} disabled:opacity-40 bg-surface-container-low`}
-          style={{ colorScheme: 'dark' }}
+          className="friendly-input disabled:opacity-40 bg-surface-container-low"
         />
         <button
           type="button"
@@ -168,11 +165,10 @@ export function FieldRulesEditor({
               onChange={(event) =>
                 onChange({ format: (event.target.value || undefined) as FieldDefinition['format'] })
               }
-              className={`${selectClasses} bg-surface-container-low`}
-              style={{ colorScheme: 'dark' }}
+              className="friendly-input bg-surface-container-low"
             >
               {textFormatOptions.map((option) => (
-                <option key={option.value || 'none'} value={option.value} className="bg-[#191c22] text-[#e1e2eb]">
+                <option key={option.value || 'none'} value={option.value}>
                   {option.label}
                 </option>
               ))}

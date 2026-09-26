@@ -36,7 +36,20 @@ export default function AgentTokensDialog({ onClose }: Props) {
   };
 
   useEffect(() => {
-    void load();
+    let active = true;
+    listAgentTokens()
+      .then((response) => {
+        if (active) setTokens(response.items);
+      })
+      .catch((cause: unknown) => {
+        if (active) setError(cause instanceof Error ? cause.message : 'No fue posible cargar los tokens.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const create = async (event: React.FormEvent) => {

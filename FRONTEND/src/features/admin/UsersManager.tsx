@@ -10,6 +10,7 @@ import {
   Plus,
   Trash2,
   Building2,
+  X,
 } from 'lucide-react';
 import {
   rbacService,
@@ -61,8 +62,8 @@ export default function UsersManager() {
         </p>
       </div>
 
-      <div className="flex items-start gap-3 p-4 rounded-2xl bg-cyan-500/5 border border-cyan-500/20">
-        <Info className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+      <div className="flex items-start gap-3 p-4 rounded-2xl bg-status-info-bg border border-status-info-border">
+        <Info className="w-4 h-4 text-status-info-icon shrink-0 mt-0.5" />
         <p className="text-xs text-on-surface-variant leading-relaxed">
           <strong className="text-on-surface">Sign-in</strong> is shared with
           SIGInstallations and SIGInventory (Active Directory), but these roles and permissions are
@@ -190,7 +191,7 @@ function RolesTab() {
             {canCreateRole && (
               <button
                 onClick={() => setIsCreating((value) => !value)}
-                className="text-cyan-400 hover:text-cyan-300 transition-colors"
+                className="text-primary hover:text-primary/80 transition-colors"
                 title="Create role"
               >
                 <Plus className="w-4 h-4" />
@@ -238,7 +239,7 @@ function RolesTab() {
               {canDeleteRole && (
                 <button
                   onClick={() => setShowDeleteRoleDialog(true)}
-                  className="text-on-surface-variant hover:text-red-400 transition-colors"
+                  className="text-on-surface-variant hover:text-status-danger-fg transition-colors"
                   title="Delete role"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -247,9 +248,9 @@ function RolesTab() {
             </div>
           </div>
 
-          {(savePermissions.isError || deleteRole.isError) && (
-            <div className="px-6 py-3 bg-red-500/10 border-b border-red-500/20">
-              <p className="text-xs text-red-300">
+          {(savePermissions.isError || deleteRole.error) && (
+            <div className="px-6 py-3 bg-status-danger-bg border-b border-status-danger-border">
+              <p className="text-xs text-status-danger-fg">
                 {/* A role still assigned to a user can't be deleted — the
                     backend answers 409 ROL_EN_USO for that, surfaced here as
                     any other error rather than a pre-emptive client-side flag. */}
@@ -316,11 +317,11 @@ function RolesTab() {
                                     <span
                                       className={`w-5 h-5 rounded flex items-center justify-center border ${
                                         isGranted
-                                          ? 'bg-cyan-400 border-cyan-400'
-                                          : 'border-border hover:border-cyan-500/40'
+                                          ? 'bg-primary border-primary'
+                                          : 'border-border hover:border-primary/40'
                                       }`}
                                     >
-                                      {isGranted && <Check className="w-3 h-3 text-slate-950" />}
+                                      {isGranted && <Check className="w-3 h-3 text-primary-foreground" />}
                                     </span>
                                   </label>
                                 </td>
@@ -402,26 +403,32 @@ function CreateRoleForm({
         event.preventDefault();
         onSubmit({ name, description });
       }}
-      className="bg-surface-container-low border border-cyan-500/30 rounded-3xl p-5 space-y-3"
+      className="bg-surface-container-low border border-primary/30 rounded-3xl p-5 space-y-3"
     >
-      <h3 className="text-xs font-black uppercase tracking-wider text-on-surface-variant">
-        New role
-      </h3>
+      <div className="flex items-center justify-between">
+        <h3 className="font-bold text-sm text-on-surface">New role</h3>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-on-surface-variant hover:text-on-surface"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
       <input
         value={name}
         onChange={(event) => setName(event.target.value)}
         placeholder="Name (e.g. CAB Approver)"
-        required
-        className="w-full bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-2 text-on-surface outline-none focus:border-cyan-500/50"
+        className="w-full bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-2 text-on-surface outline-none focus:border-primary"
       />
       <textarea
         value={description}
         onChange={(event) => setDescription(event.target.value)}
         rows={2}
         placeholder="What is this role for?"
-        className="w-full bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-2 text-on-surface outline-none focus:border-cyan-500/50 resize-none"
+        className="w-full bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-2 text-on-surface outline-none focus:border-primary resize-none"
       />
-      {error && <p className="text-xs text-red-300">{error}</p>}
+      {error && <p className="text-xs text-status-danger-fg">{error}</p>}
       <div className="flex gap-2">
         <button
           type="button"
@@ -526,7 +533,7 @@ function OrganizationTab() {
             event.preventDefault();
             createCompany.mutate();
           }}
-          className="grid gap-3 md:grid-cols-[1fr_190px_1fr_auto] items-end bg-surface-container-low border border-cyan-500/30 rounded-2xl p-4"
+          className="grid gap-3 md:grid-cols-[1fr_190px_1fr_auto] items-end bg-surface-container-low border border-primary/30 rounded-2xl p-4"
         >
           <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
             Area or team name
@@ -534,7 +541,7 @@ function OrganizationTab() {
               value={name}
               onChange={(event) => setName(event.target.value)}
               required
-              className="bg-surface-container border border-border/50 rounded-lg px-3 py-2 text-sm text-on-surface outline-none focus:border-cyan-500/50"
+              className="bg-surface-container border border-border/50 rounded-lg px-3 py-2 text-sm text-on-surface outline-none focus:border-primary"
             />
           </label>
           <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
@@ -545,7 +552,7 @@ function OrganizationTab() {
                 setType(event.target.value as Company['type']);
                 setParentId('');
               }}
-              className="bg-surface-container border border-border/50 rounded-lg px-3 py-2 text-sm text-on-surface outline-none focus:border-cyan-500/50"
+              className="bg-surface-container border border-border/50 rounded-lg px-3 py-2 text-sm text-on-surface outline-none focus:border-primary"
             >
               <option value="empresa" disabled={rootExists}>
                 Organizational unit{rootExists ? ' (already exists)' : ''}
@@ -561,7 +568,7 @@ function OrganizationTab() {
               onChange={(event) => setParentId(event.target.value)}
               required={type !== 'empresa'}
               disabled={type === 'empresa'}
-              className="bg-surface-container border border-border/50 rounded-lg px-3 py-2 text-sm text-on-surface outline-none focus:border-cyan-500/50 disabled:opacity-50"
+              className="bg-surface-container border border-border/50 rounded-lg px-3 py-2 text-sm text-on-surface outline-none focus:border-primary disabled:opacity-50"
             >
               <option value="">{type === 'empresa' ? 'Not applicable' : 'Select a unit'}</option>
               {validParents.map((company) => (
@@ -574,12 +581,12 @@ function OrganizationTab() {
           <button
             type="submit"
             disabled={createCompany.isPending || !name.trim() || (type !== 'empresa' && !parentId)}
-            className="px-4 py-2 rounded-lg bg-cyan-500 text-slate-950 text-sm font-black disabled:opacity-50"
+            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-black disabled:opacity-50"
           >
             {createCompany.isPending ? 'Creating…' : 'Create'}
           </button>
           {createCompany.isError && (
-            <p className="md:col-span-4 text-xs text-red-300">
+            <p className="md:col-span-4 text-xs text-status-danger-fg">
               {createCompany.error instanceof Error
                 ? createCompany.error.message
                 : 'The unit could not be created.'}
@@ -598,7 +605,7 @@ function OrganizationTab() {
             {ordered.map(({ company, depth }) => (
               <div key={company.id} className="flex items-center gap-3 px-6 py-4">
                 <div style={{ width: `${depth * 24}px` }} className="shrink-0" />
-                <Building2 className="w-4 h-4 text-cyan-400 shrink-0" />
+                <Building2 className="w-4 h-4 text-primary shrink-0" />
                 <div className="min-w-0">
                   <p className="font-bold text-sm text-on-surface truncate">{company.name}</p>
                   <p className="text-[10px] uppercase tracking-wider text-on-surface-variant">
@@ -740,7 +747,7 @@ function UsersTab() {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search by username, name or email…"
-          className="w-full bg-surface-container border border-border/50 text-sm rounded-lg pl-10 pr-4 py-2 text-on-surface outline-none focus:border-cyan-500/50"
+          className="w-full bg-surface-container border border-border/50 text-sm rounded-lg pl-10 pr-4 py-2 text-on-surface outline-none focus:border-primary"
         />
       </div>
         {canProvisionUsers && (
@@ -751,7 +758,7 @@ function UsersTab() {
             disabled={roles.length === 0 || organizationalUnits.length === 0}
             className="inline-flex items-center gap-2 rounded-xl bg-cyan-500 px-4 py-2 text-sm font-black text-slate-950 disabled:opacity-50"
           >
-            <Plus className="h-4 w-4" /> Crear agente de prueba
+            <Plus className="h-4 w-4" /> Create test agent
           </button>
         )}
       </div>
@@ -769,17 +776,17 @@ function UsersTab() {
       )}
 
       {setUserRole.isError && (
-        <p className="text-xs text-red-300">
+        <p className="text-xs text-status-danger-fg">
           {setUserRole.error instanceof Error ? setUserRole.error.message : 'Could not save.'}
         </p>
       )}
       {updateUser.isError && (
-        <p className="text-xs text-red-300">
+        <p className="text-xs text-status-danger-fg">
           {updateUser.error instanceof Error ? updateUser.error.message : 'Could not update the user.'}
         </p>
       )}
       {provisionUser.isError && (
-        <p className="text-xs text-red-300">
+        <p className="text-xs text-status-danger-fg">
           {provisionUser.error instanceof Error
             ? provisionUser.error.message
             : 'Could not provision the user.'}
@@ -892,13 +899,13 @@ function TestAgentForm({
       className="grid gap-4 rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-5 md:grid-cols-2 xl:grid-cols-3"
     >
       <div className="md:col-span-2 xl:col-span-3">
-        <h2 className="text-sm font-black text-on-surface">Nuevo agente de prueba</h2>
+        <h2 className="text-sm font-black text-on-surface">New test agent</h2>
         <p className="mt-1 text-xs text-on-surface-variant">
-          Crea el Usuario, le asigna una unidad organizacional y registra su perfil de Agente IT.
+          Creates the user, assigns an organizational unit, and registers the IT Agent profile.
         </p>
       </div>
       <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
-        Nombre completo
+        Full name
         <input
           required
           value={name}
@@ -908,7 +915,7 @@ function TestAgentForm({
         />
       </label>
       <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
-        Correo de prueba
+        Test email
         <input
           required
           type="email"
@@ -919,7 +926,7 @@ function TestAgentForm({
         />
       </label>
       <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
-        Area o equipo IT
+        IT area or team
         <select
           required
           value={companyId}
@@ -934,7 +941,7 @@ function TestAgentForm({
         </select>
       </label>
       <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
-        Rol
+        Role
         <select
           required
           value={roleId}
@@ -947,7 +954,7 @@ function TestAgentForm({
         </select>
       </label>
       <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
-        Habilidad
+        Skill
         <input
           required
           value={skill}
@@ -956,7 +963,7 @@ function TestAgentForm({
         />
       </label>
       <label className="grid gap-1.5 text-xs font-bold text-on-surface-variant">
-        Capacidad simultanea
+        Concurrent capacity
         <input
           required
           min="0"
@@ -969,14 +976,14 @@ function TestAgentForm({
       </label>
       <div className="flex items-end justify-end gap-3 md:col-span-2 xl:col-span-3">
         <button type="button" onClick={onCancel} className="text-xs font-bold text-on-surface-variant hover:text-on-surface">
-          Cancelar
+          Cancel
         </button>
         <button
           type="submit"
           disabled={isPending || !name.trim() || !email.trim() || !companyId || !roleId || !skill.trim()}
           className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-black text-slate-950 disabled:opacity-50"
         >
-          {isPending ? 'Creando...' : 'Crear agente de prueba'}
+          {isPending ? 'Creating...' : 'Create test agent'}
         </button>
       </div>
     </form>
@@ -1034,7 +1041,7 @@ function UserRow({
                 aria-label="Organizational unit, department or team"
                 value={draftCompanyId}
                 onChange={(event) => setDraftCompanyId(event.target.value)}
-                className="bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-1.5 text-on-surface outline-none focus:border-cyan-500/50"
+                className="bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-1.5 text-on-surface outline-none focus:border-primary"
               >
                 <option value="">Select an organizational unit</option>
                 {companies.map((company) => (
@@ -1054,7 +1061,7 @@ function UserRow({
                 aria-label="Initial role"
                 value={draftRoleId}
                 onChange={(event) => setDraftRoleId(event.target.value)}
-                className="bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-1.5 text-on-surface outline-none focus:border-cyan-500/50"
+                className="bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-1.5 text-on-surface outline-none focus:border-primary"
               >
                 <option value="">Select a role</option>
                 {roles.map((role) => (
@@ -1081,7 +1088,7 @@ function UserRow({
               <button
                 onClick={() => onProvision(draftCompanyId, draftRoleId)}
                 disabled={isPending || !draftCompanyId || !draftRoleId}
-                className="text-xs font-bold text-cyan-400 hover:text-cyan-300 disabled:opacity-50"
+                className="text-xs font-bold text-primary hover:text-primary/80 disabled:opacity-50"
               >
                 {isPending ? 'Provisioning…' : 'Grant access'}
               </button>
@@ -1094,12 +1101,12 @@ function UserRow({
                 onEdit();
               }}
               disabled={companies.length === 0 || roles.length === 0}
-              className="text-xs font-bold text-cyan-500 hover:text-cyan-400 disabled:opacity-50 disabled:text-on-surface-variant"
+              className="text-xs font-bold text-primary hover:text-primary/80 disabled:opacity-50 disabled:text-on-surface-variant"
             >
-              Dar acceso
+              Grant access
             </button>
           ) : (
-            <span className="text-xs text-on-surface-variant">Solo lectura</span>
+            <span className="text-xs text-on-surface-variant">Read-only</span>
           )}
         </td>
       </tr>
@@ -1127,7 +1134,7 @@ function UserRow({
             aria-label="Area or team"
             value={draftCompanyId}
             onChange={(event) => setDraftCompanyId(event.target.value)}
-            className="bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-1.5 text-on-surface outline-none focus:border-cyan-500/50"
+            className="bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-1.5 text-on-surface outline-none focus:border-primary"
           >
             {companies.map((company) => (
               <option key={company.id} value={company.id}>
@@ -1153,7 +1160,7 @@ function UserRow({
           <select
             value={draftRoleId}
             onChange={(event) => setDraftRoleId(event.target.value)}
-            className="bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-1.5 text-on-surface outline-none focus:border-cyan-500/50"
+            className="bg-surface-container border border-border/50 text-sm rounded-lg px-3 py-1.5 text-on-surface outline-none focus:border-primary"
           >
             {roles.map((role) => (
               <option key={role.id} value={role.id}>
@@ -1185,7 +1192,7 @@ function UserRow({
             <button
               onClick={() => onSave(draftCompanyId, draftRoleId)}
               disabled={isPending || !draftRoleId || (companies.length > 0 && !draftCompanyId)}
-              className="text-xs font-bold text-cyan-400 hover:text-cyan-300 disabled:opacity-50"
+              className="text-xs font-bold text-primary hover:text-primary/80 disabled:opacity-50"
             >
               {isPending ? 'Saving…' : 'Save'}
             </button>
@@ -1199,7 +1206,7 @@ function UserRow({
                 onEdit();
               }}
               disabled={roles.length === 0}
-              className="text-xs font-bold text-cyan-500 hover:text-cyan-400 disabled:opacity-50 disabled:text-on-surface-variant"
+              className="text-xs font-bold text-primary hover:text-primary/80 disabled:opacity-50 disabled:text-on-surface-variant"
             >
               Edit access
             </button>

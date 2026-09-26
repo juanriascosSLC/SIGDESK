@@ -53,7 +53,7 @@ import {
   materializedSurfaces,
 } from './field-operations';
 
-const selectClasses = 'friendly-input bg-[#1d2026] text-[#e1e2eb]';
+const selectClasses = 'friendly-input';
 
 function getFieldTypeIcon(type: FieldType) {
   switch (type) {
@@ -322,14 +322,13 @@ export function FieldCard({
                   value={field.type}
                   onChange={(event) => onChangeType(event.target.value as FieldType)}
                   className={selectClasses}
-                  style={{ colorScheme: 'dark' }}
                 >
                   {fieldTypeGroups.map((group) => (
-                    <optgroup key={group} label={group} className="bg-[#191c22]">
+                    <optgroup key={group} label={group}>
                       {fieldTypes
                         .filter((type) => type.group === group)
                         .map((type) => (
-                          <option key={type.value} value={type.value} className="bg-[#191c22] text-[#e1e2eb]">
+                          <option key={type.value} value={type.value}>
                             {type.label}
                           </option>
                         ))}
@@ -415,10 +414,9 @@ export function FieldCard({
                     });
                   }}
                   className={`${selectClasses} bg-surface-container-low`}
-                  style={{ colorScheme: 'dark' }}
                 >
                   {bindsToOptions.map((option) => (
-                    <option key={option.value || 'none'} value={option.value ?? ''} className="bg-[#191c22] text-[#e1e2eb]">
+                    <option key={option.value || 'none'} value={option.value ?? ''}>
                       {option.label}
                     </option>
                   ))}
@@ -434,10 +432,9 @@ export function FieldCard({
                       })
                     }
                     className={`${selectClasses} bg-surface-container-low`}
-                    style={{ colorScheme: 'dark' }}
                   >
                     {resourceTypeOptions.map((option) => (
-                      <option key={option.value || 'any'} value={option.value} className="bg-[#191c22] text-[#e1e2eb]">
+                      <option key={option.value || 'any'} value={option.value}>
                         {option.label}
                       </option>
                     ))}
@@ -591,10 +588,9 @@ function DefaultValueField({
             value={field.defaultValue === true ? 'true' : 'false'}
             onChange={(event) => onChange({ defaultValue: event.target.value === 'true' })}
             className={`${selectClasses} bg-surface-container-low`}
-            style={{ colorScheme: 'dark' }}
           >
-            <option value="false" className="bg-[#191c22] text-[#e1e2eb]">No</option>
-            <option value="true" className="bg-[#191c22] text-[#e1e2eb]">Yes</option>
+            <option value="false">No</option>
+            <option value="true">Yes</option>
           </select>
         </FriendlyField>
       </div>
@@ -621,7 +617,6 @@ function DefaultValueField({
             onChange({ defaultValue: isNumber ? Number(raw) : raw });
           }}
           className={`friendly-input bg-surface-container-low ${field.type === 'date' ? selectClasses : ''}`}
-          style={field.type === 'date' ? { colorScheme: 'dark' } : undefined}
           placeholder="e.g. Initial value"
         />
       </FriendlyField>

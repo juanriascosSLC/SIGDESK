@@ -22,10 +22,12 @@ export function ResourcesEditor({
   specification,
   updateSpecification,
   guided = false,
+  entityKey,
 }: {
   specification: CatalogSpecification;
   updateSpecification: (updater: (current: CatalogSpecification) => CatalogSpecification) => void;
   guided?: boolean;
+  entityKey?: string;
 }) {
   // Las automatizaciones tienen su propia sección (ADR-0039): su referencia
   // apunta a una versión publicada exacta, admiten varias a la vez y pueden
@@ -69,7 +71,7 @@ export function ResourcesEditor({
 
   return (
     <div className="space-y-6">
-    <AutomationsBindingsEditor specification={specification} updateSpecification={updateSpecification} />
+    <AutomationsBindingsEditor specification={specification} updateSpecification={updateSpecification} entityKey={entityKey} />
     <section className="panel-card p-6 lg:p-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <SectionHeading
@@ -155,14 +157,12 @@ export function ResourcesEditor({
                           return current;
                         })
                       }
-                      className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
-                      style={{ colorScheme: 'dark' }}
+                      className="friendly-input"
                     >
                       {clasesGenericas.map((kind) => (
                         <option
                           key={`${kind.module}:${kind.resourceType}`}
                           value={`${kind.module}:${kind.resourceType}`}
-                          className="bg-[#191c22] text-[#e1e2eb]"
                         >
                           {kind.label}
                         </option>
@@ -190,17 +190,15 @@ export function ResourcesEditor({
                           return current;
                         })
                       }
-                      className="friendly-input bg-[#1d2026] text-[#e1e2eb]"
-                      style={{ colorScheme: 'dark' }}
+                      className="friendly-input"
                     >
                       {compatibleResources.length === 0 && (
-                        <option value="" className="bg-[#191c22] text-[#e1e2eb]">No published resources</option>
+                        <option value="">No published resources</option>
                       )}
                       {compatibleResources.map((resource) => (
                         <option
                           key={`${resource.reference.resourceId}:${resource.reference.resourceVersion}`}
                           value={resource.reference.resourceId}
-                          className="bg-[#191c22] text-[#e1e2eb]"
                         >
                           {resource.displayName} · v{resource.reference.resourceVersion}
                         </option>

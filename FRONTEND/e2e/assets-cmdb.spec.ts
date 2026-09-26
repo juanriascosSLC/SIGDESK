@@ -5,6 +5,12 @@ const siteId = '11111111-1111-1111-1111-111111111111';
 const cameraId = '22222222-2222-2222-2222-222222222222';
 
 async function mockSiteAndCamera(page: Page, extraDevices: Record<string, unknown>[] = []) {
+  // Fonts are presentation-only and outside the Assets contract. Keep this
+  // suite deterministic in restricted/offline runners instead of treating a
+  // blocked Google Fonts request as an Assets console failure.
+  await page.route('https://fonts.googleapis.com/**', (route) => route.fulfill({
+    status: 200, contentType: 'text/css', body: '',
+  }));
   // The signed-in agent layout polls the notification bell on every route
   // regardless of what page is under test — unrelated to Assets/CMDB, but
   // left unstubbed it 404s (forwardUnmatched: false) and pollutes the
@@ -33,6 +39,37 @@ async function mockSiteAndCamera(page: Page, extraDevices: Record<string, unknow
     }, ...extraDevices], hasMore: false, stale: false }),
   }));
 }
+
+test('un sitio vacío con proyección vencida no se presenta como inventario confiablemente vacío', async ({ page }) => {
+  await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
+  await page.route('**/notifications?*', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], noLeidas: 0 }),
+  }));
+  await page.route('**/assets/sites?*', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      items: [{
+        id: siteId, sourceSystem: 'sig_inventory', externalEntity: 'site', externalId: '159',
+        externalKey: 'sig_inventory/site/159', kind: 'site', assetType: 'site', displayName: 'Bolton Volvo',
+        lifecycle: 'active', attributes: {}, lastSyncedAt: '2026-09-01T10:00:00Z', deleted: false,
+      }],
+      hasMore: false,
+      stale: true,
+    }),
+  }));
+  await page.route(`**/assets/sites/${siteId}/assets?*`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ items: [], hasMore: false, stale: true }),
+  }));
+
+  await page.goto('/app/assets');
+
+  await expect(page.getByText(/Showing the latest available projection/)).toBeVisible();
+  await expect(page.getByText(/No current asset data is available for this site/)).toBeVisible();
+  await expect(page.getByText(/This site has no assets available/)).toHaveCount(0);
+});
 
 // This replaces the old all-mocked happy path, which fabricated non-empty
 // PRB/RFC responses directly at the read endpoints and so could never catch
