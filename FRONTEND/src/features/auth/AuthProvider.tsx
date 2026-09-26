@@ -145,13 +145,13 @@ const CLEARED_STATE: AuthState = {
  *  and `Docs/howto/bootstrap-primer-admin.md` is the documented way to
  *  close that gap, not an error this screen should surface as a login
  *  failure. */
-async function getAuthorization(): Promise<{
+async function getAuthorization(user: { email: string; name: string }): Promise<{
   roleId: string | null;
   deskUserId: string | null;
   permissions: string[];
 }> {
   try {
-    const sesion = await sessionService.emitir();
+    const sesion = await sessionService.emitir(user);
     setSigDeskToken(sesion.access_token);
     return { roleId: sesion.role_id || null, deskUserId: sesion.usuario?.id ?? null, permissions: sesion.permissions ?? [] };
   } catch {
@@ -186,7 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setState(CLEARED_STATE);
       return;
     }
-    const authorization = await getAuthorization();
+    const authorization = await getAuthorization(user);
     setState({
       user,
       accessLevel: savedLevel ? parseInt(savedLevel, 10) : null,

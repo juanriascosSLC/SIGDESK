@@ -40,18 +40,15 @@ export interface SesionDTO {
 }
 
 export const sessionService = {
-  /**
-   * Exchanges the corporate bearer for SIG-DESK's own short-lived JWT.
-   * organization_service validates it against SIGTools /me and obtains the
-   * authorized email there; this request deliberately sends no identity body.
-   */
-  emitir: (): Promise<SesionDTO> => {
+  /** Exchanges the SIGTools identity for SIG-DESK's local authorization JWT. */
+  emitir: (identity: { email: string; name: string }): Promise<SesionDTO> => {
     const sigtoolsToken = getAccessToken();
     return apiRequest<SesionDTO>('/v1/session', {
       method: 'POST',
+      body: JSON.stringify({ email: identity.email, nombre: identity.name }),
       suppressAuthFailure: true,
       headers: sigtoolsToken
-        ? { Authorization: `Bearer ${sigtoolsToken}` }
+        ? { Authorization: 'Bearer ' + sigtoolsToken }
         : undefined,
     });
   },

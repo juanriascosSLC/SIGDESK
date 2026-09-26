@@ -442,6 +442,8 @@ function CreateRoleForm({
   );
 }
 
+const DEPARTMENT_QUICK_STARTS = ['Services', 'Accounting', 'Purchasing', 'IT', 'Central Station'] as const;
+
 function OrganizationTab() {
   const { can } = useAuth();
   const queryClient = useQueryClient();
@@ -519,6 +521,37 @@ function OrganizationTab() {
           </button>
         )}
       </div>
+
+      {canCreate && rootExists && (
+        <section
+          aria-label="Department quick starts"
+          className="rounded-2xl border border-border/40 bg-surface-container-low p-4"
+        >
+          <h3 className="text-xs font-black uppercase tracking-wider text-on-surface-variant">
+            Department quick starts
+          </h3>
+          <p className="mt-1 text-xs text-on-surface-variant">
+            Prefill the existing department form; review its parent unit before creating it.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {DEPARTMENT_QUICK_STARTS.map((department) => (
+              <button
+                key={department}
+                type="button"
+                onClick={() => {
+                  setName(department);
+                  setType('departamento');
+                  setParentId(companies.find((company) => company.type === 'empresa')?.id ?? '');
+                  setIsCreating(true);
+                }}
+                className="rounded-lg border border-cyan-500/30 px-3 py-2 text-sm font-bold text-cyan-300 transition-colors hover:bg-cyan-500/10"
+              >
+                {department}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       {isCreating && (
         <form
