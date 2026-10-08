@@ -1,5 +1,5 @@
 import type { EntityRecord } from '@/features/catalog/metamodel';
-import type { ChangeTaskStatus } from './api';
+import type { ChangeTask, ChangeTaskStatus, ChangeTaskWorkType } from './api';
 
 export const changeStateLabels: Record<string, string> = {
   draft: 'Draft',
@@ -43,6 +43,31 @@ export const taskStatusMeta: Record<ChangeTaskStatus, { label: string; style: st
   completed: { label: 'Completed', style: 'border-status-success-border bg-status-success-bg text-status-success-fg' },
   canceled: { label: 'Canceled', style: 'border-status-danger-border bg-status-danger-bg text-status-danger-fg' },
 };
+
+export const taskWorkTypeMeta: Record<ChangeTaskWorkType, { label: string; stage: string; owner: string }> = {
+  generic: { label: 'Operational task', stage: 'Execution', owner: 'Assigned team' },
+  inventory_readiness: { label: 'Inventory readiness', stage: 'Parts decision', owner: 'Inventory / Services' },
+  service_scheduling: { label: 'Field service scheduling', stage: 'Planning', owner: 'Services' },
+  field_work_order: { label: 'Field Work Order', stage: 'Field execution', owner: 'Services' },
+  restoration_validation: { label: 'Service restoration validation', stage: 'Technical validation', owner: 'IT' },
+  payment_approval: { label: 'Payment disposition', stage: 'Financial gate', owner: 'Finance' },
+  service_closeout: { label: 'Service closeout', stage: 'Closeout', owner: 'Services' },
+};
+
+export function isGovernedTask(task: Pick<ChangeTask, 'workType'>): boolean {
+  return task.workType !== 'generic';
+}
+
+export type TaskAttention = 'none' | 'overdue' | 'due-soon' | 'on-track';
+
+export function taskAttention(task: Pick<ChangeTask, 'dueAt' | 'status'>, now = Date.now()): TaskAttention {
+  if (!task.dueAt || task.status === 'completed' || task.status === 'canceled') return 'none';
+  const due = new Date(task.dueAt).getTime();
+  if (!Number.isFinite(due)) return 'none';
+  if (due < now) return 'overdue';
+  if (due - now <= 24 * 60 * 60 * 1000) return 'due-soon';
+  return 'on-track';
+}
 
 export const riskStyles: Record<string, string> = {
   low: 'border-status-success-border bg-status-success-bg text-status-success-fg',

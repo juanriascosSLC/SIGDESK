@@ -248,6 +248,13 @@ function AppRoutes() {
                   <MyChangeTasks />
                 </ProtectedRoute>
               } />
+              {/* Department-neutral execution route. The Services URL remains
+                  as a backwards-compatible alias for existing links. */}
+              <Route path="/tasks/:changeId/:taskId" element={
+                <ProtectedRoute requiredPermission={PERMISSIONS.changeTasksView} fallbackTo="/app/changes/my-tasks">
+                  <WorkOrderDetail />
+                </ProtectedRoute>
+              } />
               <Route path="/changes/:id" element={
                 <ProtectedRoute requiredPermission={PERMISSIONS.changesView}>
                   <ChangeDetail />

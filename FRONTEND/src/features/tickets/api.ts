@@ -672,19 +672,47 @@ export async function listAttachments(ticketId: string): Promise<TicketAttachmen
 
 export async function listIncidentWork(ticketId: string): Promise<IncidentWorkItem[]> {
 	const response = await apiRequest<{ items: IncidentWorkItem[] }>(`/entities/INC/${encodeURIComponent(ticketId)}/work-items`);
-	return response.items;
+	return (response.items ?? []).map(normalizeIncidentWorkItem);
 }
 
 export async function transitionIncidentWork(ticketId: string, workItemId: number, input: IncidentWorkTransitionInput): Promise<IncidentWorkItem> {
-	return apiRequest<IncidentWorkItem>(`/entities/INC/${encodeURIComponent(ticketId)}/work-items/${workItemId}/transitions/${input.transition}`, {
+	const item = await apiRequest<IncidentWorkItem>(`/entities/INC/${encodeURIComponent(ticketId)}/work-items/${workItemId}/transitions/${input.transition}`, {
 		method: 'POST',
 		headers: commandHeaders(),
-		body: JSON.stringify({ notes: input.notes, evidence: input.evidence, reopen_reason: input.reopenReason, outcomeCode: input.outcomeCode, notesArray: input.notesArray }),
+		body: JSON.stringify({ notes: input.notes, evidence: input.evidence ?? [], reopen_reason: input.reopenReason, outcomeCode: input.outcomeCode, notesArray: input.notesArray ?? [] }),
 	});
+	return normalizeIncidentWorkItem(item);
 }
 
-export function getIncidentOperationalCycle(ticketId: string) {
-	return apiRequest<IncidentOperationalCycle>(`/entities/INC/${encodeURIComponent(ticketId)}/operational-cycle`);
+export async function getIncidentOperationalCycle(ticketId: string) {
+	const cycle = await apiRequest<IncidentOperationalCycle>(`/entities/INC/${encodeURIComponent(ticketId)}/operational-cycle`);
+	// Contract: tickets_service always returns `triage`. An incident without a
+	// persisted triage row (historical or not yet claimed) receives the
+	// canonical untriaged record (empty claim, no duplicate decision,
+	// revision 1). A response without it is a contract violation; reject it so
+	// the lifecycle panel reports it instead of crashing or inventing a triage.
+	if (!cycle || typeof cycle.triage !== 'object' || cycle.triage === null) {
+		throw new Error('The incident lifecycle response is missing its triage record.');
+	}
+	return {
+		...cycle,
+		workItems: (cycle.workItems ?? []).map(normalizeIncidentWorkItem),
+		clientActions: (cycle.clientActions ?? []).map((action) => ({
+			...action,
+			instructions: Array.isArray(action.instructions) ? action.instructions : [],
+			evidence: Array.isArray(action.evidence) ? action.evidence : [],
+			outcomeNotes: Array.isArray(action.outcomeNotes) ? action.outcomeNotes : [],
+		})),
+		serviceCycles: Array.isArray(cycle.serviceCycles) ? cycle.serviceCycles : [],
+	};
+}
+
+function normalizeIncidentWorkItem(item: IncidentWorkItem): IncidentWorkItem {
+	return {
+		...item,
+		evidence: Array.isArray(item.evidence) ? item.evidence : [],
+		notes: Array.isArray(item.notes) ? item.notes : [],
+	};
 }
 
 function commandHeaders(): HeadersInit {
@@ -700,11 +728,11 @@ export function decideIncidentDuplicate(ticketId: string, decision: 'duplicate' 
 }
 
 export function createIncidentClientAction(ticketId: string, input: { it2WorkItemId: number; contactedPerson: string; instructions: string[]; performedAt: string; evidence: string[] }) {
-	return apiRequest<{ clientAction: IncidentClientAction; replayed: boolean }>(`/entities/INC/${encodeURIComponent(ticketId)}/client-actions`, { method: 'POST', headers: commandHeaders(), body: JSON.stringify(input) });
+	return apiRequest<{ clientAction: IncidentClientAction; replayed: boolean }>(`/entities/INC/${encodeURIComponent(ticketId)}/client-actions`, { method: 'POST', headers: commandHeaders(), body: JSON.stringify({ ...input, instructions: input.instructions ?? [], evidence: input.evidence ?? [] }) });
 }
 
 export function completeIncidentClientAction(ticketId: string, actionId: number, outcomeCode: 'resolved' | 'unresolved', notes: string[]) {
-	return apiRequest<{ clientAction: IncidentClientAction; replayed: boolean }>(`/entities/INC/${encodeURIComponent(ticketId)}/client-actions/${actionId}/complete`, { method: 'POST', headers: commandHeaders(), body: JSON.stringify({ outcomeCode, notes }) });
+	return apiRequest<{ clientAction: IncidentClientAction; replayed: boolean }>(`/entities/INC/${encodeURIComponent(ticketId)}/client-actions/${actionId}/complete`, { method: 'POST', headers: commandHeaders(), body: JSON.stringify({ outcomeCode, notes: notes ?? [] }) });
 }
 
 export async function uploadAttachment(

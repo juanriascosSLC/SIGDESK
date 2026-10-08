@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
+  ArrowRight,
+  CalendarCheck2,
   CheckCircle2,
   CirclePlay,
   Clock3,
@@ -15,6 +18,7 @@ import { ApiError } from '@/lib/apiClient';
 import { useAuth } from '@/features/auth/useAuth';
 import { USER_UNAVAILABLE_LABEL } from '@/features/tickets/identity-labels';
 import { PERMISSIONS } from '@/features/auth/permissions';
+import { formatDateTime, formatRelativeTime } from '@/i18n/format';
 import {
   listAssignedChangeTasks,
   transitionChangeTask,
@@ -22,7 +26,7 @@ import {
   type AssignedChangeTaskFilter,
   type ChangeTask,
 } from './api';
-import { taskStatusMeta } from './presentation';
+import { isGovernedTask, taskAttention, taskStatusMeta, taskWorkTypeMeta } from './presentation';
 import { TaskActionDialog } from './dialogs/TaskActionDialog';
 
 /**
@@ -47,7 +51,10 @@ const filterTabs: Array<{ key: AssignedChangeTaskFilter; label: string; hint: st
 function nextActions(task: ChangeTask): Array<{ key: string; label: string; icon: typeof CirclePlay }> {
   switch (task.status) {
     case 'ready': return [{ key: 'start', label: 'Start', icon: CirclePlay }];
-    case 'in_progress': return [{ key: 'complete', label: 'Complete with evidence', icon: CheckCircle2 }];
+    // Governed work has typed outcomes and must be completed in the task
+    // workspace. A generic completion here would hide decisions such as
+    // parts_required, payment_not_required or restoration_failed.
+    case 'in_progress': return task.workType === 'generic' ? [{ key: 'complete', label: 'Complete with evidence', icon: CheckCircle2 }] : [];
     case 'blocked': return [{ key: 'unblock', label: 'Unblock', icon: RotateCcw }];
     default: return [];
   }
@@ -66,6 +73,12 @@ export default function MyChangeTasks() {
     queryFn: () => listAssignedChangeTasks(filter),
   });
   const items = useMemo(() => query.data ?? [], [query.data]);
+  const summary = useMemo(() => ({
+    ready: items.filter(({ task }) => task.status === 'ready').length,
+    active: items.filter(({ task }) => task.status === 'in_progress').length,
+    blocked: items.filter(({ task }) => task.status === 'blocked').length,
+    overdue: items.filter(({ task }) => taskAttention(task) === 'overdue').length,
+  }), [items]);
 
   const transition = useMutation({
     mutationFn: ({ task, key, evidenceText }: { task: ChangeTask; key: string; evidenceText?: string }) =>
@@ -98,7 +111,7 @@ export default function MyChangeTasks() {
         <div>
           <h1 className="text-2xl font-black text-on-surface">My change tasks</h1>
           <p className="mt-1 text-sm text-on-surface-variant">
-            Work directed to you or your team from an RFC. Viewing a task doesn't grant access to the full RFC.
+            Your operational queue across IT, Services, Inventory and Finance. Governed decisions are recorded in each task workspace.
           </p>
         </div>
       </header>
@@ -121,6 +134,22 @@ export default function MyChangeTasks() {
           </button>
         ))}
       </div>
+
+      {!query.isLoading && !query.isError && items.length > 0 && (
+        <dl className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Task queue summary">
+          {[
+            ['Ready', summary.ready, 'text-primary'],
+            ['In progress', summary.active, 'text-status-info-fg'],
+            ['Blocked', summary.blocked, 'text-status-warning-fg'],
+            ['Overdue', summary.overdue, 'text-status-danger-fg'],
+          ].map(([label, value, tone]) => (
+            <div key={String(label)} className="rounded-2xl border border-border/40 bg-surface-container px-4 py-3">
+              <dt className="text-[10px] font-black uppercase tracking-wider text-on-surface-variant">{label}</dt>
+              <dd className={`mt-1 text-2xl font-black ${tone}`}>{value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
 
       {notice && <div className="mt-4 rounded-xl border border-status-success-border bg-status-success-bg p-3 text-sm text-status-success-fg">{notice}</div>}
       {transition.error && (
@@ -185,6 +214,8 @@ function AssignedTaskCard({
 }) {
   const { task, change } = item;
   const meta = taskStatusMeta[task.status];
+  const work = taskWorkTypeMeta[task.workType];
+  const attention = taskAttention(task);
   // The names come from the snapshot frozen when the task was created, not
   // a per-row Organization lookup: if someone changes teams, the task still
   // says which team it was directed to when it was created.
@@ -198,9 +229,10 @@ function AssignedTaskCard({
   return (
     <article className="flex flex-col rounded-2xl border border-border/30 bg-surface-container p-4">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <div className="font-mono text-[11px] font-bold text-primary">{task.humanId}</div>
           <h2 className="mt-1 font-bold text-on-surface">{task.title}</h2>
+          <p className="mt-1 text-[10px] font-black uppercase tracking-wider text-on-surface-variant">{work.label} · {work.stage}</p>
         </div>
         <span className={`shrink-0 rounded-full border px-2 py-1 text-[9px] font-black uppercase ${meta.style}`}>{meta.label}</span>
       </div>
@@ -230,9 +262,19 @@ function AssignedTaskCard({
       </dl>
 
       {task.dueAt && (
-        <div className="mt-3 flex items-center gap-1.5 text-[11px] text-on-surface-variant">
-          <Clock3 className="h-3.5 w-3.5" />Due {new Date(task.dueAt).toLocaleString()}
+        <div className={`mt-3 flex items-start gap-1.5 rounded-lg px-2 py-1.5 text-[11px] ${attention === 'overdue' ? 'bg-status-danger-bg text-status-danger-fg' : attention === 'due-soon' ? 'bg-status-warning-bg text-status-warning-fg' : 'text-on-surface-variant'}`}>
+          <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span><strong>{attention === 'overdue' ? `Overdue ${formatRelativeTime(task.dueAt)}` : `Due ${formatRelativeTime(task.dueAt)}`}</strong><br />{formatDateTime(task.dueAt, 'en-US')}</span>
         </div>
+      )}
+      {task.scheduledStart && task.scheduledEnd && (
+        <div className="mt-3 flex items-start gap-1.5 text-[11px] text-on-surface-variant">
+          <CalendarCheck2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>Scheduled {formatDateTime(task.scheduledStart, 'en-US')} – {formatDateTime(task.scheduledEnd, 'en-US')}</span>
+        </div>
+      )}
+      {task.dependencyIds.length > 0 && task.status === 'pending' && (
+        <p className="mt-3 text-[11px] text-on-surface-variant">Waiting for {task.dependencyIds.length} prerequisite {task.dependencyIds.length === 1 ? 'task' : 'tasks'}.</p>
       )}
       {task.blockedReason && (
         <p className="mt-3 flex items-start gap-1.5 rounded-lg border border-status-warning-border bg-status-warning-bg p-2 text-[11px] text-status-warning-fg">
@@ -249,23 +291,34 @@ function AssignedTaskCard({
         </ul>
       )}
 
-      {canExecute && nextActions(task).length > 0 && (
-        <div className="mt-auto flex flex-wrap gap-2 border-t border-border/30 pt-3">
-          {nextActions(task).map((action) => {
-            const Icon = action.icon;
-            return (
-              <button
-                key={action.key}
-                disabled={busy}
-                onClick={() => onAction(task, action.key)}
-                className="secondary-button !px-3 !py-1.5 text-[11px] disabled:opacity-40"
-              >
-                <Icon className="h-3.5 w-3.5" />{action.label}
-              </button>
-            );
-          })}
-        </div>
+      {task.outcomeCode && (
+        <p className="mt-3 rounded-lg border border-status-success-border bg-status-success-bg p-2 text-[11px] font-bold text-status-success-fg">
+          Recorded outcome: {task.outcomeCode.replaceAll('_', ' ')}
+        </p>
       )}
+
+      <div className="mt-auto flex flex-wrap gap-2 border-t border-border/30 pt-3">
+        <Link
+          to={`/app/tasks/${encodeURIComponent(task.changeId)}/${encodeURIComponent(task.id)}`}
+          className="secondary-button !px-3 !py-1.5 text-[11px]"
+          aria-label={`Open ${task.humanId} task workspace`}
+        >
+          {isGovernedTask(task) && task.status === 'in_progress' ? 'Record governed outcome' : 'Open task'}<ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+        {canExecute && nextActions(task).map((action) => {
+          const Icon = action.icon;
+          return (
+            <button
+              key={action.key}
+              disabled={busy}
+              onClick={() => onAction(task, action.key)}
+              className="secondary-button !px-3 !py-1.5 text-[11px] disabled:opacity-40"
+            >
+              <Icon className="h-3.5 w-3.5" />{action.label}
+            </button>
+          );
+        })}
+      </div>
     </article>
   );
 }

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import {
@@ -35,8 +35,8 @@ import { PERMISSIONS } from '@/features/auth/permissions';
 import { USER_UNAVAILABLE_LABEL } from '@/features/tickets/identity-labels';
 import { formatDateTime, formatRelativeTime } from '@/i18n/format';
 import { TaskActionDialog } from '@/features/changes/dialogs/TaskActionDialog';
-import type { ChangeTask, ChangeTaskAttachment, ChangeTaskOutcomeCode } from '@/features/changes/api';
-import { downloadServiceWorkOrderAttachment, listServiceWorkOrderAttachments, listServiceWorkOrders, scheduleServiceWorkOrder, transitionServiceWorkOrder, uploadServiceWorkOrderAttachment } from './api';
+import { getAssignedChangeTask, getRelatedAssignedChangeTask, type AssignedChangeTask, type ChangeTask, type ChangeTaskAttachment, type ChangeTaskOutcomeCode } from '@/features/changes/api';
+import { downloadServiceWorkOrderAttachment, isServicesTask, listServiceWorkOrderAttachments, scheduleServiceWorkOrder, transitionServiceWorkOrder, uploadServiceWorkOrderAttachment } from './api';
 import {
   actionsForWorkOrder,
   PRIORITY_TONE,
@@ -49,6 +49,8 @@ import {
 } from './presentation';
 import type { WorkOrderAction } from './types';
 
+const FIELD_WORK_WORKFLOW_KEY = 'services_field_work';
+
 export default function WorkOrderDetail() {
   const { changeId, taskId } = useParams<{ changeId: string; taskId: string }>();
   const { can } = useAuth();
@@ -56,14 +58,21 @@ export default function WorkOrderDetail() {
   const [dialogAction, setDialogAction] = useState<'complete' | 'block' | null>(null);
   const [notice, setNotice] = useState('');
   const query = useQuery({
-    queryKey: ['services', 'work-orders', 'scope'],
-    queryFn: () => listServiceWorkOrders('scope'),
+    queryKey: ['changes', 'assigned-task', taskId],
+    queryFn: () => getAssignedChangeTask(taskId!),
+    enabled: Boolean(taskId),
   });
-  const item = useMemo(
-    () => query.data?.find(({ task }) => task.id === taskId && task.changeId === changeId),
-    [changeId, query.data, taskId],
-  );
-  const fieldWorkTask = useMemo(() => query.data?.find((candidate) => candidate.task.changeId === changeId && candidate.task.workType === 'field_work_order')?.task, [changeId, query.data]);
+  const item = query.data?.task.changeId === changeId ? query.data : undefined;
+  // A scheduling task schedules its RFC's field Work Order. Resolve that one
+  // sibling directly instead of scanning the bounded inbox list; a 404 means
+  // it is missing or outside the actor's scope, and the form stays hidden.
+  const fieldWork = useQuery({
+    queryKey: ['changes', 'assigned-task', taskId, 'related', FIELD_WORK_WORKFLOW_KEY],
+    queryFn: () => getRelatedAssignedChangeTask(taskId!, FIELD_WORK_WORKFLOW_KEY),
+    enabled: Boolean(taskId && item?.task.workType === 'service_scheduling'),
+    retry: false,
+  });
+  const fieldWorkTask = fieldWork.data?.task;
   const attachments = useQuery({
     queryKey: ['services', 'work-order-attachments', changeId, taskId],
     queryFn: () => listServiceWorkOrderAttachments(changeId!, taskId!),
@@ -80,6 +89,16 @@ export default function WorkOrderDetail() {
     onSuccess: (task) => {
       setDialogAction(null);
       setNotice(`${task.humanId} is now ${WORK_ORDER_STATUS[task.status].label.toLowerCase()}.`);
+      // The page may have been opened by humanId: update the key that is
+      // rendering now, and keep the canonical internal-ID entry in step so a
+      // later visit through the usual link does not show the old status.
+      queryClient.setQueryData<AssignedChangeTask>(['changes', 'assigned-task', taskId], (current) => current ? { ...current, task } : current);
+      if (task.id !== taskId) {
+        queryClient.setQueryData<AssignedChangeTask>(['changes', 'assigned-task', task.id], (current) => {
+          const base = current ?? item;
+          return base ? { ...base, task } : current;
+        });
+      }
       void queryClient.invalidateQueries({ queryKey: ['services', 'work-orders'] });
       void queryClient.invalidateQueries({ queryKey: ['changes', 'assigned-tasks'] });
     },
@@ -92,9 +111,9 @@ export default function WorkOrderDetail() {
       <Shell>
         <EmptyState
           icon="search"
-          title="Work order not available"
-          description="It may not belong to Services, may be outside your organizational scope, or may no longer exist."
-          action={<Link to="/app/services" className="secondary-button">Back to Services</Link>}
+          title="Task not available"
+          description="It may be outside your organizational scope or may no longer exist."
+          action={<Link to="/app/changes/my-tasks" className="secondary-button">Back to My Tasks</Link>}
         />
       </Shell>
     );
@@ -115,6 +134,9 @@ export default function WorkOrderDetail() {
   const team = task.organization?.teamName || task.team || 'Team unavailable';
   const assignee = task.assigneeName || task.organization?.assigneeName || (task.assigneeUserId ? USER_UNAVAILABLE_LABEL : 'Team assignment');
   const stage = workOrderStage(task);
+  const servicesOwned = isServicesTask(department);
+  const backTo = servicesOwned ? '/app/services' : '/app/changes/my-tasks';
+  const backLabel = servicesOwned ? 'Back to Services' : 'Back to My Tasks';
 
   function runAction(action: WorkOrderAction) {
     setNotice('');
@@ -129,9 +151,9 @@ export default function WorkOrderDetail() {
   return (
     <Shell>
       <PageHeader
-        eyebrow={<Link to="/app/services" className="mb-2 inline-flex items-center gap-1.5 text-xs font-bold text-services-accent hover:underline"><ArrowLeft className="h-3.5 w-3.5" />Back to Services</Link>}
+        eyebrow={<Link to={backTo} className="mb-2 inline-flex items-center gap-1.5 text-xs font-bold text-services-accent hover:underline"><ArrowLeft className="h-3.5 w-3.5" />{backLabel}</Link>}
         title={task.title || 'Untitled work order'}
-        description={`${task.humanId} · Operational task from ${change.humanId}`}
+        description={`${task.humanId} · ${stage} from ${change.humanId}`}
         actions={<div className="flex flex-wrap gap-2"><Badge tone="neutral">{stage}</Badge><Badge tone={PRIORITY_TONE[task.priority.toLowerCase()] ?? 'neutral'}>{task.priority || 'No priority'}</Badge><StatusBadge label={status.label} tone={status.tone} /></div>}
       />
 
@@ -174,7 +196,7 @@ export default function WorkOrderDetail() {
               <div className="space-y-2">{actions.map((action) => <Button key={action.key} className="w-full" variant={action.key === 'block' ? 'secondary' : 'primary'} loading={transition.isPending} onClick={() => runAction(action)} leadingIcon={action.key === 'start' ? <CirclePlay className="h-4 w-4" /> : action.key === 'complete' ? <CheckCircle2 className="h-4 w-4" /> : action.key === 'block' ? <LockKeyhole className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}>{action.label}</Button>)}</div>
             )}
             {canExecuteTask && task.status === 'in_progress' && task.workType !== 'generic' && <GovernedCompletion task={task} busy={transition.isPending} onComplete={(outcomeCode, notes, evidence, parts) => transition.mutate({ task, action: { key: 'complete', label: 'Complete' }, outcomeCode, notes, evidence, parts })} />}
-            {canExecuteTask && task.workType === 'service_scheduling' && fieldWorkTask && !fieldWorkTask.scheduledStart && <ScheduleFieldWork task={fieldWorkTask} onScheduled={() => { setNotice('The field Work Order was scheduled.'); void query.refetch(); }} />}
+            {canExecuteTask && task.workType === 'service_scheduling' && fieldWorkTask && !fieldWorkTask.scheduledStart && <ScheduleFieldWork task={fieldWorkTask} onScheduled={() => { setNotice('The field Work Order was scheduled.'); void query.refetch(); void fieldWork.refetch(); }} />}
           </Card>
 
           <Card>

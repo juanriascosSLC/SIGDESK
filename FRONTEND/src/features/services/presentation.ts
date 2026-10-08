@@ -29,7 +29,16 @@ export const WORK_ORDER_STAGE: Record<string, string> = {
 };
 
 export function workOrderStage(task: ChangeTask): string {
-  return task.workflowKey ? WORK_ORDER_STAGE[task.workflowKey] ?? 'Work order' : 'Work order';
+  if (task.workflowKey && WORK_ORDER_STAGE[task.workflowKey]) return WORK_ORDER_STAGE[task.workflowKey];
+  switch (task.workType) {
+    case 'inventory_readiness': return 'Parts decision';
+    case 'service_scheduling': return 'Planning';
+    case 'field_work_order': return 'Field execution';
+    case 'restoration_validation': return 'Technical validation';
+    case 'payment_approval': return 'Financial gate';
+    case 'service_closeout': return 'Closeout';
+    default: return 'Operational task';
+  }
 }
 
 export function workOrderGovernanceBlock(task: ChangeTask, changeState: string): string | undefined {

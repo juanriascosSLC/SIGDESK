@@ -74,7 +74,13 @@ async function stubServicesDomain(page: Page, taskSeed: typeof serviceTask = ser
   };
 
   await page.route('**/notifications*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], unread: 0 }) }));
-  await page.route('**/changes/tasks/assigned*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [{ task: currentTask, change }, { task: otherDepartmentTask, change }] }) }));
+  await page.route(/\/changes\/tasks\/assigned(?:\/[^/?]+)?(?:\?.*)?$/, (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    const body = pathname === '/changes/tasks/assigned'
+      ? { items: [{ task: currentTask, change }, { task: otherDepartmentTask, change }] }
+      : { task: currentTask, change };
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  });
   await page.route('**/changes/change-1/tasks/task-services-1/transitions/*', async (route) => {
     const key = new URL(route.request().url()).pathname.split('/').at(-1);
     const body = route.request().postDataJSON() as { evidence?: string[]; notes?: string[]; outcomeCode?: string; reason?: string };
@@ -172,16 +178,18 @@ test('starting team-directed work claims it for the current Services operator', 
 test('field execution waits until Change Management moves the RFC to Implementing', async ({ page }) => {
   await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
   await stubServicesDomain(page);
-  await page.route('**/changes/tasks/assigned*', (route) => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({
-      items: [{
-        task: { ...serviceTask, workflowKey: 'services_field_work' },
-        change: { ...change, state: 'approved' },
-      }],
-    }),
-  }));
+  await page.route(/\/changes\/tasks\/assigned(?:\/[^/?]+)?(?:\?.*)?$/, (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    const item = {
+      task: { ...serviceTask, workflowKey: 'services_field_work' },
+      change: { ...change, state: 'approved' },
+    };
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(pathname === '/changes/tasks/assigned' ? { items: [item] } : item),
+    });
+  });
 
   await page.goto('/app/services/work-orders/change-1/task-services-1');
 
@@ -251,4 +259,95 @@ test('Services shows a recoverable error instead of fabricated fallback data', a
   await expect(page.getByRole('heading', { name: 'Service temporarily unavailable' })).toBeVisible();
   await expect(page.getByTestId(/^service-work-order-/)).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+});
+
+test('detail opened by humanId shows a transition immediately without reload', async ({ page }) => {
+  await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
+  await stubServicesDomain(page);
+  const detailReads: string[] = [];
+  page.on('request', (request) => {
+    const { pathname } = new URL(request.url());
+    if (pathname.startsWith('/changes/tasks/assigned/')) detailReads.push(pathname);
+  });
+
+  await page.goto('/app/services/work-orders/change-1/TSK-000101');
+  await expect(page.getByText('Ready to start', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Start work' }).click();
+
+  // The new status must come from the cache entry rendering this page (keyed
+  // by the humanId in the URL), not from a reload or a second detail read.
+  await expect(page.getByText('In progress', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Work completed' })).toBeVisible();
+  expect(detailReads).toEqual(['/changes/tasks/assigned/TSK-000101']);
+});
+
+test('scheduling resolves its field Work Order directly instead of scanning the bounded list', async ({ page }) => {
+  const schedulingTask = {
+    ...serviceTask,
+    id: 'task-schedule-1',
+    humanId: 'TSK-000100',
+    title: 'Schedule field visit',
+    workflowKey: 'services_schedule',
+    workType: 'service_scheduling',
+    status: 'in_progress',
+    scheduledStart: null,
+    scheduledEnd: null,
+    scheduledBy: '',
+  };
+  let fieldWorkTask = { ...serviceTask, status: 'pending', scheduledStart: null as string | null, scheduledEnd: null as string | null, scheduledBy: '' };
+  await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
+  await stubServicesDomain(page);
+  let listReads = 0;
+  const relatedReads: string[] = [];
+  await page.route(/\/changes\/tasks\/assigned(?:\/.*)?(?:\?.*)?$/, (route) => {
+    const { pathname } = new URL(route.request().url());
+    if (pathname === '/changes/tasks/assigned') {
+      listReads += 1;
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [] }) });
+    }
+    if (pathname === '/changes/tasks/assigned/task-schedule-1') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ task: schedulingTask, change }) });
+    }
+    if (pathname === '/changes/tasks/assigned/task-schedule-1/related/services_field_work') {
+      relatedReads.push(pathname);
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ task: fieldWorkTask, change }) });
+    }
+    return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ code: 'NO_ENCONTRADO', message: 'Not found' }) });
+  });
+  await page.route('**/changes/change-1/tasks/task-services-1/schedule', async (route) => {
+    const body = route.request().postDataJSON() as { start: string; end: string };
+    fieldWorkTask = { ...fieldWorkTask, scheduledStart: body.start, scheduledEnd: body.end, scheduledBy: 'admin' };
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fieldWorkTask) });
+  });
+
+  await page.goto('/app/services/work-orders/change-1/task-schedule-1');
+  await page.getByLabel('Start', { exact: true }).fill('2026-10-12T09:00');
+  await page.getByLabel('End', { exact: true }).fill('2026-10-12T11:00');
+  await page.getByRole('button', { name: 'Schedule field work' }).click();
+
+  await expect(page.getByText('The field Work Order was scheduled.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Schedule field work' })).toHaveCount(0);
+  expect(relatedReads.length).toBeGreaterThanOrEqual(2);
+  expect(listReads).toBe(0);
+});
+
+test('work order cards label generic work as an operational task and typed work by its stage', async ({ page }) => {
+  const genericTask = { ...serviceTask, id: 'task-generic-1', humanId: 'TSK-000301', title: 'Inspect cabinet seals', workflowKey: '', workType: 'generic' };
+  const restorationTask = { ...serviceTask, id: 'task-restoration-1', humanId: 'TSK-000302', title: 'Confirm cameras recover', workflowKey: '', workType: 'restoration_validation' };
+  await mockAuthenticatedTaskExecutor(page, { forwardUnmatched: false });
+  await stubServicesDomain(page);
+  await page.route(/\/changes\/tasks\/assigned(?:\?.*)?$/, (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ items: [{ task: genericTask, change }, { task: serviceTask, change }, { task: restorationTask, change }] }),
+  }));
+
+  await page.goto('/app/services');
+
+  const card = (id: string) => page.getByTestId(`service-work-order-${id}`);
+  await expect(card('task-generic-1').getByText('Operational task', { exact: true })).toBeVisible();
+  await expect(card('task-services-1').getByText('Field execution', { exact: true })).toBeVisible();
+  await expect(card('task-services-1').getByText('Operational task', { exact: true })).toHaveCount(0);
+  await expect(card('task-restoration-1').getByText('Technical validation', { exact: true })).toBeVisible();
+  await expect(card('task-restoration-1').getByText('Operational task', { exact: true })).toHaveCount(0);
 });

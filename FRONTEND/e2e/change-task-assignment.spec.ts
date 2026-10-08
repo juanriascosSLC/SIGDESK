@@ -65,8 +65,15 @@ const warehouseTask = {
 async function stubAssignedTasks(page: Page, items: unknown[]) {
   const requested: string[] = [];
   await page.route(
-    (url) => url.port === apiPort && url.pathname === '/changes/tasks/assigned',
+    (url) => url.port === apiPort && url.pathname.startsWith('/changes/tasks/assigned'),
     async (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname !== '/changes/tasks/assigned') {
+        const taskId = decodeURIComponent(url.pathname.split('/').at(-1) ?? '');
+        const item = (items as Array<{ task?: { id?: string; humanId?: string } }>).find((candidate) => candidate.task?.id === taskId || candidate.task?.humanId === taskId);
+        await route.fulfill({ status: item ? 200 : 404, contentType: 'application/json', body: JSON.stringify(item ?? { code: 'NO_ENCONTRADO', message: 'Task not found' }) });
+        return;
+      }
       requested.push(new URL(route.request().url()).search);
       await route.fulfill({
         status: 200,
@@ -236,4 +243,43 @@ test('un administrador global ve la bandeja y tambien el tablero de RFC', async 
   await page.goto('/app/changes/my-tasks');
   await expect(page.locator('article').filter({ hasText: 'TSK-000009' })).toBeVisible();
   await expect(page.locator('#app-nav').getByText('Changes')).toBeVisible();
+});
+
+test('una tarea gobernada de Finanzas se completa en su workspace con resultado tipado', async ({ page }) => {
+  const financeTask = {
+    ...warehouseTask,
+    task: {
+      ...warehouseTask.task,
+      id: 'finance-1',
+      humanId: 'TSK-000201',
+      title: 'Approve service payment',
+      workType: 'payment_approval',
+      workflowKey: 'finance_payment_approval',
+      area: 'Finance',
+      status: 'in_progress',
+      notes: [],
+      scheduledStart: null,
+      scheduledEnd: null,
+      scheduledBy: '',
+      revision: 2,
+      organization: {
+        ...warehouseTask.task.organization,
+        departmentName: 'Finance',
+        teamName: 'Accounts Payable',
+      },
+    },
+  };
+  await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
+  await stubAssignedTasks(page, [financeTask]);
+
+  await page.goto('/app/changes/my-tasks');
+  const card = page.locator('article').filter({ hasText: 'TSK-000201' });
+  await expect(card.getByText('Financial gate')).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Complete with evidence' })).toHaveCount(0);
+  await card.getByRole('link', { name: 'Open TSK-000201 task workspace' }).click();
+
+  await expect(page).toHaveURL(/\/app\/tasks\/4\/finance-1$/);
+  await expect(page.getByRole('button', { name: 'Payment approved' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Payment rejected' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Payment not required' })).toBeVisible();
 });

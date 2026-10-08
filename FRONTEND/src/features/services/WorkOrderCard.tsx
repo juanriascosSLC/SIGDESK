@@ -59,10 +59,17 @@ export function WorkOrderCard({ item }: { item: ServiceWorkOrder }) {
       </dl>
 
       <div className="mt-auto space-y-2 pt-3 text-[11px] text-services-on-surface-variant">
-        {task.dueAt && (
-          <div className={`flex items-center gap-1.5 ${attention === 'overdue' ? 'font-bold text-status-danger-fg' : attention === 'due-soon' ? 'font-bold text-status-warning-fg' : ''}`} title={formatDateTime(task.dueAt)}>
+        {task.dueAt ? (
+          <div data-testid="work-order-deadline" data-attention={attention} className={`flex items-center gap-1.5 ${attention === 'overdue' ? 'font-bold text-status-danger-fg' : attention === 'due-soon' ? 'font-bold text-status-warning-fg' : ''}`} title={formatDateTime(task.dueAt)}>
             <CalendarClock className="h-3.5 w-3.5 shrink-0" />
             {attention === 'overdue' ? `Overdue ${formatRelativeTime(task.dueAt)}` : `Due ${formatRelativeTime(task.dueAt)}`}
+          </div>
+        ) : (
+          // Say so explicitly: an absent deadline is a fact about the task,
+          // not something the card should silently omit.
+          <div data-testid="work-order-deadline" data-attention="none" className="flex items-center gap-1.5">
+            <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+            No deadline
           </div>
         )}
         {workOrderSiteId(task) && <div className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" />Site context attached</div>}

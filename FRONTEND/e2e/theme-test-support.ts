@@ -92,6 +92,33 @@ const mockIncSpec = {
   },
 };
 
+/**
+ * The operational cycle tickets_service returns for an incident with no
+ * persisted triage row (historical, or not yet claimed by IT 1): the use case
+ * substitutes domain.NewIncidentTriage(ticketID) and the controller always
+ * serializes `triage`. Unset pointers (claimedAt, primaryTicketId, decidedAt)
+ * are JSON null.
+ */
+export function canonicalUntriagedIncidentCycle(ticketId: number) {
+  return {
+    triage: {
+      ticketId,
+      claimedByUserId: '',
+      claimedDepartmentId: '',
+      claimedTeamId: '',
+      claimedAt: null as string | null,
+      duplicateDecision: '' as '' | 'duplicate' | 'not_duplicate',
+      primaryTicketId: null as number | null,
+      decidedByUserId: '',
+      decidedAt: null as string | null,
+      revision: 1,
+    },
+    workItems: [],
+    clientActions: [],
+    serviceCycles: [],
+  };
+}
+
 export async function setupThemeTestMocks(page: Page) {
   await page.route(
     (url) => url.port === String(SIG_DESK_API_PORT),
@@ -227,6 +254,15 @@ export async function setupThemeTestMocks(page: Page) {
             createdAt: '2026-09-01T08:00:00Z',
             updatedAt: '2026-09-01T09:30:00Z',
           }),
+        });
+      }
+
+      const operationalCycle = pathname.match(/^\/entities\/INC\/(\d+)\/operational-cycle$/);
+      if (operationalCycle) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(canonicalUntriagedIncidentCycle(Number(operationalCycle[1]))),
         });
       }
 
@@ -707,41 +743,38 @@ export async function setupThemeTestMocks(page: Page) {
         });
       }
 
-      if (pathname === '/changes/tasks/assigned' || pathname.startsWith('/changes/tasks/assigned?')) {
+      if (pathname === '/changes/tasks/assigned' || pathname.startsWith('/changes/tasks/assigned/')) {
+        const item = {
+          task: {
+            id: 'task-services-theme',
+            humanId: 'TSK-000101',
+            changeId: 'rfc-theme',
+            title: 'Restore site connectivity',
+            description: 'Replace the failed switch and validate every camera.',
+            area: 'Services',
+            team: 'Field Services',
+            assigneeId: 'user-services-1',
+            departmentId: 'department-services',
+            teamId: 'team-services',
+            assigneeUserId: 'user-services-1',
+            organization: {
+              departmentId: 'department-services', departmentName: 'Services',
+              teamId: 'team-services', teamName: 'Field Services',
+              assigneeUserId: 'user-services-1', assigneeName: 'Morgan Lee',
+              assigneeEmail: 'services@sig.systems', capturedAt: '2026-09-01T08:00:00Z',
+            },
+            priority: 'high', required: true, status: 'ready', dependencyIds: [],
+            dueAt: null, blockedReason: '', evidence: [],
+            createdBy: 'user-it-1', createdAt: '2026-09-01T08:00:00Z',
+            updatedAt: '2026-09-01T08:00:00Z', completedAt: null,
+            assetContext: { siteAssetId: 'site-1', links: [] },
+          },
+          change: { id: 'rfc-theme', humanId: 'RFC-000050', state: 'implementing', title: 'Restore site connectivity' },
+        };
         return route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({
-            items: [
-              {
-                task: {
-                  id: 'task-services-theme',
-                  humanId: 'TSK-000101',
-                  changeId: 'rfc-theme',
-                  title: 'Restore site connectivity',
-                  description: 'Replace the failed switch and validate every camera.',
-                  area: 'Services',
-                  team: 'Field Services',
-                  assigneeId: 'user-services-1',
-                  departmentId: 'department-services',
-                  teamId: 'team-services',
-                  assigneeUserId: 'user-services-1',
-                  organization: {
-                    departmentId: 'department-services', departmentName: 'Services',
-                    teamId: 'team-services', teamName: 'Field Services',
-                    assigneeUserId: 'user-services-1', assigneeName: 'Morgan Lee',
-                    assigneeEmail: 'services@sig.systems', capturedAt: '2026-09-01T08:00:00Z',
-                  },
-                  priority: 'high', required: true, status: 'ready', dependencyIds: [],
-                  dueAt: null, blockedReason: '', evidence: [],
-                  createdBy: 'user-it-1', createdAt: '2026-09-01T08:00:00Z',
-                  updatedAt: '2026-09-01T08:00:00Z', completedAt: null,
-                  assetContext: { siteAssetId: 'site-1', links: [] },
-                },
-                change: { id: 'rfc-theme', humanId: 'RFC-000050', state: 'implementing', title: 'Restore site connectivity' },
-              },
-            ],
-          }),
+          body: JSON.stringify(pathname === '/changes/tasks/assigned' ? { items: [item] } : item),
         });
       }
 

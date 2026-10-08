@@ -181,7 +181,12 @@ export interface AssignedChangeTask {
   change: { id: string; humanId: string; state: string; title: string };
 }
 
-type ChangeTaskWire = Omit<ChangeTask, 'evidence' | 'notes'> & { evidence?: string[] | null; notes?: string[] | null };
+type ChangeTaskWire = Omit<ChangeTask, 'evidence' | 'notes' | 'dependencyIds' | 'workType'> & {
+  evidence?: string[] | null;
+  notes?: string[] | null;
+  dependencyIds?: string[] | null;
+  workType?: ChangeTaskWorkType | null;
+};
 type AssignedChangeTaskWire = Omit<AssignedChangeTask, 'task'> & { task: ChangeTaskWire };
 
 /**
@@ -194,6 +199,10 @@ function normalizeChangeTask(task: ChangeTaskWire): ChangeTask {
     ...task,
     evidence: Array.isArray(task.evidence) ? task.evidence : [],
     notes: Array.isArray(task.notes) ? task.notes : [],
+    dependencyIds: Array.isArray(task.dependencyIds) ? task.dependencyIds : [],
+    workType: task.workType && ['generic', 'inventory_readiness', 'service_scheduling', 'field_work_order', 'restoration_validation', 'payment_approval', 'service_closeout'].includes(task.workType)
+      ? task.workType
+      : 'generic',
   };
 }
 
@@ -210,6 +219,27 @@ export async function listAssignedChangeTasks(filter: AssignedChangeTaskFilter =
     `/changes/tasks/assigned${query}`,
   );
   return response.items.map((item) => ({ ...item, task: normalizeChangeTask(item.task) }));
+}
+
+export async function getAssignedChangeTask(taskId: string): Promise<AssignedChangeTask> {
+  const item = await apiRequest<AssignedChangeTaskWire>(
+    `/changes/tasks/assigned/${encodeURIComponent(taskId)}`,
+  );
+  return { ...item, task: normalizeChangeTask(item.task) };
+}
+
+/**
+ * Resolves the sibling task with `workflowKey` in the RFC of `taskId` (for
+ * example the field Work Order a scheduling task schedules). The backend
+ * applies the actor's ceiling to both tasks in one query and answers 404 when
+ * either is missing or out of scope, so this never depends on the bounded
+ * inbox list.
+ */
+export async function getRelatedAssignedChangeTask(taskId: string, workflowKey: string): Promise<AssignedChangeTask> {
+  const item = await apiRequest<AssignedChangeTaskWire>(
+    `/changes/tasks/assigned/${encodeURIComponent(taskId)}/related/${encodeURIComponent(workflowKey)}`,
+  );
+  return { ...item, task: normalizeChangeTask(item.task) };
 }
 
 export async function listChangeTasks(changeId: string) {
