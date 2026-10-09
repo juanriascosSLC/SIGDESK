@@ -23,7 +23,12 @@ export default function ServiceRequestDetail() {
   const query = useQuery({ queryKey: ['service-request', id], queryFn: () => getServiceRequest(id), enabled: Boolean(id) });
   const [active, setActive] = useState<CommandName>();
   const mutation = useMutation({
-    mutationFn: ({ command, input }: { command: CommandName; input: ServiceRequestCommand }) => executeServiceRequestCommand(Number(id), command, input),
+    // The route may carry the stable RQS human ID. Mutations always use the
+    // canonical numeric ID returned by the authorized detail response.
+    mutationFn: ({ command, input }: { command: CommandName; input: ServiceRequestCommand }) => {
+      if (!query.data) throw new Error('Purchase request is not available');
+      return executeServiceRequestCommand(query.data.id, command, input);
+    },
     onSuccess: (item) => { queryClient.setQueryData(['service-request', id], item); void queryClient.invalidateQueries({ queryKey: ['service-requests'] }); setActive(undefined); },
   });
   if (query.isLoading) return <LoadingState label="Loading purchase request…" />;
