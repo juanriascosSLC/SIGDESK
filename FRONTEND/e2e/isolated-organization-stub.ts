@@ -109,6 +109,9 @@ export interface IsolatedOrganizationStubOptions {
    *  "Inventario" and "Servicios" (task assignment); other specs can omit
    *  this and get just the default single department. */
   extraDepartments?: string[];
+  /** Keep the historical generic E2E unit unless a scenario needs an exact
+   * production-like department directory. */
+  includeDefaultDepartment?: boolean;
 }
 
 export async function startIsolatedOrganizationStub(
@@ -117,7 +120,9 @@ export async function startIsolatedOrganizationStub(
   const internalSecret = `dev-only-e2e-org-stub-internal-secret-${crypto.randomUUID()}`;
 
   const defaultUnit = newUnit('IT (E2E aislado)', 'Soporte Nivel 1 (E2E aislado)', 'Agente E2E aislado');
-  const units: Record<string, OrganizationUnitSeed> = { [defaultUnit.departmentName]: defaultUnit };
+  const units: Record<string, OrganizationUnitSeed> = options.includeDefaultDepartment === false
+    ? {}
+    : { [defaultUnit.departmentName]: defaultUnit };
   for (const name of options.extraDepartments ?? []) {
     units[name] = newUnit(name, `Equipo ${name} (E2E aislado)`, `Responsable ${name} (E2E aislado)`);
   }

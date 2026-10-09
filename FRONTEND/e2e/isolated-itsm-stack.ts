@@ -88,12 +88,14 @@ export interface IsolatedServiceProcess {
   port: number;
   baseUrl: string;
   isolatedRequest: APIRequestContext;
+  outputTail: () => string;
   cleanup: () => Promise<void>;
 }
 
 type SpawnServiceOptions = {
   serviceLabel: 'problem' | 'change';
   binaryRelativePath: string;
+  binaryEnvVar: 'SIGDESK_E2E_PROBLEM_BINARY' | 'SIGDESK_E2E_CHANGE_BINARY';
   dbNamePrefix: string;
   dbUrlEnvVar: string;
   runToken: string;
@@ -107,7 +109,9 @@ type SpawnServiceOptions = {
  *  `isolated-catalog-stack.ts`'s tickets-specific version rather than
  *  importing/refactoring it — see this file's header comment. */
 async function spawnIsolatedService(options: SpawnServiceOptions): Promise<IsolatedServiceProcess> {
-  const binaryPath = path.resolve(__dirname, options.binaryRelativePath);
+  const binaryPath = process.env[options.binaryEnvVar]
+    ? path.resolve(process.env[options.binaryEnvVar]!)
+    : path.resolve(__dirname, options.binaryRelativePath);
   if (!fs.existsSync(binaryPath)) {
     throw new Error(
       `${options.serviceLabel} isolated binary not found at ${binaryPath}. Run 'go build -o .run/e2e_${options.serviceLabel}_service.exe ./cmd/e2e_server' in ${options.serviceLabel}_service first.`,
@@ -317,7 +321,7 @@ async function spawnIsolatedService(options: SpawnServiceOptions): Promise<Isola
       extraHTTPHeaders: { Authorization: `Bearer ${options.jwtToken}` },
     });
 
-    return { dbName, port, baseUrl, isolatedRequest: requestContext, cleanup };
+    return { dbName, port, baseUrl, isolatedRequest: requestContext, outputTail: () => processOutputTail, cleanup };
   } catch (setupError) {
     try {
       await cleanup();
@@ -334,6 +338,7 @@ async function spawnIsolatedService(options: SpawnServiceOptions): Promise<Isola
 export interface IsolatedItsmStack {
   runToken: string;
   jwtToken: string;
+  changeInternalSecret: string;
   tickets: IsolatedCatalogStack;
   problem: IsolatedServiceProcess;
   change: IsolatedServiceProcess;
@@ -362,7 +367,10 @@ export async function startIsolatedItsmStack(): Promise<IsolatedItsmStack> {
   // "Inventario"/"Servicios" are the two departments itsm-golden-path.spec.ts
   // needs for its Task assignment flow — see isolated-organization-stub.ts's
   // header comment for the full contract this satisfies.
-  const organization = await startIsolatedOrganizationStub({ extraDepartments: ['Inventario', 'Servicios'] });
+  const organization = await startIsolatedOrganizationStub({
+    includeDefaultDepartment: false,
+    extraDepartments: ['IT', 'Inventario', 'Servicios', 'Finanzas'],
+  });
 
   let tickets: IsolatedCatalogStack | null = null;
   let problem: IsolatedServiceProcess | null = null;
@@ -427,6 +435,7 @@ export async function startIsolatedItsmStack(): Promise<IsolatedItsmStack> {
     change = await spawnIsolatedService({
       serviceLabel: 'change',
       binaryRelativePath: '../../BACKEND/change_service/.run/e2e_change_service.exe',
+      binaryEnvVar: 'SIGDESK_E2E_CHANGE_BINARY',
       dbNamePrefix: 'sigdesk_change_e2e_',
       dbUrlEnvVar: 'CHANGE_DATABASE_URL',
       runToken,
@@ -447,6 +456,7 @@ export async function startIsolatedItsmStack(): Promise<IsolatedItsmStack> {
     problem = await spawnIsolatedService({
       serviceLabel: 'problem',
       binaryRelativePath: '../../BACKEND/problem_service/.run/e2e_problem_service.exe',
+      binaryEnvVar: 'SIGDESK_E2E_PROBLEM_BINARY',
       dbNamePrefix: 'sigdesk_problem_e2e_',
       dbUrlEnvVar: 'PROBLEM_DATABASE_URL',
       runToken,
@@ -465,7 +475,16 @@ export async function startIsolatedItsmStack(): Promise<IsolatedItsmStack> {
       },
     });
 
-    return { runToken, jwtToken, tickets, problem, change, organization, cleanup };
+    return {
+      runToken,
+      jwtToken,
+      changeInternalSecret: INTERNAL_SECRETS.change,
+      tickets,
+      problem,
+      change,
+      organization,
+      cleanup,
+    };
   } catch (setupError) {
     try {
       await cleanup();

@@ -41,6 +41,7 @@ const EndUserDashboard = React.lazy(() => import('./features/endUser/EndUserDash
 const MyTickets = React.lazy(() => import('./features/endUser/MyTickets'));
 const UsersManager = React.lazy(() => import('./features/admin/UsersManager'));
 const CatalogBuilder = React.lazy(() => import('./features/admin/CatalogBuilder'));
+const TaskExperienceBuilder = React.lazy(() => import('./features/admin/TaskExperienceBuilder'));
 const AssistantFeedback = React.lazy(() => import('./features/admin/AssistantFeedback'));
 const Dashboard = React.lazy(() =>
   import('./features/dashboard/Dashboard').then((module) => ({ default: module.Dashboard })),
@@ -360,6 +361,14 @@ function AppRoutes() {
                         <CatalogBuilder />
                       </CatalogBuilderErrorBoundary>
                     </React.Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/task-experience"
+                element={
+                  <ProtectedRoute requiredPermission={PERMISSIONS.changesImplement} fallbackTo="/app">
+                    <TaskExperienceBuilder />
                   </ProtectedRoute>
                 }
               />

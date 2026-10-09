@@ -64,7 +64,7 @@ const otherDepartmentTask = {
 
 const change = { id: 'change-1', humanId: 'RFC-000050', state: 'implementing', title: 'Restore connectivity at North Site' };
 
-async function stubServicesDomain(page: Page, taskSeed: typeof serviceTask = serviceTask) {
+async function stubServicesDomain(page: Page, taskSeed: typeof serviceTask = serviceTask, onTransition?: (body: Record<string, unknown>) => void) {
   let currentTask = structuredClone(taskSeed) as Omit<typeof serviceTask, 'status' | 'evidence' | 'notes' | 'outcomeCode' | 'blockedReason'> & {
     status: string;
     evidence: string[];
@@ -83,7 +83,8 @@ async function stubServicesDomain(page: Page, taskSeed: typeof serviceTask = ser
   });
   await page.route('**/changes/change-1/tasks/task-services-1/transitions/*', async (route) => {
     const key = new URL(route.request().url()).pathname.split('/').at(-1);
-    const body = route.request().postDataJSON() as { evidence?: string[]; notes?: string[]; outcomeCode?: string; reason?: string };
+    const body = route.request().postDataJSON() as { evidence?: string[]; notes?: string[]; outcomeCode?: string; reason?: string; collectedData?: Record<string, unknown> };
+    onTransition?.(body);
     const status = key === 'start' ? 'in_progress' : key === 'complete' ? 'completed' : key === 'block' ? 'blocked' : 'ready';
     currentTask = {
       ...currentTask,
@@ -142,8 +143,9 @@ test('work order executes the real task lifecycle and requires completion eviden
   await expect(page.getByText('In progress', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Work completed' }).click();
   await expect(page.getByRole('button', { name: 'Record governed outcome' })).toBeDisabled();
-  await page.getByLabel('Notes (one per line)').fill('Switch replacement completed.');
-  await page.getByLabel('Evidence references (one per line)').fill('Switch replaced; all cameras responding.');
+  await expect(page.getByText('Execute the approved on-site work and preserve a complete technical record.')).toBeVisible();
+  await page.getByLabel('Work performed 1', { exact: true }).fill('Switch replacement completed.');
+  await page.getByLabel('Completion evidence 1', { exact: true }).fill('Switch replaced; all cameras responding.');
   await page.getByRole('button', { name: 'Record governed outcome' }).click();
   await expect(page.getByText('Completed', { exact: true })).toBeVisible();
   await expect(page.getByText('Switch replaced; all cameras responding.')).toBeVisible();
@@ -173,6 +175,63 @@ test('starting team-directed work claims it for the current Services operator', 
   await expect(page.getByText('Playwright Warehouse')).toBeVisible();
   await expect(page.getByText('playwright-warehouse', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Starting this work order assigns it to you')).toHaveCount(0);
+});
+
+test('professional completion keeps focus while typing and supports multiple structured entries', async ({ page }) => {
+  await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
+  await stubServicesDomain(page, { ...serviceTask, status: 'in_progress' });
+  await page.goto('/app/services/work-orders/change-1/task-services-1');
+  await page.getByRole('button', { name: 'Work completed' }).click();
+
+  const firstNote = page.getByLabel('Work performed 1', { exact: true });
+  await firstNote.pressSequentially('Replaced switch and restored uplink', { delay: 5 });
+  await expect(firstNote).toHaveValue('Replaced switch and restored uplink');
+  await expect(firstNote).toBeFocused();
+
+  await page.getByRole('button', { name: 'Add entry' }).first().click();
+  await page.getByLabel('Work performed 2', { exact: true }).fill('Validated all downstream cameras');
+  await page.getByLabel('Completion evidence 1', { exact: true }).fill('Photo set WO-001');
+  await page.getByRole('button', { name: 'Add entry' }).nth(1).click();
+  await page.getByLabel('Completion evidence 2', { exact: true }).fill('Monitoring graph returned to green');
+
+  await page.getByRole('button', { name: 'Record governed outcome' }).click();
+  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+});
+
+test('published task-template snapshot renders custom required fields and submits their values', async ({ page }) => {
+  const templatedTask = {
+    ...serviceTask,
+    status: 'in_progress',
+    templateFamilyKey: 'services_field_work',
+    templateVersion: 3,
+    collectedData: {},
+    taskTemplate: {
+      title: 'Camera Field Restoration',
+      summary: 'Capture the governed restoration measurement.',
+      instructions: ['Measure signal before leaving site.'],
+      fields: [
+        { key: 'work_notes', label: 'Work performed', type: 'textarea', required: true, multiple: true, options: [] },
+        { key: 'signal_dbm', label: 'Final signal (dBm)', type: 'number', required: true, options: [], helpText: 'Measured after restoration.' },
+        { key: 'evidence', label: 'Photo evidence', type: 'attachment', required: true, multiple: true, evidence: true, options: [] },
+      ],
+      outcomes: [{ code: 'work_completed', label: 'Restoration completed', description: 'Field restoration succeeded.', requiredFields: ['work_notes', 'signal_dbm', 'evidence'] }],
+      sections: [{ id: 'execution', title: 'Execution', fieldKeys: ['work_notes', 'signal_dbm', 'evidence'] }],
+    },
+  };
+  let completionBody: Record<string, unknown> | undefined;
+  await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
+  await stubServicesDomain(page, templatedTask, (body) => { completionBody = body; });
+  await page.goto('/app/services/work-orders/change-1/task-services-1');
+
+  await expect(page.getByText('Camera Field Restoration')).toBeVisible();
+  await page.getByRole('button', { name: 'Restoration completed' }).click();
+  await page.getByLabel('Work performed 1', { exact: true }).fill('Replaced and aligned the camera.');
+  await page.getByLabel('Photo evidence 1', { exact: true }).fill('photo://camera-restored');
+  await page.getByLabel('Final signal (dBm)').fill('-48');
+  await page.getByRole('button', { name: 'Record governed outcome' }).click();
+
+  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  expect(completionBody?.collectedData).toEqual({ signal_dbm: -48 });
 });
 
 test('field execution waits until Change Management moves the RFC to Implementing', async ({ page }) => {
@@ -213,8 +272,8 @@ test('work order can be blocked, resumed, completed, and reopened through backen
   await page.getByRole('button', { name: 'Start work' }).click();
   await expect(page.getByText('In progress', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Work completed' }).click();
-  await page.getByLabel('Notes (one per line)').fill('Site access obtained.');
-  await page.getByLabel('Evidence references (one per line)').fill('Access obtained and connectivity validated.');
+  await page.getByLabel('Work performed 1', { exact: true }).fill('Site access obtained.');
+  await page.getByLabel('Completion evidence 1', { exact: true }).fill('Access obtained and connectivity validated.');
   await page.getByRole('button', { name: 'Record governed outcome' }).click();
   await page.getByRole('button', { name: 'Reopen' }).click();
   await expect(page.getByText('Ready to start', { exact: true })).toBeVisible();

@@ -250,7 +250,10 @@ async function publishRealPrbDefinition(ticketsRequest: APIRequestContext): Prom
 }
 
 async function publishCanonicalRfcDefinition(ticketsRequest: APIRequestContext): Promise<void> {
-  const fixturePath = path.resolve(e2eDirectory, '../../BACKEND/scripts/fixtures/catalog-rfc-v1.json');
+  const backendRoot = process.env.SIGDESK_E2E_BACKEND_ROOT
+    ? path.resolve(process.env.SIGDESK_E2E_BACKEND_ROOT)
+    : path.resolve(e2eDirectory, '../../BACKEND');
+  const fixturePath = path.join(backendRoot, 'scripts/fixtures/catalog-rfc-v1.json');
   const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8')) as {
     entityKey: 'RFC';
     name: string;

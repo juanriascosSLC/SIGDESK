@@ -1,5 +1,13 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const playwrightPort = Number(process.env.PLAYWRIGHT_PORT ?? '3003');
+const playwrightBaseUrl = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${playwrightPort}`;
+const reuseExistingServer = process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER === '1'
+  ? true
+  : process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER === '0'
+    ? false
+    : !process.env.CI;
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
@@ -20,7 +28,7 @@ export default defineConfig({
     ['html', { open: 'never' }],
   ],
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3003',
+    baseURL: playwrightBaseUrl,
     extraHTTPHeaders: process.env.PLAYWRIGHT_SIGDESK_TOKEN
       ? { Authorization: `Bearer ${process.env.PLAYWRIGHT_SIGDESK_TOKEN}` }
       : undefined,
@@ -41,9 +49,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev -- --host 127.0.0.1',
-    url: 'http://127.0.0.1:3003',
-    reuseExistingServer: !process.env.CI,
+    command: `npm run dev -- --host 127.0.0.1 --port ${playwrightPort} --strictPort`,
+    url: playwrightBaseUrl,
+    reuseExistingServer,
     timeout: 120_000,
   },
 });

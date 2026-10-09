@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { startIsolatedCatalogStack, type IsolatedCatalogStack } from './isolated-catalog-stack';
 import { mockAuthenticatedAdmin } from './support';
 
 // The page designer's INTERACTION contract, asserted against the canvas only:
@@ -29,9 +30,28 @@ import { mockAuthenticatedAdmin } from './support';
 // fallo que parecía del arrastre y era del reloj. Se midió antes de subirlo.
 test.setTimeout(120_000);
 
+let catalogStack: IsolatedCatalogStack;
+
+test.beforeAll(async () => {
+  catalogStack = await startIsolatedCatalogStack({ resourceServiceUrl: '' });
+});
+
+test.afterAll(async () => {
+  await catalogStack?.cleanup();
+});
+
+async function mockIsolatedCatalogAdmin(page: Page) {
+  await mockAuthenticatedAdmin(page, {
+    catalogApiUrl: catalogStack.baseUrl,
+    sessionToken: catalogStack.jwtToken,
+    runToken: catalogStack.runToken,
+    specLabel: 'catalog-page-designer-interactions.spec.ts',
+  });
+}
+
 async function openPageDesignerForINC(page: Page, expand = true) {
   await page.setViewportSize({ width: 1400, height: 1200 });
-  await mockAuthenticatedAdmin(page);
+  await mockIsolatedCatalogAdmin(page);
   await page.goto('/app/admin/catalog-builder');
   await expect(page.getByTestId('catalog-builder')).toBeVisible();
   await page.getByTestId('catalog-entity-INC').click();
@@ -43,7 +63,7 @@ async function openPageDesignerForINC(page: Page, expand = true) {
 
 async function openPageDesignerForEntity(page: Page, entityKey: 'PRB' | 'RFC') {
   await page.setViewportSize({ width: 1400, height: 1200 });
-  await mockAuthenticatedAdmin(page);
+  await mockIsolatedCatalogAdmin(page);
   await page.goto('/app/admin/catalog-builder');
   await expect(page.getByTestId('catalog-builder')).toBeVisible();
   await page.getByTestId(`catalog-entity-${entityKey}`).click();
@@ -211,6 +231,61 @@ test('click-to-add, resize from the panel, Delete and Ctrl+Z', async ({ page }) 
   await expect(page.getByTestId(/^page-designer-slot-cell-/).filter({ hasText: 'Divider' })).toHaveCount(1);
 });
 
+test('responsive canvas switches between desktop, tablet and mobile without changing the saved page', async ({ page }) => {
+  await openPageDesignerForINC(page);
+  const canvas = page.getByTestId('page-designer-responsive-canvas');
+  const main = page.getByTestId('page-designer-region-wrapper-main');
+  const sidebar = page.getByTestId('page-designer-region-wrapper-sidebar');
+
+  await expect(page.getByTestId('page-designer-viewport-desktop')).toHaveAttribute('aria-pressed', 'true');
+  await expect(canvas).toHaveAttribute('data-viewport', 'desktop');
+  const desktopMain = await main.boundingBox();
+  const desktopSidebar = await sidebar.boundingBox();
+  if (!desktopMain || !desktopSidebar) throw new Error('desktop regions are not visible');
+  expect(Math.abs(desktopMain.y - desktopSidebar.y)).toBeLessThan(20);
+
+  await page.getByTestId('page-designer-viewport-tablet').click();
+  await expect(canvas).toHaveAttribute('data-viewport', 'tablet');
+  await expect.poll(async () => (await canvas.boundingBox())?.width ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(820);
+
+  await page.getByTestId('page-designer-viewport-mobile').click();
+  await expect(canvas).toHaveAttribute('data-viewport', 'mobile');
+  // Width is deliberately animated for 200 ms. Wait for the rendered
+  // geometry, not only the state attribute that changes at click time.
+  await expect.poll(async () => (await canvas.boundingBox())?.width ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(390);
+  const mobileMain = await main.boundingBox();
+  const mobileSidebar = await sidebar.boundingBox();
+  if (!mobileMain || !mobileSidebar) throw new Error('mobile regions are not visible');
+  expect(mobileSidebar.y).toBeGreaterThan(mobileMain.y + mobileMain.height);
+
+  // This is a presentation-only switch: returning to desktop reveals the
+  // exact same editable placements rather than creating a second layout.
+  const slotsBefore = await page.getByTestId(/^page-designer-slot-/).count();
+  await page.getByTestId('page-designer-viewport-desktop').click();
+  await expect(canvas).toHaveAttribute('data-viewport', 'desktop');
+  await expect(page.getByTestId(/^page-designer-slot-/)).toHaveCount(slotsBefore);
+});
+
+test('controlled card and callout components are editable and render on the real canvas', async ({ page }) => {
+  await openPageDesignerForINC(page);
+  const properties = page.getByTestId('page-designer-properties');
+
+  await page.getByTestId('page-designer-palette-content-card').click();
+  await properties.getByLabel('Title').fill('Resolution checklist');
+  await properties.getByLabel('Text').fill('Capture the diagnosis, action and verification.');
+  const card = page.getByTestId(/^page-designer-slot-cell-/).filter({ hasText: 'Resolution checklist' });
+  await expect(card).toContainText('Capture the diagnosis, action and verification.');
+
+  await page.getByTestId('page-designer-palette-content-callout').click();
+  await properties.getByLabel('Title').fill('Safety notice');
+  await properties.getByLabel('Text').fill('Confirm the maintenance window before making changes.');
+  const callout = page.getByTestId(/^page-designer-slot-cell-/).filter({ hasText: 'Safety notice' });
+  await expect(callout).toContainText('Confirm the maintenance window before making changes.');
+
+  // The palette is controlled: arbitrary HTML/script components are never offered.
+  await expect(page.getByTestId('page-designer-palette-content-html')).toHaveCount(0);
+});
+
 test('move-to-region from the properties panel relocates the element', async ({ page }) => {
   await openPageDesignerForINC(page);
   const assetSlot = await ensureAssetDetailsSlot(page);
@@ -233,12 +308,44 @@ test('the resize handle still drags, and canvas widgets are inert', async ({ pag
   await expect(handle).toBeVisible();
   const box = await handle.boundingBox();
   if (!box) throw new Error('no resize handle box');
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(box.x - 200, box.y, { steps: 10 });
-  await page.mouse.up();
-  await page.waitForTimeout(300);
-  expect(await slot.getAttribute('aria-label')).not.toBe(before);
+  const startX = box.x + box.width / 2;
+  const startY = box.y + box.height / 2;
+  await handle.dispatchEvent('pointerdown', {
+    pointerId: 1,
+    pointerType: 'mouse',
+    clientX: startX,
+    clientY: startY,
+    button: 0,
+    buttons: 1,
+  });
+  // EditableSlot installs its window-level pointermove listener in the
+  // effect triggered by pointerdown. Wait for the actual resizing state so
+  // this proves the handle rather than racing the listener registration.
+  await expect(handle).toHaveClass(/bg-primary\/20/);
+  await page.evaluate(
+    ({ x, y }) => window.dispatchEvent(new PointerEvent('pointermove', {
+      pointerId: 1,
+      pointerType: 'mouse',
+      clientX: x,
+      clientY: y,
+      buttons: 1,
+      bubbles: true,
+    })),
+    { x: startX - 200, y: startY },
+  );
+  await expect.poll(() => slot.getAttribute('aria-label')).not.toBe(before);
+  await page.evaluate(
+    ({ x, y }) => window.dispatchEvent(new PointerEvent('pointerup', {
+      pointerId: 1,
+      pointerType: 'mouse',
+      clientX: x,
+      clientY: y,
+      button: 0,
+      buttons: 0,
+      bubbles: true,
+    })),
+    { x: startX - 200, y: startY },
+  );
 
   // The previewed widget's own controls are inert: the Resolve button is
   // rendered and visible, but the slot above it takes the pointer, so a click

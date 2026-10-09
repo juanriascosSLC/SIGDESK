@@ -19,11 +19,15 @@ import {
   Lock,
   Maximize2,
   Minimize2,
+  Monitor,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
   Redo2,
+  RefreshCcw,
+  Smartphone,
+  Tablet,
   Trash2,
   Undo2,
   Users,
@@ -83,6 +87,17 @@ const AUDIENCE_LABELS: Record<AudienceKey, string> = {
   supervisor: 'Supervisor',
 };
 const ALL_AUDIENCES: AudienceKey[] = ['requester', 'agent', 'supervisor'];
+type DesignerViewport = 'desktop' | 'tablet' | 'mobile';
+const VIEWPORTS: Array<{
+  key: DesignerViewport;
+  label: string;
+  width: string;
+  icon: typeof Monitor;
+}> = [
+  { key: 'desktop', label: 'Desktop', width: '100%', icon: Monitor },
+  { key: 'tablet', label: 'Tablet', width: '820px', icon: Tablet },
+  { key: 'mobile', label: 'Mobile', width: '390px', icon: Smartphone },
+];
 
 // Drops follow the CURSOR, not the bulk of the thing being dragged.
 //
@@ -196,6 +211,7 @@ export function PageDesigner({
   const [paletteOpen, setPaletteOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const [expanded, setExpanded] = useState(false);
+  const [designerViewport, setDesignerViewport] = useState<DesignerViewport>('desktop');
 
   const { context: simulatedContext } = surface.useSimulatedContext(specification, entityKey);
   const sensors = useSensors(
@@ -298,6 +314,18 @@ export function PageDesigner({
       variants: (definition.variants ?? []).filter((variant) => variant.audienceKey !== audience),
     });
     setActiveVariantKey(null);
+    setSelectedId(null);
+  }
+
+  function handleResetVariant(audience: AudienceKey) {
+    history.commit({
+      ...definition,
+      variants: (definition.variants ?? []).map((variant) =>
+        variant.audienceKey === audience
+          ? { ...variant, page: structuredClone(definition.default) }
+          : variant,
+      ),
+    });
     setSelectedId(null);
   }
 
@@ -599,6 +627,33 @@ export function PageDesigner({
         </div>
 
         <div className="flex items-center gap-1">
+          <div
+            className="mr-1 flex items-center gap-0.5 rounded-lg border border-border/40 bg-surface-container-low p-0.5"
+            role="group"
+            aria-label="Preview viewport"
+          >
+            {VIEWPORTS.map((viewport) => {
+              const ViewportIcon = viewport.icon;
+              return (
+                <button
+                  key={viewport.key}
+                  type="button"
+                  data-testid={`page-designer-viewport-${viewport.key}`}
+                  aria-label={`${viewport.label} viewport`}
+                  aria-pressed={designerViewport === viewport.key}
+                  title={`${viewport.label} viewport`}
+                  onClick={() => setDesignerViewport(viewport.key)}
+                  className={`rounded-md p-1.5 transition-colors ${
+                    designerViewport === viewport.key
+                      ? 'bg-primary/15 text-primary'
+                      : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  <ViewportIcon className="h-3.5 w-3.5" />
+                </button>
+              );
+            })}
+          </div>
           <ToolbarToggle
             active={paletteOpen}
             onClick={() => setPaletteOpen((current) => !current)}
@@ -658,10 +713,20 @@ export function PageDesigner({
       </div>
 
         {activeVariantKey && (
-          <p className="rounded-xl border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-[11px] leading-4 text-amber-200">
-            You are editing the <span className="font-bold">{AUDIENCE_LABELS[activeVariantKey]}</span> variant. Changes
-            do not affect the default page. Audience determines what is displayed, never which data can be accessed.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-[11px] leading-4 text-amber-700 dark:text-amber-200">
+            <p>
+              You are editing the <span className="font-bold">{AUDIENCE_LABELS[activeVariantKey]}</span> variant. It
+              began as a copy of Default and now evolves independently. Audience changes presentation, never access.
+            </p>
+            <button
+              type="button"
+              data-testid="page-designer-reset-audience"
+              onClick={() => handleResetVariant(activeVariantKey)}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-500/30 bg-surface-container px-2.5 py-1.5 font-bold text-on-surface hover:border-amber-500/60"
+            >
+              <RefreshCcw className="h-3 w-3" /> Reset from Default
+            </button>
+          </div>
         )}
       </div>
 
@@ -701,20 +766,26 @@ export function PageDesigner({
                 onSelectExisting={selectAndReveal}
               />
             )}
-            <div
-              className="min-w-0 flex-1 rounded-2xl border border-dashed border-border/40 bg-surface-container-low/40 p-3"
-              onClick={(event) => {
-                if (event.target === event.currentTarget) setSelectedId(null);
-              }}
-            >
-              <PageRegionsSkeleton
-                sidebarColumns={activePage.sidebarColumns}
-                header={renderRegionCanvas('header')}
-                actions={renderRegionCanvas('actions')}
-                main={renderRegionCanvas('main')}
-                sidebar={renderRegionCanvas('sidebar')}
-                footer={renderRegionCanvas('footer')}
-              />
+            <div className="min-w-0 flex-1 overflow-x-auto rounded-2xl border border-dashed border-border/40 bg-surface-container-low/40 p-3">
+              <div
+                data-testid="page-designer-responsive-canvas"
+                data-viewport={designerViewport}
+                className="mx-auto min-w-0 rounded-xl bg-surface p-3 shadow-sm transition-[width] duration-200"
+                style={{ width: VIEWPORTS.find((viewport) => viewport.key === designerViewport)?.width }}
+                onClick={(event) => {
+                  if (event.target === event.currentTarget) setSelectedId(null);
+                }}
+              >
+                <PageRegionsSkeleton
+                  sidebarColumns={activePage.sidebarColumns}
+                  stacked={designerViewport !== 'desktop'}
+                  header={renderRegionCanvas('header')}
+                  actions={renderRegionCanvas('actions')}
+                  main={renderRegionCanvas('main')}
+                  sidebar={renderRegionCanvas('sidebar')}
+                  footer={renderRegionCanvas('footer')}
+                />
+              </div>
             </div>
             {propertiesOpen && (
               <PagePropertiesPanel

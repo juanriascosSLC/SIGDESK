@@ -410,10 +410,9 @@ class ResourceTracker {
 export async function startIsolatedCatalogStack(
   options: IsolatedStackOptions = {},
 ): Promise<IsolatedCatalogStack> {
-  const binaryPath = path.resolve(
-    __dirname,
-    '../../BACKEND/tickets_service/.run/e2e_tickets_service.exe',
-  );
+  const binaryPath = process.env.SIGDESK_E2E_TICKETS_BINARY
+    ? path.resolve(process.env.SIGDESK_E2E_TICKETS_BINARY)
+    : path.resolve(__dirname, '../../BACKEND/tickets_service/.run/e2e_tickets_service.exe');
 
   // 1. Preflight binary before creating the database
   if (!fs.existsSync(binaryPath)) {
@@ -580,7 +579,10 @@ export async function startIsolatedCatalogStack(
     }
 
     // 8. Seed INC, PRB, RFC from canonical fixtures via real APIs
-    const fixturePath = path.resolve(__dirname, '../../BACKEND/scripts/fixtures/catalog-inc-v1.json');
+    const backendRoot = process.env.SIGDESK_E2E_BACKEND_ROOT
+      ? path.resolve(process.env.SIGDESK_E2E_BACKEND_ROOT)
+      : path.resolve(__dirname, '../../BACKEND');
+    const fixturePath = path.join(backendRoot, 'scripts/fixtures/catalog-inc-v1.json');
     if (!fs.existsSync(fixturePath)) {
       throw new Error(`Canonical fixture catalog-inc-v1.json not found at ${fixturePath}`);
     }

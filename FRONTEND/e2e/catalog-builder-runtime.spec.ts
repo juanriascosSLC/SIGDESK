@@ -150,7 +150,10 @@ async function fillCatalogForm(
 }
 
 test('canonical catalog-inc-v1.json fixture is clean of E2E markers and labels', () => {
-  const fixturePath = path.resolve(__dirname, '../../BACKEND/scripts/fixtures/catalog-inc-v1.json');
+  const backendRoot = process.env.SIGDESK_E2E_BACKEND_ROOT
+    ? path.resolve(process.env.SIGDESK_E2E_BACKEND_ROOT)
+    : path.resolve(__dirname, '../../BACKEND');
+  const fixturePath = path.join(backendRoot, 'scripts/fixtures/catalog-inc-v1.json');
   expect(fs.existsSync(fixturePath)).toBeTruthy();
   const content = fs.readFileSync(fixturePath, 'utf8');
   expect(content).not.toContain('Contexto de resolución E2E');

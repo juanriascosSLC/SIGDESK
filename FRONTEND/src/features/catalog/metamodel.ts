@@ -291,7 +291,7 @@ export type RegionName = 'header' | 'actions' | 'main' | 'sidebar' | 'footer';
 
 export type PagePlacementKind = 'field' | 'widget' | 'content';
 
-export type ContentKind = 'section' | 'text' | 'divider' | 'spacer';
+export type ContentKind = 'section' | 'text' | 'card' | 'callout' | 'divider' | 'spacer';
 
 // The widget catalog of the ticket page (see TicketWidgetRegistry.tsx for the
 // runtime component behind each key). `field` placements (source

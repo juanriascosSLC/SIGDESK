@@ -11,6 +11,8 @@ import {
   ListChecks,
   Minus,
   MoveVertical,
+  MessageSquareWarning,
+  PanelTop,
   Phone,
   SquareCheck,
   Type,
@@ -86,6 +88,8 @@ const FIELD_TYPE_ICONS: Record<FieldType, LucideIcon> = {
 export const CONTENT_META: Record<ContentKind, { label: string; description: string; icon: LucideIcon }> = {
   section: { label: 'Section title', description: 'Separates content with a header', icon: Heading },
   text: { label: 'Informational text', description: 'A fixed note or instruction for the agent', icon: Info },
+  card: { label: 'Content card', description: 'Groups a title and supporting text in a visual card', icon: PanelTop },
+  callout: { label: 'Callout', description: 'Highlights instructions or an important operational note', icon: MessageSquareWarning },
   divider: { label: 'Divider', description: 'A horizontal dividing line', icon: Minus },
   spacer: { label: 'Spacer', description: 'A vertical blank space', icon: MoveVertical },
 };

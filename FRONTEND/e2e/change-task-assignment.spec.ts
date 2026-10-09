@@ -204,6 +204,7 @@ test('completar exige evidencia y la envia en la transicion', async ({ page }) =
 
   expect(requestCount).toBe(1);
   expect(sent).toEqual({
+    collectedData: {},
     evidence: ['Stock alistado'],
     notes: [],
     parts: [],

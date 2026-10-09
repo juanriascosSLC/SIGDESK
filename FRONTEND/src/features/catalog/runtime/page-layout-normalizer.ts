@@ -217,7 +217,7 @@ function parseRegion(value: unknown): LayoutRegion | null {
     }
     if (
       kind === 'content' &&
-      !['section', 'text', 'divider', 'spacer'].includes(String(candidate.contentKind ?? ''))
+      !['section', 'text', 'card', 'callout', 'divider', 'spacer'].includes(String(candidate.contentKind ?? ''))
     ) {
       return null;
     }

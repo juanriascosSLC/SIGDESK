@@ -69,6 +69,15 @@ export function DesignerPlacementContent({
           <hr className="border-border/60" />
         </DesignerGhost>
       );
+    case 'card':
+    case 'callout':
+      return placement.title || placement.content ? (
+        <ContentPlacementView placement={placement} />
+      ) : (
+        <DesignerGhost placement={placement}>
+          <p className="text-xs italic text-on-surface-variant/60">Empty — add a title or text in Properties</p>
+        </DesignerGhost>
+      );
     case 'spacer':
       return (
         <DesignerGhost placement={placement}>

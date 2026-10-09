@@ -17,6 +17,7 @@ import {
   Settings,
   Wrench,
   ShoppingCart,
+  PanelsTopLeft,
   type LucideIcon,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/features/auth/permissions';
@@ -246,6 +247,15 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Workflow,
     section: 'administration',
     permission: (ctx) => ctx.can(PERMISSIONS.automationsView),
+    surfaces: ['sidebar', 'drawer'],
+  },
+  {
+    key: 'task-experience',
+    label: 'Task Experience',
+    route: '/app/admin/task-experience',
+    icon: PanelsTopLeft,
+    section: 'administration',
+    permission: (ctx) => ctx.can(PERMISSIONS.changesImplement),
     surfaces: ['sidebar', 'drawer'],
   },
   {

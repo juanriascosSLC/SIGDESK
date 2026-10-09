@@ -116,6 +116,10 @@ export interface ChangeTask {
   scheduledEnd: string | null;
   scheduledBy: string;
   revision: number;
+  templateFamilyKey?: string;
+  templateVersion?: number;
+  taskTemplate?: import('@/features/admin/task-experience/api').TaskTemplateDefinition | null;
+  collectedData?: Record<string, unknown>;
   title: string;
   description: string;
   area: string;
@@ -186,6 +190,7 @@ type ChangeTaskWire = Omit<ChangeTask, 'evidence' | 'notes' | 'dependencyIds' | 
   notes?: string[] | null;
   dependencyIds?: string[] | null;
   workType?: ChangeTaskWorkType | null;
+  collectedData?: Record<string, unknown> | null;
 };
 type AssignedChangeTaskWire = Omit<AssignedChangeTask, 'task'> & { task: ChangeTaskWire };
 
@@ -200,6 +205,7 @@ function normalizeChangeTask(task: ChangeTaskWire): ChangeTask {
     evidence: Array.isArray(task.evidence) ? task.evidence : [],
     notes: Array.isArray(task.notes) ? task.notes : [],
     dependencyIds: Array.isArray(task.dependencyIds) ? task.dependencyIds : [],
+    collectedData: task.collectedData && typeof task.collectedData === 'object' ? task.collectedData : {},
     workType: task.workType && ['generic', 'inventory_readiness', 'service_scheduling', 'field_work_order', 'restoration_validation', 'payment_approval', 'service_closeout'].includes(task.workType)
       ? task.workType
       : 'generic',
@@ -267,6 +273,7 @@ export async function transitionChangeTask(
     notes?: string[];
     outcomeCode?: ChangeTaskOutcomeCode;
     parts?: Array<{ sku?: string; description: string; quantity: number }>;
+    collectedData?: Record<string, unknown>;
   } = {},
 ) {
   const task = await apiRequest<ChangeTaskWire>(
@@ -274,7 +281,7 @@ export async function transitionChangeTask(
     {
       method: 'POST',
       headers: { 'Idempotency-Key': crypto.randomUUID() },
-      body: JSON.stringify({ ...options, evidence: options.evidence ?? [], notes: options.notes ?? [], parts: options.parts ?? [] }),
+      body: JSON.stringify({ ...options, evidence: options.evidence ?? [], notes: options.notes ?? [], parts: options.parts ?? [], collectedData: options.collectedData ?? {} }),
     },
   );
   return normalizeChangeTask(task);

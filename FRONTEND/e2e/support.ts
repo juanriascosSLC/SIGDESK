@@ -336,7 +336,9 @@ async function mockAuthenticatedIdentity(
         }
         if (
           changeApiUrl &&
-          (p === '/changes' ||
+          (p === '/change-task-templates' ||
+            p.startsWith('/change-task-templates/') ||
+            p === '/changes' ||
             p.startsWith('/changes/') ||
             p === '/change-relationships' ||
             p.startsWith('/change-relationships/'))

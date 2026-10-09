@@ -29,7 +29,7 @@ export function transitionServiceWorkOrder(
   changeId: string,
   taskId: string,
   transitionKey: string,
-  options: { reason?: string; evidence?: string[]; notes?: string[]; outcomeCode?: ChangeTaskOutcomeCode; parts?: Array<{ sku?: string; description: string; quantity: number }> } = {},
+  options: { reason?: string; evidence?: string[]; notes?: string[]; outcomeCode?: ChangeTaskOutcomeCode; parts?: Array<{ sku?: string; description: string; quantity: number }>; collectedData?: Record<string, unknown> } = {},
 ) {
   return transitionChangeTask(changeId, taskId, transitionKey, options);
 }

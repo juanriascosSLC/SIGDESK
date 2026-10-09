@@ -15,6 +15,28 @@ export function ContentPlacementView({ placement }: { placement: PagePlacement }
       );
     case 'text':
       return <p className="text-sm text-on-surface-variant">{placement.content}</p>;
+    case 'card':
+      return (
+        <section className="rounded-2xl border border-border/50 bg-surface-container p-4 shadow-sm">
+          {placement.title && <h3 className="text-sm font-black text-on-surface">{placement.title}</h3>}
+          {placement.content && (
+            <p className={`${placement.title ? 'mt-1.5' : ''} text-sm leading-6 text-on-surface-variant`}>
+              {placement.content}
+            </p>
+          )}
+        </section>
+      );
+    case 'callout':
+      return (
+        <aside className="rounded-2xl border border-primary/25 bg-primary/5 p-4 text-sm">
+          {placement.title && <h3 className="font-black text-primary">{placement.title}</h3>}
+          {placement.content && (
+            <p className={`${placement.title ? 'mt-1.5' : ''} leading-6 text-on-surface-variant`}>
+              {placement.content}
+            </p>
+          )}
+        </aside>
+      );
     case 'divider':
       return <hr className="border-border/40" />;
     case 'spacer':
@@ -74,6 +96,7 @@ function RegionGrid({
 // is what you get).
 export function PageRegionsSkeleton({
   sidebarColumns,
+  stacked = false,
   header,
   actions,
   main,
@@ -81,6 +104,8 @@ export function PageRegionsSkeleton({
   footer,
 }: {
   sidebarColumns: number;
+  /** Designer-only viewport simulation. Runtime pages remain responsive to the real viewport. */
+  stacked?: boolean;
   header: ReactNode;
   actions: ReactNode;
   main: ReactNode;
@@ -93,7 +118,7 @@ export function PageRegionsSkeleton({
     <div className="space-y-6">
       {header}
       {actions}
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+      <div className={`flex flex-col gap-6 ${stacked ? '' : 'lg:flex-row lg:items-start'}`}>
         <div className="min-w-0 lg:flex-1" style={{ flexGrow: mainColumns, flexBasis: 0 }}>
           {main}
         </div>

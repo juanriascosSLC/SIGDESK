@@ -273,7 +273,7 @@ export function PagePropertiesPanel({
         />
       )}
 
-      {placement.kind === 'content' && placement.contentKind === 'section' && (
+      {placement.kind === 'content' && ['section', 'card', 'callout'].includes(placement.contentKind ?? '') && (
         <LabeledInput
           label="Title"
           value={placement.title ?? ''}
@@ -282,7 +282,7 @@ export function PagePropertiesPanel({
         />
       )}
 
-      {placement.kind === 'content' && placement.contentKind === 'text' && (
+      {placement.kind === 'content' && ['text', 'card', 'callout'].includes(placement.contentKind ?? '') && (
         <LabeledTextarea
           label="Text"
           value={placement.content ?? ''}

@@ -13,8 +13,10 @@ import {
   LockKeyhole,
   MapPin,
   PackageSearch,
+  Plus,
   RotateCcw,
   Users,
+  X,
 } from 'lucide-react';
 import { DepartmentScope } from '@/components/layout/DepartmentScope';
 import {
@@ -48,6 +50,7 @@ import {
   workOrderStage,
 } from './presentation';
 import type { WorkOrderAction } from './types';
+import { taskExperienceFor } from './task-experience';
 
 const FIELD_WORK_WORKFLOW_KEY = 'services_field_work';
 
@@ -80,11 +83,11 @@ export default function WorkOrderDetail() {
   });
 
   const transition = useMutation({
-    mutationFn: ({ task, action, value, outcomeCode, notes, evidence, parts }: { task: ChangeTask; action: WorkOrderAction; value?: string; outcomeCode?: ChangeTaskOutcomeCode; notes?: string[]; evidence?: string[]; parts?: Array<{ sku?: string; description: string; quantity: number }> }) =>
+    mutationFn: ({ task, action, value, outcomeCode, notes, evidence, parts, collectedData }: { task: ChangeTask; action: WorkOrderAction; value?: string; outcomeCode?: ChangeTaskOutcomeCode; notes?: string[]; evidence?: string[]; parts?: Array<{ sku?: string; description: string; quantity: number }>; collectedData?: Record<string, unknown> }) =>
       transitionServiceWorkOrder(task.changeId, task.id, action.key, {
         reason: action.requiresInput === 'reason' ? value : undefined,
         evidence: evidence ?? (action.requiresInput === 'evidence' && value ? [value] : undefined),
-        notes, outcomeCode, parts,
+        notes, outcomeCode, parts, collectedData,
       }),
     onSuccess: (task) => {
       setDialogAction(null);
@@ -195,7 +198,7 @@ export default function WorkOrderDetail() {
             {actions.length === 0 ? <p className="text-sm text-services-on-surface-variant">{canExecuteTask ? 'No execution action is available in the current state.' : task.workType === 'payment_approval' ? 'Financial approval permission is required for this task.' : 'You have read access, but not permission to execute this work order.'}</p> : (
               <div className="space-y-2">{actions.map((action) => <Button key={action.key} className="w-full" variant={action.key === 'block' ? 'secondary' : 'primary'} loading={transition.isPending} onClick={() => runAction(action)} leadingIcon={action.key === 'start' ? <CirclePlay className="h-4 w-4" /> : action.key === 'complete' ? <CheckCircle2 className="h-4 w-4" /> : action.key === 'block' ? <LockKeyhole className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}>{action.label}</Button>)}</div>
             )}
-            {canExecuteTask && task.status === 'in_progress' && task.workType !== 'generic' && <GovernedCompletion task={task} busy={transition.isPending} onComplete={(outcomeCode, notes, evidence, parts) => transition.mutate({ task, action: { key: 'complete', label: 'Complete' }, outcomeCode, notes, evidence, parts })} />}
+            {canExecuteTask && task.status === 'in_progress' && task.workType !== 'generic' && <GovernedCompletion task={task} busy={transition.isPending} onComplete={(outcomeCode, notes, evidence, parts, collectedData) => transition.mutate({ task, action: { key: 'complete', label: 'Complete' }, outcomeCode, notes, evidence, parts, collectedData })} />}
             {canExecuteTask && task.workType === 'service_scheduling' && fieldWorkTask && !fieldWorkTask.scheduledStart && <ScheduleFieldWork task={fieldWorkTask} onScheduled={() => { setNotice('The field Work Order was scheduled.'); void query.refetch(); void fieldWork.refetch(); }} />}
           </Card>
 
@@ -233,26 +236,128 @@ export default function WorkOrderDetail() {
   );
 }
 
-const OUTCOMES: Partial<Record<ChangeTask['workType'], Array<{ code: ChangeTaskOutcomeCode; label: string }>>> = {
-  inventory_readiness: [{ code: 'parts_not_required', label: 'No parts required' }, { code: 'parts_required', label: 'Parts required' }],
-  service_scheduling: [{ code: 'schedule_confirmed', label: 'Confirm schedule' }],
-  field_work_order: [{ code: 'work_completed', label: 'Work completed' }, { code: 'work_failed', label: 'Work failed' }, { code: 'additional_issue_found', label: 'Additional issue found' }],
-  restoration_validation: [{ code: 'restoration_validated', label: 'Restoration validated' }, { code: 'restoration_failed', label: 'Restoration failed' }],
-  payment_approval: [{ code: 'payment_approved', label: 'Payment approved' }, { code: 'payment_rejected', label: 'Payment rejected' }, { code: 'payment_not_required', label: 'Payment not required' }],
-  service_closeout: [{ code: 'closeout_completed', label: 'Close out service cycle' }],
-};
-
-function GovernedCompletion({ task, busy, onComplete }: { task: ChangeTask; busy: boolean; onComplete: (outcome: ChangeTaskOutcomeCode, notes: string[], evidence: string[], parts: Array<{ sku?: string; description: string; quantity: number }>) => void }) {
+function GovernedCompletion({ task, busy, onComplete }: { task: ChangeTask; busy: boolean; onComplete: (outcome: ChangeTaskOutcomeCode, notes: string[], evidence: string[], parts: Array<{ sku?: string; description: string; quantity: number }>, collectedData: Record<string, unknown>) => void }) {
   const [outcome, setOutcome] = useState<ChangeTaskOutcomeCode>();
-  const [notes, setNotes] = useState('');
-  const [evidence, setEvidence] = useState('');
-  const [parts, setParts] = useState('');
-  const available = OUTCOMES[task.workType] ?? [];
-  const parsedParts = parts.split('\n').map((line) => { const [sku, description, rawQuantity] = line.split('|').map((value) => value.trim()); return { sku, description, quantity: Number(rawQuantity) }; }).filter((line) => line.description && Number.isInteger(line.quantity) && line.quantity > 0);
-  const noteItems = notes.split('\n').map((value) => value.trim()).filter(Boolean);
-  const evidenceItems = evidence.split('\n').map((value) => value.trim()).filter(Boolean);
-  const valid = Boolean(outcome && noteItems.length && evidenceItems.length && (outcome !== 'parts_required' || parsedParts.length));
-  return <div className="mt-4 border-t border-services-border pt-4"><p className="text-xs font-black uppercase tracking-wider text-services-on-surface-variant">Typed completion</p><div className="mt-3 flex flex-wrap gap-2">{available.map((item) => <Button key={item.code} size="sm" variant={outcome === item.code ? 'primary' : 'secondary'} onClick={() => setOutcome(item.code)}>{item.label}</Button>)}</div>{outcome && <div className="mt-3 space-y-3"><label className="block text-xs font-bold">Notes (one per line)<textarea className="input-field mt-1 w-full" rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} /></label><label className="block text-xs font-bold">Evidence references (one per line)<textarea className="input-field mt-1 w-full" rows={3} value={evidence} onChange={(event) => setEvidence(event.target.value)} /></label>{outcome === 'parts_required' && <label className="block text-xs font-bold">Required parts (SKU | description | quantity)<textarea className="input-field mt-1 w-full" rows={3} value={parts} onChange={(event) => setParts(event.target.value)} placeholder="CAM-01 | Replacement camera | 1" /></label>}<Button className="w-full" loading={busy} disabled={!valid} onClick={() => onComplete(outcome, noteItems, evidenceItems, parsedParts)}>Record governed outcome</Button></div>}</div>;
+  const [notes, setNotes] = useState<string[]>(['']);
+  const [evidence, setEvidence] = useState<string[]>(['']);
+  const [parts, setParts] = useState<Array<{ sku: string; description: string; quantity: string }>>([
+    { sku: '', description: '', quantity: '1' },
+  ]);
+  const [collectedData, setCollectedData] = useState<Record<string, unknown>>({});
+  const experience = taskExperienceFor(task);
+  if (!experience) return null;
+  const selectedOutcome = experience.outcomes.find((candidate) => candidate.code === outcome);
+  const noteItems = notes.map((value) => value.trim()).filter(Boolean);
+  const evidenceItems = evidence.map((value) => value.trim()).filter(Boolean);
+  const parsedParts = parts
+    .map((part) => ({ sku: part.sku.trim() || undefined, description: part.description.trim(), quantity: Number(part.quantity) }))
+    .filter((part) => part.description && Number.isInteger(part.quantity) && part.quantity > 0);
+  const valid = Boolean(outcome && noteItems.length && evidenceItems.length && (!selectedOutcome?.requiresParts || parsedParts.length));
+  const customFields = task.taskTemplate?.fields.filter((field) => field.key !== 'work_notes' && field.key !== 'notes' && !field.evidence && field.type !== 'attachment') ?? [];
+  const requiredCustomFields = selectedOutcome && task.taskTemplate
+    ? task.taskTemplate.outcomes.find((candidate) => candidate.code === selectedOutcome.code)?.requiredFields.filter((key) => customFields.some((field) => field.key === key)) ?? []
+    : [];
+  const customFieldsValid = requiredCustomFields.every((key) => templateValuePresent(collectedData[key]));
+
+  return (
+    <div className="mt-4 space-y-4 border-t border-services-border pt-4" data-testid="governed-task-completion">
+      <div>
+        <p className="text-xs font-black uppercase tracking-wider text-services-on-surface-variant">{experience.label}</p>
+        <p className="mt-1 text-sm leading-5 text-services-on-surface-variant">{experience.objective}</p>
+      </div>
+      <fieldset>
+        <legend className="text-xs font-bold text-services-on-surface">Choose the verified outcome</legend>
+        <div className="mt-2 grid gap-2">
+          {experience.outcomes.map((item) => (
+            <button
+              key={item.code}
+              type="button"
+              aria-pressed={outcome === item.code}
+              onClick={() => setOutcome(item.code)}
+              className={`rounded-xl border p-3 text-left transition-colors ${
+                outcome === item.code
+                  ? 'border-services-accent bg-services-accent/10'
+                  : 'border-services-border bg-services-surface-container hover:border-services-accent/50'
+              }`}
+            >
+              <span className="block text-sm font-black text-services-on-surface">{item.label}</span>
+              <span className="mt-1 block text-xs leading-4 text-services-on-surface-variant">{item.description}</span>
+            </button>
+          ))}
+        </div>
+      </fieldset>
+      {outcome && (
+        <div className="space-y-4">
+          <StringListEditor label={experience.notesLabel} help={experience.notesHelp} values={notes} onChange={setNotes} />
+          <StringListEditor label={experience.evidenceLabel} help={experience.evidenceHelp} values={evidence} onChange={setEvidence} />
+          {customFields.length > 0 && <TemplateFields fields={customFields} values={collectedData} onChange={setCollectedData} />}
+          {selectedOutcome?.requiresParts && <PartsEditor values={parts} onChange={setParts} />}
+          <div className="rounded-xl border border-services-border bg-services-surface-container p-3 text-xs text-services-on-surface-variant">
+            Required before completion: a typed outcome, at least one finding and at least one evidence reference
+            {selectedOutcome?.requiresParts ? ', plus one valid part requirement' : ''}.
+          </div>
+          <Button className="w-full" loading={busy} disabled={!valid || !customFieldsValid} onClick={() => onComplete(outcome, noteItems, evidenceItems, parsedParts, collectedData)}>
+            Record governed outcome
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function templateValuePresent(value: unknown) {
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'string') return value.trim().length > 0;
+  return value !== undefined && value !== null;
+}
+
+function TemplateFields({ fields, values, onChange }: { fields: NonNullable<ChangeTask['taskTemplate']>['fields']; values: Record<string, unknown>; onChange: (value: Record<string, unknown>) => void }) {
+  function set(key: string, value: unknown) { onChange({ ...values, [key]: value }); }
+  return <fieldset className="rounded-xl border border-services-border p-3"><legend className="px-1 text-xs font-black text-services-on-surface">Task-specific information</legend><div className="mt-2 grid gap-3">{fields.map((field) => <label key={field.key} className="block text-xs font-bold">{field.label}{field.required ? ' *' : ''}{field.type === 'textarea' ? <textarea className="input-field mt-1 w-full" rows={3} value={String(values[field.key] ?? '')} onChange={(event) => set(field.key, event.target.value)} /> : field.type === 'boolean' ? <select className="input-field mt-1 w-full" value={String(values[field.key] ?? '')} onChange={(event) => set(field.key, event.target.value === '' ? undefined : event.target.value === 'true')}><option value="">Select</option><option value="true">Yes</option><option value="false">No</option></select> : field.type === 'select' ? <select className="input-field mt-1 w-full" value={String(values[field.key] ?? '')} onChange={(event) => set(field.key, event.target.value)}><option value="">Select</option>{field.options.map((option) => <option key={option} value={option}>{option}</option>)}</select> : <input className="input-field mt-1 w-full" type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : field.type === 'datetime' ? 'datetime-local' : 'text'} value={String(values[field.key] ?? '')} onChange={(event) => set(field.key, field.type === 'number' ? Number(event.target.value) : event.target.value)} />}{field.helpText && <span className="mt-1 block font-normal text-services-on-surface-variant">{field.helpText}</span>}</label>)}</div></fieldset>;
+}
+
+function StringListEditor({ label, help, values, onChange }: { label: string; help: string; values: string[]; onChange: (values: string[]) => void }) {
+  function update(index: number, value: string) { onChange(values.map((current, currentIndex) => currentIndex === index ? value : current)); }
+  function remove(index: number) { const next = values.filter((_, currentIndex) => currentIndex !== index); onChange(next.length ? next : ['']); }
+  return (
+    <fieldset className="rounded-xl border border-services-border p-3">
+      <legend className="px-1 text-xs font-black text-services-on-surface">{label}</legend>
+      <p className="mb-2 text-xs leading-4 text-services-on-surface-variant">{help}</p>
+      <div className="space-y-2">
+        {values.map((value, index) => (
+          <div key={index} className="flex items-center gap-2">
+            <input className="input-field min-w-0 flex-1" value={value} onChange={(event) => update(index, event.target.value)} aria-label={`${label} ${index + 1}`} />
+            <button type="button" onClick={() => remove(index)} aria-label={`Remove ${label.toLowerCase()} ${index + 1}`} className="rounded-lg p-2 text-services-on-surface-variant hover:bg-services-surface-container"><X className="h-4 w-4" /></button>
+          </div>
+        ))}
+      </div>
+      <Button type="button" size="sm" variant="ghost" className="mt-2" onClick={() => onChange([...values, ''])}><Plus className="h-3.5 w-3.5" />Add entry</Button>
+    </fieldset>
+  );
+}
+
+function PartsEditor({ values, onChange }: { values: Array<{ sku: string; description: string; quantity: string }>; onChange: (values: Array<{ sku: string; description: string; quantity: string }>) => void }) {
+  function update(index: number, patch: Partial<(typeof values)[number]>) { onChange(values.map((part, currentIndex) => currentIndex === index ? { ...part, ...patch } : part)); }
+  function remove(index: number) { const next = values.filter((_, currentIndex) => currentIndex !== index); onChange(next.length ? next : [{ sku: '', description: '', quantity: '1' }]); }
+  return (
+    <fieldset className="rounded-xl border border-services-border p-3">
+      <legend className="px-1 text-xs font-black text-services-on-surface">Required parts</legend>
+      <p className="mb-2 text-xs text-services-on-surface-variant">Each line becomes a governed purchasing requirement.</p>
+      <div className="space-y-2">
+        {values.map((part, index) => (
+          <div key={index} className="grid grid-cols-[minmax(0,1fr)_5rem_auto] gap-2">
+            <div className="grid gap-2 sm:grid-cols-[8rem_minmax(0,1fr)]">
+              <input className="input-field" value={part.sku} placeholder="SKU (optional)" aria-label={`Part ${index + 1} SKU`} onChange={(event) => update(index, { sku: event.target.value })} />
+              <input className="input-field" value={part.description} placeholder="Part description" aria-label={`Part ${index + 1} description`} onChange={(event) => update(index, { description: event.target.value })} />
+            </div>
+            <input className="input-field" type="number" min="1" value={part.quantity} aria-label={`Part ${index + 1} quantity`} onChange={(event) => update(index, { quantity: event.target.value })} />
+            <button type="button" onClick={() => remove(index)} aria-label={`Remove part ${index + 1}`} className="rounded-lg p-2 text-services-on-surface-variant hover:bg-services-surface-container"><X className="h-4 w-4" /></button>
+          </div>
+        ))}
+      </div>
+      <Button type="button" size="sm" variant="ghost" className="mt-2" onClick={() => onChange([...values, { sku: '', description: '', quantity: '1' }])}><Plus className="h-3.5 w-3.5" />Add part</Button>
+    </fieldset>
+  );
 }
 
 function ScheduleFieldWork({ task, onScheduled }: { task: ChangeTask; onScheduled: () => void }) {
