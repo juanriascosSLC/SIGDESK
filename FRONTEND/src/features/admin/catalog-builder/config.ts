@@ -15,7 +15,7 @@ import type {
   ResourceTypeFilter,
 } from '@/features/catalog/metamodel';
 
-export type Section = 'general' | 'fields' | 'detail' | 'workflow' | 'relations' | 'resources' | 'review' | 'advanced';
+export type Section = 'general' | 'fields' | 'detail' | 'tasks' | 'workflow' | 'relations' | 'resources' | 'review' | 'advanced';
 
 export const fieldTypes: Array<{
   value: FieldType;
@@ -173,6 +173,7 @@ export const sectionItems: Array<{
   { id: 'general', label: 'General Information', description: 'Name, code, and purpose', icon: Info },
   { id: 'fields', label: 'Form Fields', description: 'Data that must be completed', icon: ListChecks },
   { id: 'detail', label: 'Visual Design', description: 'Where each element appears', icon: LayoutDashboard },
+  { id: 'tasks', label: 'Troubleshooting Forms', description: 'IT 1 and IT 2 task experience', icon: ListChecks },
   { id: 'workflow', label: 'States & Transitions', description: 'Record lifecycle', icon: GitBranch },
   { id: 'relations', label: 'Related Cases', description: 'INC, PRB, and RFC links', icon: GitBranch },
   { id: 'resources', label: 'Connected Modules', description: 'IAM, SLA, and automations', icon: Link2 },

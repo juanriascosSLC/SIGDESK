@@ -14,7 +14,7 @@ export interface DialogProps {
   description?: string;
   children?: ReactNode;
   footer?: ReactNode;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
   /** Disables closing on Escape/overlay click — for a dialog whose action is
    *  mid-flight and shouldn't be dismissed accidentally. The header close
    *  button still works. */
@@ -38,7 +38,7 @@ export function Dialog({ open, onClose, title, description, children, footer, si
     if (!preventDismiss) onClose();
   });
 
-  const sizeClass = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl' }[size];
+  const sizeClass = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-5xl' }[size];
 
   return createPortal(
     <AnimatePresence>

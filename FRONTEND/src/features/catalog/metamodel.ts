@@ -573,7 +573,36 @@ export interface CatalogSpecification {
   relations?: RelationDefinition[];
   events?: Array<{ key: string; trigger: string }>;
   actions?: Array<{ key: string; label: string; binding?: string }>;
+  incidentWorkExperience?: Partial<Record<IncidentWorkExperienceKey, IncidentWorkExperience>>;
   extensions?: Record<string, Record<string, unknown>>;
+}
+
+export type IncidentWorkExperienceKey = 'it1_remote_troubleshooting' | 'it2_troubleshooting';
+export type IncidentWorkFieldType = 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'multiselect' | 'date' | 'datetime' | 'list' | 'diagnostic_checks';
+export interface IncidentWorkExperienceField { key: string; label: string; type: IncidentWorkFieldType; required: boolean; options: string[]; placeholder?: string; helpText?: string; evidence?: boolean }
+export interface IncidentWorkExperienceSection { id: string; title: string; description?: string; fieldKeys: string[] }
+export interface IncidentWorkExperienceOutcome { code: string; label: string; description?: string; requiredFields: string[] }
+export interface IncidentWorkExperience { contractVersion: 1; title: string; summary: string; sections: IncidentWorkExperienceSection[]; fields: IncidentWorkExperienceField[]; outcomes: IncidentWorkExperienceOutcome[] }
+
+export function defaultIncidentWorkExperience(workType: IncidentWorkExperienceKey): IncidentWorkExperience {
+  const outcomes: IncidentWorkExperienceOutcome[] = [{ code: 'resolved', label: 'Resolved', requiredFields: ['resolution_summary'] }];
+  if (workType === 'it1_remote_troubleshooting') outcomes.push({ code: 'escalate_to_it2', label: 'Escalate to IT 2', requiredFields: ['escalation_reason', 'next_action'] });
+  else outcomes.push({ code: 'client_action_required', label: 'Client / site action', requiredFields: ['escalation_reason', 'next_action'] }, { code: 'service_required', label: 'Services required', requiredFields: ['escalation_reason', 'next_action'] });
+  return { contractVersion: 1, title: 'Diagnostic report', summary: 'Document observations, tests, analysis and the resulting handoff.', sections: [
+    { id: 'condition', title: 'Observed condition', description: 'Capture what is failing and its operational impact.', fieldKeys: ['symptom_summary', 'impact_assessment', 'affected_services'] },
+    { id: 'checks', title: 'Diagnostic checks', description: 'Record each action and its observed result.', fieldKeys: ['diagnostic_checks'] },
+    { id: 'analysis', title: 'Analysis and outcome', fieldKeys: ['suspected_cause', 'resolution_summary', 'escalation_reason', 'next_action', 'evidence_references'] },
+  ], fields: [
+    { key: 'symptom_summary', label: 'Symptom summary', type: 'textarea', required: true, options: [], placeholder: 'What is the user or monitoring system observing?' },
+    { key: 'impact_assessment', label: 'Impact assessment', type: 'textarea', required: true, options: [], placeholder: 'Users, locations, duration and business impact' },
+    { key: 'affected_services', label: 'Affected services or components', type: 'list', required: true, options: [], placeholder: 'One item per line' },
+    { key: 'diagnostic_checks', label: 'Diagnostic checks', type: 'diagnostic_checks', required: true, options: ['power', 'connectivity', 'network', 'application', 'hardware', 'configuration', 'monitoring', 'other'] },
+    { key: 'suspected_cause', label: 'Suspected root cause', type: 'textarea', required: true, options: [] },
+    { key: 'resolution_summary', label: 'Resolution applied', type: 'textarea', required: false, options: [] },
+    { key: 'escalation_reason', label: 'Why this must continue', type: 'textarea', required: false, options: [] },
+    { key: 'next_action', label: 'Recommended next action', type: 'textarea', required: false, options: [] },
+    { key: 'evidence_references', label: 'Evidence references', type: 'list', required: true, evidence: true, options: [] },
+  ], outcomes };
 }
 
 export interface RelationDefinition {

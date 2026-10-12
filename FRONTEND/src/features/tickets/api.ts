@@ -679,7 +679,7 @@ export async function transitionIncidentWork(ticketId: string, workItemId: numbe
 	const item = await apiRequest<IncidentWorkItem>(`/entities/INC/${encodeURIComponent(ticketId)}/work-items/${workItemId}/transitions/${input.transition}`, {
 		method: 'POST',
 		headers: commandHeaders(),
-		body: JSON.stringify({ notes: input.notes, evidence: input.evidence ?? [], reopen_reason: input.reopenReason, outcomeCode: input.outcomeCode, notesArray: input.notesArray ?? [] }),
+		body: JSON.stringify({ notes: input.notes, evidence: input.evidence ?? [], reopen_reason: input.reopenReason, outcomeCode: input.outcomeCode, notesArray: input.notesArray ?? [], troubleshootingReport: input.troubleshootingReport, formData: input.formData ?? {} }),
 	});
 	return normalizeIncidentWorkItem(item);
 }
@@ -712,6 +712,14 @@ function normalizeIncidentWorkItem(item: IncidentWorkItem): IncidentWorkItem {
 		...item,
 		evidence: Array.isArray(item.evidence) ? item.evidence : [],
 		notes: Array.isArray(item.notes) ? item.notes : [],
+		formData: item.formData && typeof item.formData === 'object' ? item.formData : {},
+		troubleshootingReport: item.troubleshootingReport && typeof item.troubleshootingReport === 'object'
+			? {
+				...item.troubleshootingReport,
+				affectedServices: Array.isArray(item.troubleshootingReport.affectedServices) ? item.troubleshootingReport.affectedServices : [],
+				checks: Array.isArray(item.troubleshootingReport.checks) ? item.troubleshootingReport.checks : [],
+			}
+			: undefined,
 	};
 }
 

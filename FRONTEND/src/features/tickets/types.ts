@@ -174,6 +174,25 @@ export interface TicketAttachment {
 
 export type IncidentWorkStatus = 'pending' | 'in_progress' | 'resolved' | 'service_required' | 'canceled';
 
+export interface IncidentDiagnosticCheck {
+	category: string;
+	action: string;
+	result: string;
+	status: 'passed' | 'failed' | 'not_applicable';
+}
+
+export interface IncidentTroubleshootingReport {
+	contractVersion: 1;
+	symptomSummary: string;
+	impactAssessment: string;
+	affectedServices: string[];
+	checks: IncidentDiagnosticCheck[];
+	suspectedCause: string;
+	resolutionSummary: string;
+	escalationReason: string;
+	nextAction: string;
+}
+
 export interface IncidentWorkItem {
 	id: number;
 	ticketId: number;
@@ -190,6 +209,9 @@ export interface IncidentWorkItem {
 	outcomeById?: string;
 	outcomeNotes?: string;
 	evidence: string[];
+	troubleshootingReport?: Partial<IncidentTroubleshootingReport>;
+	experienceSnapshot?: import('@/features/catalog/metamodel').IncidentWorkExperience;
+	formData?: Record<string, unknown>;
 	createdAt: string;
 	updatedAt: string;
 	completedAt?: string;
@@ -209,6 +231,8 @@ export interface IncidentWorkTransitionInput {
 	reopenReason?: string;
 	outcomeCode?: IncidentWorkItem['outcomeCode'];
 	notesArray?: string[];
+	troubleshootingReport?: IncidentTroubleshootingReport;
+	formData?: Record<string, unknown>;
 }
 
 export interface IncidentTriage {

@@ -55,6 +55,7 @@ import { FieldsEditor } from './catalog-builder/FieldsEditor';
 import { TemplateDesigner } from './catalog-builder/template-designer/TemplateDesigner';
 import { RelationsEditor, WorkflowEditor } from './catalog-builder/BehaviorEditors';
 import { ResourcesEditor } from './catalog-builder/ResourcesEditor';
+import { IncidentWorkExperienceEditor } from './catalog-builder/IncidentWorkExperienceEditor';
 import {
   AdvancedEditor,
   GuidedProgress,
@@ -689,7 +690,7 @@ export default function CatalogBuilder() {
             data-testid="builder-workspace-model"
             onClick={() => openSection('general')}
             className={`group rounded-2xl border p-4 text-left transition-all ${
-              activeSection !== 'detail'
+              activeSection !== 'detail' && activeSection !== 'tasks'
                 ? 'border-primary/50 bg-primary/10 shadow-sm'
                 : 'border-border/50 bg-surface-container-low hover:border-primary/40 hover:bg-primary/5'
             }`}
@@ -730,8 +731,8 @@ export default function CatalogBuilder() {
           <button
             type="button"
             data-testid="builder-workspace-tasks"
-            onClick={() => navigate('/app/admin/task-experience')}
-            className="group rounded-2xl border border-border/50 bg-surface-container-low p-4 text-left transition-all hover:border-primary/50 hover:bg-primary/10"
+            onClick={() => selected.entityKey === 'INC' ? openSection('tasks') : navigate('/app/admin/task-experience')}
+            className={`group rounded-2xl border p-4 text-left transition-all ${activeSection === 'tasks' ? 'border-primary/60 bg-primary/15' : 'border-border/50 bg-surface-container-low hover:border-primary/50 hover:bg-primary/10'}`}
           >
             <span className="flex items-start justify-between gap-3">
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -739,7 +740,7 @@ export default function CatalogBuilder() {
               </span>
               <ArrowRight className="h-4 w-4 text-on-surface-variant transition-transform group-hover:translate-x-1 group-hover:text-primary" />
             </span>
-            <span className="mt-3 block text-sm font-black text-on-surface">Task experience</span>
+            <span className="mt-3 block text-sm font-black text-on-surface">{selected.entityKey === 'INC' ? 'Troubleshooting experience' : 'Task experience'}</span>
             <span className="mt-1 block text-xs leading-5 text-on-surface-variant">
               Define instructions, completion fields, evidence and typed outcomes for every team.
             </span>
@@ -937,6 +938,9 @@ export default function CatalogBuilder() {
               specification={specification}
               updateSpecification={updateSpecification}
             />
+          )}
+          {activeSection === 'tasks' && selected.entityKey === 'INC' && (
+            <IncidentWorkExperienceEditor specification={selected.specification} onChange={(specification) => updateSpecification(() => specification)} />
           )}
           {activeSection === 'workflow' && (
             <WorkflowEditor
