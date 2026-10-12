@@ -1,0 +1,203 @@
+services:
+  postgres:
+    image: ${BETA_POSTGRES_IMAGE:?immutable PostgreSQL image required}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:?required}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?required}
+      POSTGRES_DB: postgres
+      ORGANIZATION_DB_PASSWORD: ${ORGANIZATION_DB_PASSWORD:?required}
+      RESOURCE_DB_PASSWORD: ${RESOURCE_DB_PASSWORD:?required}
+      TICKETS_DB_PASSWORD: ${TICKETS_DB_PASSWORD:?required}
+      CHANGE_DB_PASSWORD: ${CHANGE_DB_PASSWORD:?required}
+      PROBLEM_DB_PASSWORD: ${PROBLEM_DB_PASSWORD:?required}
+      WORKFLOW_DB_PASSWORD: ${WORKFLOW_DB_PASSWORD:?required}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?required}
+      AUDIT_DB_PASSWORD: ${AUDIT_DB_PASSWORD:?required}
+      KNOWLEDGE_DB_PASSWORD: ${KNOWLEDGE_DB_PASSWORD:?required}
+      RAG_DB_PASSWORD: ${RAG_DB_PASSWORD:?required}
+      AI_ADVISOR_DB_PASSWORD: ${AI_ADVISOR_DB_PASSWORD:?required}
+      TEMPORAL_DB_PASSWORD: ${TEMPORAL_DB_PASSWORD:?required}
+    volumes:
+      - beta_postgres_data:/var/lib/postgresql/data
+      - ../deploy/beta/postgres/init-beta-databases.sh:/docker-entrypoint-initdb.d/10-init-beta-databases.sh:ro
+    networks: [sigdesk_runtime]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    security_opt: [no-new-privileges:true]
+
+  kafka:
+    image: ${BETA_KAFKA_IMAGE:?immutable Kafka image required}
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID:?required}
+    volumes:
+      - beta_kafka_data:/var/lib/kafka/data
+    networks: [sigdesk_runtime]
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server 127.0.0.1:29092 --list >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+    security_opt: [no-new-privileges:true]
+
+  temporal:
+    image: ${BETA_TEMPORAL_IMAGE:?immutable Temporal image required}
+    restart: unless-stopped
+    depends_on:
+      postgres: {condition: service_healthy}
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_SEEDS: postgres
+      POSTGRES_USER: temporal_service
+      POSTGRES_PWD: ${TEMPORAL_DB_PASSWORD:?required}
+      DBNAME: sigdesk_temporal_beta
+      VISIBILITY_DBNAME: sigdesk_temporal_visibility_beta
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+    networks: [sigdesk_runtime]
+    healthcheck:
+      test: ["CMD", "tctl", "--address", "127.0.0.1:7233", "cluster", "health"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 45s
+    security_opt: [no-new-privileges:true]
+
+  object_storage:
+    image: ${BETA_OBJECT_STORAGE_IMAGE:?immutable S3-compatible image required}
+    restart: unless-stopped
+    command: ["/data"]
+    environment:
+      RUSTFS_ACCESS_KEY: ${OBJECT_STORAGE_ACCESS_KEY:?required}
+      RUSTFS_SECRET_KEY: ${OBJECT_STORAGE_SECRET_KEY:?required}
+    volumes:
+      - beta_object_storage_data:/data
+    networks: [sigdesk_runtime]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    security_opt: [no-new-privileges:true]
+
+  object_storage_init:
+    image: ${BETA_OBJECT_STORAGE_CLIENT_IMAGE:?immutable S3 client image required}
+    restart: "no"
+    depends_on:
+      object_storage: {condition: service_healthy}
+    networks: [sigdesk_runtime]
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        rc alias set beta http://object_storage:9000 "$${OBJECT_STORAGE_ACCESS_KEY}" "$${OBJECT_STORAGE_SECRET_KEY}"
+        rc bucket create "beta/$${KNOWLEDGE_S3_BUCKET}" --ignore-existing
+        (rc admin user add beta "$${RAG_S3_ACCESS_KEY}" "$${RAG_S3_SECRET_KEY}" || true)
+        (rc admin policy attach beta readonly --user "$${RAG_S3_ACCESS_KEY}" || true)
+    environment:
+      OBJECT_STORAGE_ACCESS_KEY: ${OBJECT_STORAGE_ACCESS_KEY:?required}
+      OBJECT_STORAGE_SECRET_KEY: ${OBJECT_STORAGE_SECRET_KEY:?required}
+      KNOWLEDGE_S3_BUCKET: ${KNOWLEDGE_S3_BUCKET:?required}
+      RAG_S3_ACCESS_KEY: ${RAG_S3_ACCESS_KEY:?required}
+      RAG_S3_SECRET_KEY: ${RAG_S3_SECRET_KEY:?required}
+
+  tei:
+    profiles: [ai-local]
+    image: ${BETA_TEI_IMAGE:?immutable TEI image required}
+    restart: unless-stopped
+    command:
+      - --model-id
+      - ${TEI_MODEL_ID:-BAAI/bge-m3}
+      - --port
+      - "80"
+      - --dtype
+      - float32
+      - --auto-truncate
+    volumes:
+      - beta_tei_cache:/data
+    networks: [sigdesk_runtime]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:80/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 300s
+
+  reranker:
+    profiles: [ai-local]
+    image: ${BETA_RERANKER_IMAGE:?immutable reranker image required}
+    restart: unless-stopped
+    command:
+      - --model-id
+      - ${RERANKER_MODEL_ID:-cross-encoder/mmarco-mMiniLMv2-L12-H384-v1}
+      - --port
+      - "80"
+      - --dtype
+      - float32
+    volumes:
+      - beta_reranker_cache:/data
+    networks: [sigdesk_runtime]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:80/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 300s
+
+  ollama:
+    profiles: [ai-local]
+    image: ${BETA_OLLAMA_IMAGE:?immutable Ollama image required}
+    restart: unless-stopped
+    environment:
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_KEEP_ALIVE: 30m
+    volumes:
+      - beta_ollama_data:/root/.ollama
+    networks: [sigdesk_runtime]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  ollama_pull:
+    profiles: [ai-local]
+    image: ${BETA_OLLAMA_IMAGE:?immutable Ollama image required}
+    restart: "no"
+    depends_on:
+      ollama: {condition: service_healthy}
+    volumes:
+      - beta_ollama_data:/root/.ollama
+    networks: [sigdesk_runtime]
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["OLLAMA_HOST=http://ollama:11434 ollama pull '$${OLLAMA_MODEL}'"]
+    environment:
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b-instruct}
+
+networks:
+  sigdesk_runtime: {}
+
+volumes:
+  beta_postgres_data: {}
+  beta_kafka_data: {}
+  beta_object_storage_data: {}
+  beta_tei_cache: {}
+  beta_reranker_cache: {}
+  beta_ollama_data: {}

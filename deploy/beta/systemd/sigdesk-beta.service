@@ -1,0 +1,17 @@
+[Unit]
+Description=SIG-DESK persistent beta stack
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=@@SIGDESK_ROOT@@
+ExecStart=/usr/bin/pwsh @@SIGDESK_ROOT@@/deploy/beta/manage-beta.ps1 start -EnvFile @@SIGDESK_ENV@@
+ExecStop=/usr/bin/pwsh @@SIGDESK_ROOT@@/deploy/beta/manage-beta.ps1 down -EnvFile @@SIGDESK_ENV@@
+TimeoutStartSec=900
+TimeoutStopSec=180
+
+[Install]
+WantedBy=multi-user.target

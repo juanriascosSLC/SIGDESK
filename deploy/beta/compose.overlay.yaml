@@ -1,0 +1,199 @@
+services:
+  organization_service:
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka: {condition: service_healthy}
+    environment:
+      DATABASE_URL: postgres://organization_service:${ORGANIZATION_DB_PASSWORD}@postgres:5432/sigdesk_organization_beta?sslmode=disable&application_name=organization_service
+      KAFKA_BROKERS: kafka:29092
+      SIGTOOLS_API_URL: ${SIGTOOLS_API_URL:?required}
+    networks: [sigdesk_internal, sigdesk_runtime]
+
+  resource_service:
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka: {condition: service_healthy}
+      organization_service: {condition: service_healthy}
+    environment:
+      DATABASE_URL: postgres://resource_service:${RESOURCE_DB_PASSWORD}@postgres:5432/sigdesk_resource_beta?sslmode=disable&application_name=resource_service
+      KAFKA_BROKERS: kafka:29092
+      INVENTORY_API_URL: ${SIGTOOLS_ASSETS_API_URL:?approved SIGTools assets endpoint required}
+      INVENTORY_SERVICE_TOKEN: ${SIGTOOLS_ASSETS_READ_TOKEN:?read-only SIGTools token required}
+    networks: [sigdesk_internal, sigdesk_runtime]
+
+  tickets_service:
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka: {condition: service_healthy}
+      organization_service: {condition: service_healthy}
+      resource_service: {condition: service_healthy}
+    environment:
+      DATABASE_URL: postgres://tickets_service:${TICKETS_DB_PASSWORD}@postgres:5432/sigdesk_tickets_beta?sslmode=disable&application_name=tickets_service
+      KAFKA_BROKERS: kafka:29092
+    networks: [sigdesk_internal, sigdesk_runtime]
+
+  change_service:
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka: {condition: service_healthy}
+      tickets_service: {condition: service_healthy}
+    environment:
+      CHANGE_DATABASE_URL: postgres://change_service:${CHANGE_DB_PASSWORD}@postgres:5432/sigdesk_change_beta?sslmode=disable&application_name=change_service
+      KAFKA_BROKERS: kafka:29092
+    networks: [sigdesk_internal, sigdesk_runtime]
+
+  problem_service:
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka: {condition: service_healthy}
+      tickets_service: {condition: service_healthy}
+      change_service: {condition: service_healthy}
+    environment:
+      PROBLEM_DATABASE_URL: postgres://problem_service:${PROBLEM_DB_PASSWORD}@postgres:5432/sigdesk_problem_beta?sslmode=disable&application_name=problem_service
+      KAFKA_BROKERS: kafka:29092
+    networks: [sigdesk_internal, sigdesk_runtime]
+
+  workflow_service:
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka: {condition: service_healthy}
+      temporal: {condition: service_healthy}
+      tickets_service: {condition: service_healthy}
+      change_service: {condition: service_healthy}
+    secrets: !reset []
+    environment:
+      DATABASE_URL: postgres://workflow_service:${WORKFLOW_DB_PASSWORD}@postgres:5432/sigdesk_workflow_beta?sslmode=disable&application_name=workflow_service
+      KAFKA_BROKERS: kafka:29092
+      TEMPORAL_HOST: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      TEMPORAL_TLS_ENABLED: "false"
+      TEMPORAL_TLS_SERVER_NAME: ""
+      TEMPORAL_TLS_CA_FILE: ""
+      TEMPORAL_TLS_CERT_FILE: ""
+      TEMPORAL_TLS_KEY_FILE: ""
+    networks: [sigdesk_internal, sigdesk_runtime]
+
+  notification_service:
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka: {condition: service_healthy}
+      organization_service: {condition: service_healthy}
+    environment:
+      NOTIFICATION_DATABASE_URL: postgres://notification_service:${NOTIFICATION_DB_PASSWORD}@postgres:5432/sigdesk_notification_beta?sslmode=disable&application_name=notification_service
+      KAFKA_BROKERS: kafka:29092
+    networks: [sigdesk_internal, sigdesk_runtime]
+
+  audit_service:
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka: {condition: service_healthy}
+    environment:
+      AUDIT_DATABASE_URL: postgres://audit_service:${AUDIT_DB_PASSWORD}@postgres:5432/sigdesk_audit_beta?sslmode=disable&application_name=audit_service
+      KAFKA_BROKERS: kafka:29092
+    networks: [sigdesk_internal, sigdesk_runtime]
+
+  knowledge_service:
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka: {condition: service_healthy}
+      object_storage_init: {condition: service_completed_successfully}
+    environment:
+      KNOWLEDGE_DATABASE_URL: postgres://knowledge_service:${KNOWLEDGE_DB_PASSWORD}@postgres:5432/sigdesk_knowledge_beta?sslmode=disable&application_name=knowledge_service
+      KAFKA_BROKERS: kafka:29092
+      KNOWLEDGE_S3_ENDPOINT: http://object_storage:9000
+    networks: [sigdesk_internal, sigdesk_runtime]
+
+  rag_indexador:
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka: {condition: service_healthy}
+      object_storage_init: {condition: service_completed_successfully}
+      tickets_service: {condition: service_healthy}
+      organization_service: {condition: service_healthy}
+    environment:
+      RAG_DATABASE_URL: postgres://rag_service:${RAG_DB_PASSWORD}@postgres:5432/sigdesk_rag_beta?sslmode=disable&application_name=rag_indexador
+      KAFKA_BROKERS: kafka:29092
+      RAG_S3_ENDPOINT: http://object_storage:9000
+    networks: [sigdesk_internal, sigdesk_runtime]
+
+  rag_buscador:
+    depends_on:
+      postgres: {condition: service_healthy}
+    environment:
+      RAG_DATABASE_URL: postgres://rag_service:${RAG_DB_PASSWORD}@postgres:5432/sigdesk_rag_beta?sslmode=disable&application_name=rag_buscador
+    networks: [sigdesk_internal, sigdesk_runtime]
+
+  ai_advisor_service:
+    depends_on:
+      postgres: {condition: service_healthy}
+      rag_buscador: {condition: service_healthy}
+    environment:
+      AI_ADVISOR_DATABASE_URL: postgres://ai_advisor_service:${AI_ADVISOR_DB_PASSWORD}@postgres:5432/sigdesk_ai_advisor_beta?sslmode=disable&application_name=ai_advisor_service
+    networks: [sigdesk_internal, sigdesk_runtime]
+
+  kong:
+    ports: !reset []
+    expose: ["8000", "8100"]
+    environment:
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_SSL_CERT: "off"
+      KONG_SSL_CERT_KEY: "off"
+    secrets: !reset []
+    networks: [sigdesk_internal, sigdesk_edge]
+
+  frontend:
+    image: ${SIGDESK_FRONTEND_IMAGE:?immutable frontend image required}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=32m,uid=101,gid=101
+      - /var/run:size=2m,uid=101,gid=101
+    cap_drop: [ALL]
+    user: "101:101"
+    security_opt: [no-new-privileges:true]
+    expose: ["8080"]
+    networks: [sigdesk_edge]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  edge:
+    image: ${BETA_EDGE_IMAGE:?immutable Nginx image required}
+    restart: unless-stopped
+    depends_on:
+      frontend: {condition: service_healthy}
+      kong: {condition: service_healthy}
+    environment:
+      NGINX_ENVSUBST_FILTER: SIGDESK_HOSTNAME|SIGTOOLS_UPSTREAM|SIGTOOLS_TLS_NAME
+      SIGDESK_HOSTNAME: ${SIGDESK_HOSTNAME:?required}
+      SIGTOOLS_UPSTREAM: ${SIGTOOLS_UPSTREAM:?required}
+      SIGTOOLS_TLS_NAME: ${SIGTOOLS_TLS_NAME:?required}
+    volumes:
+      - ../deploy/beta/edge/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ${BETA_TLS_CERT_FILE:?required}:/etc/nginx/tls/tls.crt:ro
+      - ${BETA_TLS_KEY_FILE:?required}:/etc/nginx/tls/tls.key:ro
+      - ${SIGTOOLS_CA_FILE:?required}:/etc/nginx/tls/sigtools-ca.pem:ro
+    ports:
+      - target: 8443
+        published: ${BETA_HTTPS_PORT:-443}
+        host_ip: ${BETA_BIND_ADDRESS:-0.0.0.0}
+        protocol: tcp
+    networks: [sigdesk_edge]
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=32m,uid=101,gid=101
+      - /var/run:size=2m,uid=101,gid=101
+      - /etc/nginx/conf.d:size=2m,uid=101,gid=101
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETGID, SETUID]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: ["CMD", "wget", "--no-check-certificate", "-q", "-O", "/dev/null", "https://127.0.0.1:8443/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+networks:
+  sigdesk_runtime: {}

@@ -1,0 +1,25 @@
+# syntax=docker/dockerfile:1.7
+FROM node:22-alpine AS build
+WORKDIR /app
+
+# These values are public browser configuration, not secrets. Keeping both
+# APIs behind the beta origin avoids CORS and mixed-content failures.
+ARG VITE_API_URL=/sigdesk-api
+ARG VITE_SIGTOOLS_API_URL=/sigtools
+ENV VITE_API_URL=${VITE_API_URL}
+ENV VITE_SIGTOOLS_API_URL=${VITE_SIGTOOLS_API_URL}
+
+COPY package.json package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci
+COPY . .
+RUN npm run build
+
+FROM nginx:1.27-alpine
+COPY --from=build /app/dist /usr/share/nginx/html
+COPY nginx.beta.conf /etc/nginx/conf.d/default.conf
+EXPOSE 8080
+HEALTHCHECK --interval=15s --timeout=3s --retries=5 \
+  CMD wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1
+USER 101:101
+ENTRYPOINT []
+CMD ["nginx", "-g", "daemon off;"]
