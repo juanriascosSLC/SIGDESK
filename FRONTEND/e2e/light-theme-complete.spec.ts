@@ -169,6 +169,10 @@ test.describe('Production-Quality Light Theme & Visual Regression Suite', () => 
       await disableAnimations(page);
       await waitForPageReady(page);
       await expect(page.getByTestId('catalog-builder')).toBeVisible({ timeout: 10000 });
+      await expect(page.getByTestId('builder-studio-switcher')).toBeVisible();
+      await expect(page.getByTestId('builder-workspace-model')).toContainText('Entity model');
+      await expect(page.getByTestId('builder-workspace-visual')).toContainText('Visual canvas');
+      await expect(page.getByTestId('builder-workspace-tasks')).toContainText('Task experience');
       await page.waitForTimeout(500);
 
       await saveScreenshot(page, ARTIFACT_FINAL_DARK, 'catalog-builder-dark-final');
@@ -310,6 +314,9 @@ test.describe('Production-Quality Light Theme & Visual Regression Suite', () => 
       await waitForPageReady(page);
 
       await expect(page.getByTestId('catalog-builder')).toBeVisible({ timeout: 10000 });
+      await expect(page.getByTestId('builder-studio-switcher')).toBeVisible();
+      await page.getByTestId('builder-workspace-visual').click();
+      await expect(page.getByTestId('page-designer')).toBeVisible();
       const contrast = await evaluateElementContrast(page, 'h1, h2');
       expect(contrast.passed).toBe(true);
 

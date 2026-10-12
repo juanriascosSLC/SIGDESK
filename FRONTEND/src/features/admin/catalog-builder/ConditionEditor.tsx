@@ -7,6 +7,7 @@ import type {
 import { bindingIsMultiple } from '@/features/catalog/metamodel';
 import { conditionOperators, defaultConditionValue, parseConditionValue } from './config';
 import { Toggle } from './ui';
+import { Plus, Trash2 } from 'lucide-react';
 
 // El ÚNICO editor de condiciones del Entity Builder.
 //
@@ -202,6 +203,106 @@ export function ConditionRule({
         </label>
       )}
     </div>
+  );
+}
+
+/**
+ * Visual editor for the full ConditionExpression contract. It keeps the
+ * familiar single-rule path, but can author an ALL/ANY group without asking
+ * an administrator to edit JSON.
+ */
+export function AdvancedConditionRule(props: ConditionRuleProps) {
+  const { condition, sources, onChange, label, emptyLabel, testId, disabled } = props;
+  if (sources.length === 0) return null;
+  const mode: 'simple' | 'all' | 'any' = condition?.all ? 'all' : condition?.any ? 'any' : 'simple';
+  const children = mode === 'all' ? condition?.all ?? [] : mode === 'any' ? condition?.any ?? [] : [];
+  const defaultRule = (): ConditionExpression => ({
+    field: sources[0].key,
+    operator: 'equals',
+    value: defaultConditionValue(sources[0]),
+  });
+
+  function changeMode(next: 'simple' | 'all' | 'any') {
+    if (!condition) {
+      onChange(next === 'simple' ? defaultRule() : { [next]: [defaultRule(), defaultRule()] });
+      return;
+    }
+    if (next === 'simple') {
+      onChange(children[0] ?? defaultRule());
+      return;
+    }
+    const first = mode === 'simple' ? condition : children[0] ?? defaultRule();
+    onChange({ [next]: children.length > 0 ? children : [first, defaultRule()] });
+  }
+
+  if (mode === 'simple') {
+    return (
+      <div className="space-y-2" data-testid={testId ? `${testId}-advanced` : undefined}>
+        <ConditionRule {...props} />
+        {condition && !disabled && (
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-on-surface-variant">Combine rules:</span>
+            <button type="button" onClick={() => changeMode('all')} className="rounded-lg border border-border/40 px-2 py-1 text-[10px] font-bold text-on-surface hover:border-primary/50">All must match</button>
+            <button type="button" onClick={() => changeMode('any')} className="rounded-lg border border-border/40 px-2 py-1 text-[10px] font-bold text-on-surface hover:border-primary/50">Any may match</button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <section data-testid={testId ? `${testId}-advanced` : undefined} className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="text-xs font-black text-on-surface">{label}</p>
+          <p className="text-[10px] text-on-surface-variant">
+            {mode === 'all' ? 'Show only when every rule matches.' : 'Show when at least one rule matches.'}
+          </p>
+        </div>
+        <div className="flex rounded-lg border border-border/40 bg-surface-container p-0.5">
+          {(['all', 'any'] as const).map((candidate) => (
+            <button key={candidate} type="button" aria-pressed={mode === candidate} onClick={() => changeMode(candidate)} className={`rounded-md px-2 py-1 text-[10px] font-bold ${mode === candidate ? 'bg-primary text-on-primary' : 'text-on-surface-variant'}`}>
+              {candidate === 'all' ? 'Match all' : 'Match any'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="space-y-2">
+        {children.map((child, index) => (
+          <div key={index} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
+            <ConditionRule
+              {...props}
+              label={`Rule ${index + 1}`}
+              emptyLabel={undefined}
+              condition={child}
+              compact
+              testId={testId ? `${testId}-rule-${index}` : undefined}
+              onChange={(next) => {
+                const updated = children.map((item, childIndex) => childIndex === index ? (next ?? defaultRule()) : item);
+                onChange({ [mode]: updated });
+              }}
+            />
+            <button
+              type="button"
+              aria-label={`Remove rule ${index + 1}`}
+              disabled={children.length <= 1}
+              onClick={() => onChange({ [mode]: children.filter((_, childIndex) => childIndex !== index) })}
+              className="mt-2 rounded-lg p-2 text-on-surface-variant hover:bg-red-500/10 hover:text-red-600 disabled:opacity-30"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => onChange({ [mode]: [...children, defaultRule()] })} className="flex items-center gap-1 rounded-lg border border-primary/30 px-2.5 py-1.5 text-[10px] font-black text-primary">
+          <Plus className="h-3 w-3" /> Add rule
+        </button>
+        <button type="button" onClick={() => changeMode('simple')} className="rounded-lg px-2.5 py-1.5 text-[10px] font-bold text-on-surface-variant">Use one rule</button>
+        <button type="button" onClick={() => onChange(undefined)} className="ml-auto rounded-lg px-2.5 py-1.5 text-[10px] font-bold text-red-600">Disable</button>
+      </div>
+      {!condition && emptyLabel && <p className="text-[10px] text-on-surface-variant">{emptyLabel}</p>}
+    </section>
   );
 }
 

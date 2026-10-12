@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import {
@@ -264,6 +264,13 @@ function GovernedCompletion({ task, busy, onComplete }: { task: ChangeTask; busy
       <div>
         <p className="text-xs font-black uppercase tracking-wider text-services-on-surface-variant">{experience.label}</p>
         <p className="mt-1 text-sm leading-5 text-services-on-surface-variant">{experience.objective}</p>
+        {task.taskTemplate && task.taskTemplate.instructions.length > 0 && (
+          <ol className="mt-3 space-y-1 rounded-xl border border-services-border bg-services-surface-container p-3 pl-8 text-xs leading-5 text-services-on-surface-variant" data-testid="task-template-instructions">
+            {task.taskTemplate.instructions.filter(Boolean).map((instruction, index) => (
+              <li key={index} className="list-decimal">{instruction}</li>
+            ))}
+          </ol>
+        )}
       </div>
       <fieldset>
         <legend className="text-xs font-bold text-services-on-surface">Choose the verified outcome</legend>
@@ -290,7 +297,9 @@ function GovernedCompletion({ task, busy, onComplete }: { task: ChangeTask; busy
         <div className="space-y-4">
           <StringListEditor label={experience.notesLabel} help={experience.notesHelp} values={notes} onChange={setNotes} />
           <StringListEditor label={experience.evidenceLabel} help={experience.evidenceHelp} values={evidence} onChange={setEvidence} />
-          {customFields.length > 0 && <TemplateFields fields={customFields} values={collectedData} onChange={setCollectedData} />}
+          {customFields.length > 0 && task.taskTemplate && (
+            <TemplateFields definition={task.taskTemplate} fields={customFields} values={collectedData} onChange={setCollectedData} />
+          )}
           {selectedOutcome?.requiresParts && <PartsEditor values={parts} onChange={setParts} />}
           <div className="rounded-xl border border-services-border bg-services-surface-container p-3 text-xs text-services-on-surface-variant">
             Required before completion: a typed outcome, at least one finding and at least one evidence reference
@@ -311,9 +320,31 @@ function templateValuePresent(value: unknown) {
   return value !== undefined && value !== null;
 }
 
-function TemplateFields({ fields, values, onChange }: { fields: NonNullable<ChangeTask['taskTemplate']>['fields']; values: Record<string, unknown>; onChange: (value: Record<string, unknown>) => void }) {
+function TemplateFields({ definition, fields, values, onChange }: { definition: NonNullable<ChangeTask['taskTemplate']>; fields: NonNullable<ChangeTask['taskTemplate']>['fields']; values: Record<string, unknown>; onChange: (value: Record<string, unknown>) => void }) {
   function set(key: string, value: unknown) { onChange({ ...values, [key]: value }); }
-  return <fieldset className="rounded-xl border border-services-border p-3"><legend className="px-1 text-xs font-black text-services-on-surface">Task-specific information</legend><div className="mt-2 grid gap-3">{fields.map((field) => <label key={field.key} className="block text-xs font-bold">{field.label}{field.required ? ' *' : ''}{field.type === 'textarea' ? <textarea className="input-field mt-1 w-full" rows={3} value={String(values[field.key] ?? '')} onChange={(event) => set(field.key, event.target.value)} /> : field.type === 'boolean' ? <select className="input-field mt-1 w-full" value={String(values[field.key] ?? '')} onChange={(event) => set(field.key, event.target.value === '' ? undefined : event.target.value === 'true')}><option value="">Select</option><option value="true">Yes</option><option value="false">No</option></select> : field.type === 'select' ? <select className="input-field mt-1 w-full" value={String(values[field.key] ?? '')} onChange={(event) => set(field.key, event.target.value)}><option value="">Select</option>{field.options.map((option) => <option key={option} value={option}>{option}</option>)}</select> : <input className="input-field mt-1 w-full" type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : field.type === 'datetime' ? 'datetime-local' : 'text'} value={String(values[field.key] ?? '')} onChange={(event) => set(field.key, field.type === 'number' ? Number(event.target.value) : event.target.value)} />}{field.helpText && <span className="mt-1 block font-normal text-services-on-surface-variant">{field.helpText}</span>}</label>)}</div></fieldset>;
+  const fieldByKey = new Map(fields.map((field) => [field.key, field]));
+  const sections = definition.sections
+    .map((section) => ({ ...section, fields: section.fieldKeys.map((key) => fieldByKey.get(key)).filter(Boolean) as typeof fields }))
+    .filter((section) => section.fields.length > 0);
+  return <div className="space-y-3" data-testid="task-template-sections">{sections.map((section) => <fieldset key={section.id} className="rounded-xl border border-services-border bg-services-surface-container/40 p-3" data-testid={`task-runtime-section-${section.id}`}><legend className="px-1 text-xs font-black text-services-on-surface">{section.title}</legend>{section.description && <p className="mb-3 text-xs leading-4 text-services-on-surface-variant">{section.description}</p>}<div className="grid gap-3 sm:grid-cols-2">{section.fields.map((field) => <TemplateField key={field.key} field={field} value={values[field.key]} onChange={(value) => set(field.key, value)} />)}</div></fieldset>)}</div>;
+}
+
+function TemplateField({ field, value, onChange }: { field: NonNullable<ChangeTask['taskTemplate']>['fields'][number]; value: unknown; onChange: (value: unknown) => void }) {
+  const shared = { className: 'input-field mt-1 w-full', 'aria-label': field.label };
+  let control: ReactNode;
+  if (field.type === 'textarea') {
+    control = <textarea {...shared} rows={3} placeholder={field.placeholder} value={String(value ?? '')} onChange={(event) => onChange(event.target.value)} />;
+  } else if (field.type === 'boolean') {
+    control = <select {...shared} value={String(value ?? '')} onChange={(event) => onChange(event.target.value === '' ? undefined : event.target.value === 'true')}><option value="">Select</option><option value="true">Yes</option><option value="false">No</option></select>;
+  } else if (field.type === 'select') {
+    control = <select {...shared} value={String(value ?? '')} onChange={(event) => onChange(event.target.value)}><option value="">{field.placeholder || 'Select'}</option>{field.options.map((option) => <option key={option} value={option}>{option}</option>)}</select>;
+  } else if (field.type === 'multiselect') {
+    const selected = Array.isArray(value) ? value.map(String) : [];
+    control = <select {...shared} multiple value={selected} onChange={(event) => onChange(Array.from(event.target.selectedOptions, (option) => option.value))}>{field.options.map((option) => <option key={option} value={option}>{option}</option>)}</select>;
+  } else {
+    control = <input {...shared} placeholder={field.placeholder} type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : field.type === 'datetime' ? 'datetime-local' : 'text'} value={String(value ?? '')} onChange={(event) => onChange(field.type === 'number' ? (event.target.value === '' ? undefined : Number(event.target.value)) : event.target.value)} />;
+  }
+  return <label className={`block text-xs font-bold ${field.type === 'textarea' || field.type === 'multiselect' ? 'sm:col-span-2' : ''}`}>{field.label}{field.required ? ' *' : ''}{control}{field.helpText && <span className="mt-1 block font-normal text-services-on-surface-variant">{field.helpText}</span>}</label>;
 }
 
 function StringListEditor({ label, help, values, onChange }: { label: string; help: string; values: string[]; onChange: (values: string[]) => void }) {

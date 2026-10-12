@@ -292,6 +292,7 @@ export type RegionName = 'header' | 'actions' | 'main' | 'sidebar' | 'footer';
 export type PagePlacementKind = 'field' | 'widget' | 'content';
 
 export type ContentKind = 'section' | 'text' | 'card' | 'callout' | 'divider' | 'spacer';
+export type ContentTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
 
 // The widget catalog of the ticket page (see TicketWidgetRegistry.tsx for the
 // runtime component behind each key). `field` placements (source
@@ -353,6 +354,7 @@ export interface PagePlacement {
 
   // kind === 'content' — structural/generic, owned by no business module
   contentKind?: ContentKind;
+  contentTone?: ContentTone;
   title?: string;
   content?: string;
 }
@@ -363,6 +365,33 @@ export interface PagePlacement {
 export interface LayoutRegion {
   columns: number;
   placements: PagePlacement[];
+  style?: RegionStyle;
+}
+
+export type RegionSurface = 'transparent' | 'subtle' | 'card';
+export type RegionPadding = 'none' | 'sm' | 'md';
+export type RegionGap = 'compact' | 'comfortable' | 'spacious';
+
+/** Safe, theme-aware presentation controls for one named page region. */
+export interface RegionStyle {
+  surface: RegionSurface;
+  padding: RegionPadding;
+  gap: RegionGap;
+}
+
+export type PageDensity = 'compact' | 'comfortable' | 'spacious';
+export type PageContentWidth = 'contained' | 'wide' | 'full';
+export type PageSurfaceStyle = 'flat' | 'soft' | 'cards';
+
+/**
+ * Presentation-only page settings. They are deliberately a closed contract:
+ * admins can shape the experience without injecting CSS or HTML, and the
+ * published definition remains deterministic across light/dark themes.
+ */
+export interface PageAppearance {
+  density: PageDensity;
+  contentWidth: PageContentWidth;
+  surfaceStyle: PageSurfaceStyle;
 }
 
 // SidebarColumns splits the page width between main and sidebar in the row
@@ -370,6 +399,7 @@ export interface LayoutRegion {
 // footer always span the full page width.
 export interface PageLayout {
   sidebarColumns: number;
+  appearance?: PageAppearance;
   header: LayoutRegion;
   actions: LayoutRegion;
   main: LayoutRegion;

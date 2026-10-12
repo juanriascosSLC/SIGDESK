@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
   History,
+  LayoutDashboard,
+  ListChecks,
   LoaderCircle,
+  PanelsTopLeft,
   Plus,
   RefreshCw,
   Rocket,
@@ -143,6 +147,7 @@ function addMissingSiteBinding(
 
 export default function CatalogBuilder() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const definitionsQuery = useQuery({
     queryKey: ['catalog-definitions'],
     queryFn: () => listDefinitions(false),
@@ -603,17 +608,19 @@ export default function CatalogBuilder() {
       data-testid="catalog-builder"
       className="p-6 lg:p-8 w-full min-h-full space-y-6"
     >
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-primary text-xs font-black uppercase tracking-[0.2em] mb-2">
-            <Settings2 className="w-4 h-4" /> No-code configuration
+      <header className="relative overflow-hidden rounded-[28px] border border-primary/25 bg-surface-container-low px-5 py-5 shadow-sm sm:px-7 sm:py-6">
+        <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
+        <div className="relative flex flex-wrap items-start justify-between gap-5">
+          <div className="max-w-2xl">
+            <div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-primary">
+              <Settings2 className="h-4 w-4" /> No-code experience studio
+            </div>
+            <h1 className="text-3xl font-black text-on-surface sm:text-4xl">Entity Builder</h1>
+            <p className="mt-2 text-sm leading-6 text-on-surface-variant">
+              Design the data, ticket screens and governed task experience from one workspace.
+            </p>
           </div>
-          <h1 className="text-3xl font-black text-on-surface">Entity Builder</h1>
-          <p className="text-sm text-on-surface-variant mt-1">
-            Define what's captured, how it flows, and how each record will look.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-3">
           {guidedMode ? (
             <button
               onClick={() => {
@@ -667,8 +674,78 @@ export default function CatalogBuilder() {
               </button>
             </>
           )}
+          </div>
         </div>
       </header>
+
+      {!guidedMode && (
+        <section
+          data-testid="builder-studio-switcher"
+          aria-label="Builder workspaces"
+          className="grid gap-3 md:grid-cols-3"
+        >
+          <button
+            type="button"
+            data-testid="builder-workspace-model"
+            onClick={() => openSection('general')}
+            className={`group rounded-2xl border p-4 text-left transition-all ${
+              activeSection !== 'detail'
+                ? 'border-primary/50 bg-primary/10 shadow-sm'
+                : 'border-border/50 bg-surface-container-low hover:border-primary/40 hover:bg-primary/5'
+            }`}
+          >
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
+              <ListChecks className="h-5 w-5" />
+            </span>
+            <span className="mt-3 block text-sm font-black text-on-surface">Entity model</span>
+            <span className="mt-1 block text-xs leading-5 text-on-surface-variant">
+              Fields, lifecycle, relations and connected modules.
+            </span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="builder-workspace-visual"
+            onClick={() => openSection('detail')}
+            className={`group rounded-2xl border p-4 text-left transition-all ${
+              activeSection === 'detail'
+                ? 'border-primary/60 bg-primary/15 shadow-[0_0_24px_rgba(34,211,238,0.12)]'
+                : 'border-border/50 bg-surface-container-low hover:border-primary/50 hover:bg-primary/10'
+            }`}
+          >
+            <span className="flex items-start justify-between gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-on-primary shadow-sm">
+                <LayoutDashboard className="h-5 w-5" />
+              </span>
+              <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-primary">
+                Visual canvas
+              </span>
+            </span>
+            <span className="mt-3 block text-sm font-black text-on-surface">Ticket experience</span>
+            <span className="mt-1 block text-xs leading-5 text-on-surface-variant">
+              Drag, resize and preview Create, Edit and Detail pages by audience and device.
+            </span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="builder-workspace-tasks"
+            onClick={() => navigate('/app/admin/task-experience')}
+            className="group rounded-2xl border border-border/50 bg-surface-container-low p-4 text-left transition-all hover:border-primary/50 hover:bg-primary/10"
+          >
+            <span className="flex items-start justify-between gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <PanelsTopLeft className="h-5 w-5" />
+              </span>
+              <ArrowRight className="h-4 w-4 text-on-surface-variant transition-transform group-hover:translate-x-1 group-hover:text-primary" />
+            </span>
+            <span className="mt-3 block text-sm font-black text-on-surface">Task experience</span>
+            <span className="mt-1 block text-xs leading-5 text-on-surface-variant">
+              Define instructions, completion fields, evidence and typed outcomes for every team.
+            </span>
+          </button>
+        </section>
+      )}
 
       {guidedMode && <GuidedProgress activeSection={activeSection} onSelect={openSection} />}
 

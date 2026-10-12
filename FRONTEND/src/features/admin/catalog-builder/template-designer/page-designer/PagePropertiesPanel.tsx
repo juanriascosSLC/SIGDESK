@@ -6,23 +6,29 @@ import {
   MoveLeft,
   MoveRight,
   PanelsTopLeft,
+  Palette,
   Trash2,
   X,
 } from 'lucide-react';
 import type {
   CatalogSpecification,
   PageLayout,
+  PageAppearance,
   PagePlacement,
   RegionName,
+  RegionStyle,
 } from '@/features/catalog/metamodel';
 import { Toggle } from '../../ui';
-import { ConditionRule } from '../../ConditionEditor';
+import { AdvancedConditionRule } from '../../ConditionEditor';
 import { findPlacementRegion } from './page-document-ops';
+import { resolvePageAppearance } from './page-document-ops';
 import { ALLOWED_SPANS, type DesignerSpan } from './designer-grid-model';
 import { canDuplicatePlacement, placementAllowedInRegion, placementLabel } from './designer-actions';
 import { REGION_ORDER } from './region-meta';
 import type { AnyPageSurface } from './surface';
 import { placementIcon } from './page-library';
+import { PAGE_EXPERIENCE_TEMPLATES, type PageExperienceTemplate } from './page-templates';
+import { DEFAULT_REGION_STYLE } from './page-document-ops';
 
 export interface SelectionNeighbours {
   canMoveLeft: boolean;
@@ -76,6 +82,10 @@ export function PagePropertiesPanel({
   onDuplicate,
   onRemove,
   onSidebarColumnsChange,
+  onAppearanceChange,
+  onApplyPreset,
+  onApplyTemplate,
+  onRegionStyleChange,
   onClose,
 }: {
   surface: AnyPageSurface;
@@ -90,6 +100,10 @@ export function PagePropertiesPanel({
   onDuplicate: (placementId: string) => void;
   onRemove: (placementId: string) => void;
   onSidebarColumnsChange: (value: number) => void;
+  onAppearanceChange: (patch: Partial<PageAppearance>) => void;
+  onApplyPreset: (sidebarColumns: number, appearance: PageAppearance) => void;
+  onApplyTemplate: (template: PageExperienceTemplate) => void;
+  onRegionStyleChange: (region: RegionName, patch: Partial<RegionStyle>) => void;
   onClose: () => void;
 }) {
   const placement = selectedId
@@ -106,7 +120,15 @@ export function PagePropertiesPanel({
   if (!placement || !regionName || !selectedId) {
     return (
       <PanelShell>
-        <PageSettings surface={surface} page={page} onSidebarColumnsChange={onSidebarColumnsChange} />
+        <PageSettings
+          surface={surface}
+          page={page}
+          onSidebarColumnsChange={onSidebarColumnsChange}
+          onAppearanceChange={onAppearanceChange}
+          onApplyPreset={onApplyPreset}
+          onApplyTemplate={onApplyTemplate}
+          onRegionStyleChange={onRegionStyleChange}
+        />
       </PanelShell>
     );
   }
@@ -291,6 +313,26 @@ export function PagePropertiesPanel({
         />
       )}
 
+      {placement.kind === 'content' && ['card', 'callout'].includes(placement.contentKind ?? '') && (
+        <SegmentedSetting
+          label="Visual tone"
+          value={placement.contentTone ?? (placement.contentKind === 'callout' ? 'info' : 'neutral')}
+          options={[
+            ['neutral', 'Neutral'],
+            ['info', 'Info'],
+            ['success', 'Success'],
+            ['warning', 'Warning'],
+            ['danger', 'Danger'],
+          ]}
+          columns={2}
+          testId="page-designer-content-tone"
+          onChange={(contentTone) => update((current) => ({
+            ...current,
+            contentTone: contentTone as PagePlacement['contentTone'],
+          }))}
+        />
+      )}
+
       {placement.kind === 'field' && (
         <Toggle
           checked={Boolean(placement.readOnly)}
@@ -299,9 +341,10 @@ export function PagePropertiesPanel({
         />
       )}
 
-      <ConditionRule
+      <AdvancedConditionRule
         label="Show only when…"
         compact
+        testId="page-designer-visibility"
         condition={placement.visibleWhen}
         sources={specification.fields}
         onChange={(condition) => update((current) => ({ ...current, visibleWhen: condition }))}
@@ -389,12 +432,44 @@ function PageSettings({
   surface,
   page,
   onSidebarColumnsChange,
+  onAppearanceChange,
+  onApplyPreset,
+  onApplyTemplate,
+  onRegionStyleChange,
 }: {
   surface: AnyPageSurface;
   page: PageLayout;
   onSidebarColumnsChange: (value: number) => void;
+  onAppearanceChange: (patch: Partial<PageAppearance>) => void;
+  onApplyPreset: (sidebarColumns: number, appearance: PageAppearance) => void;
+  onApplyTemplate: (template: PageExperienceTemplate) => void;
+  onRegionStyleChange: (region: RegionName, patch: Partial<RegionStyle>) => void;
 }) {
   const sidebar = page.sidebarColumns || 4;
+  const appearance = resolvePageAppearance(page);
+  const presets: Array<{ key: string; name: string; description: string; sidebar: number; appearance: PageAppearance }> = [
+    {
+      key: 'operations',
+      name: 'Operations console',
+      description: 'Dense, full-width workspace for agents handling many signals.',
+      sidebar: 3,
+      appearance: { density: 'compact', contentWidth: 'full', surfaceStyle: 'flat' },
+    },
+    {
+      key: 'balanced',
+      name: 'Balanced workspace',
+      description: 'Clear hierarchy with a supporting sidebar and soft canvas.',
+      sidebar: 4,
+      appearance: { density: 'comfortable', contentWidth: 'wide', surfaceStyle: 'soft' },
+    },
+    {
+      key: 'guided',
+      name: 'Guided experience',
+      description: 'Focused, spacious presentation for requesters and reviews.',
+      sidebar: 5,
+      appearance: { density: 'spacious', contentWidth: 'contained', surfaceStyle: 'cards' },
+    },
+  ];
   return (
     <>
       <div className="flex items-start gap-2">
@@ -408,6 +483,93 @@ function PageSettings({
           </p>
         </div>
       </div>
+
+      <section className="space-y-2">
+        <FieldLabel>Full-page templates</FieldLabel>
+        <p className="text-[10px] leading-4 text-on-surface-variant">
+          Reorganizes every movable element and applies a complete visual system. Undo is available.
+        </p>
+        <div className="space-y-2" data-testid="page-designer-templates">
+          {PAGE_EXPERIENCE_TEMPLATES.map((template) => (
+            <button
+              key={template.key}
+              type="button"
+              data-testid={`page-designer-template-${template.key}`}
+              onClick={() => onApplyTemplate(template)}
+              className="w-full rounded-xl border border-border/40 bg-surface-container-low p-3 text-left transition-colors hover:border-primary/50 hover:bg-primary/5"
+            >
+              <span className="block text-xs font-black text-on-surface">{template.name}</span>
+              <span className="mt-1 block text-[10px] leading-4 text-on-surface-variant">{template.description}</span>
+              <span className="mt-1.5 block text-[9px] font-bold uppercase tracking-wide text-primary">{template.bestFor}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <FieldLabel>Experience presets</FieldLabel>
+        <div className="space-y-2" data-testid="page-designer-presets">
+          {presets.map((preset) => {
+            const active = sidebar === preset.sidebar &&
+              appearance.density === preset.appearance.density &&
+              appearance.contentWidth === preset.appearance.contentWidth &&
+              appearance.surfaceStyle === preset.appearance.surfaceStyle;
+            return (
+              <button
+                key={preset.key}
+                type="button"
+                data-testid={`page-designer-preset-${preset.key}`}
+                aria-pressed={active}
+                onClick={() => onApplyPreset(preset.sidebar, preset.appearance)}
+                className={`w-full rounded-xl border p-3 text-left transition-colors ${
+                  active
+                    ? 'border-primary/60 bg-primary/10'
+                    : 'border-border/40 bg-surface-container-low hover:border-primary/40'
+                }`}
+              >
+                <span className="flex items-center gap-2 text-xs font-black text-on-surface">
+                  <Palette className="h-3.5 w-3.5 text-primary" /> {preset.name}
+                </span>
+                <span className="mt-1 block text-[10px] leading-4 text-on-surface-variant">{preset.description}</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <SegmentedSetting
+        label="Density"
+        value={appearance.density}
+        options={[
+          ['compact', 'Compact'],
+          ['comfortable', 'Comfortable'],
+          ['spacious', 'Spacious'],
+        ]}
+        testId="page-designer-density"
+        onChange={(density) => onAppearanceChange({ density: density as PageAppearance['density'] })}
+      />
+      <SegmentedSetting
+        label="Content width"
+        value={appearance.contentWidth}
+        options={[
+          ['contained', 'Contained'],
+          ['wide', 'Wide'],
+          ['full', 'Full'],
+        ]}
+        testId="page-designer-width"
+        onChange={(contentWidth) => onAppearanceChange({ contentWidth: contentWidth as PageAppearance['contentWidth'] })}
+      />
+      <SegmentedSetting
+        label="Surface treatment"
+        value={appearance.surfaceStyle}
+        options={[
+          ['flat', 'Flat'],
+          ['soft', 'Soft'],
+          ['cards', 'Cards'],
+        ]}
+        testId="page-designer-surface"
+        onChange={(surfaceStyle) => onAppearanceChange({ surfaceStyle: surfaceStyle as PageAppearance['surfaceStyle'] })}
+      />
 
       <section className="space-y-2">
         <FieldLabel>Column layout</FieldLabel>
@@ -457,20 +619,23 @@ function PageSettings({
             return (
               <li
                 key={region}
-                className="flex items-center gap-2 rounded-lg border border-border/30 bg-surface-container-low px-2.5 py-2"
+                className="space-y-2 rounded-lg border border-border/30 bg-surface-container-low px-2.5 py-2"
               >
-                <RegionIcon className="h-3.5 w-3.5 shrink-0 text-on-surface-variant" />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[11px] font-bold text-on-surface">{meta.label}</span>
-                  <span className="block truncate text-[10px] text-on-surface-variant/80">
-                    {page[region].placements.length} element{page[region].placements.length === 1 ? '' : 's'}
+                <div className="flex items-center gap-2">
+                  <RegionIcon className="h-3.5 w-3.5 shrink-0 text-on-surface-variant" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[11px] font-bold text-on-surface">{meta.label}</span>
+                    <span className="block truncate text-[10px] text-on-surface-variant/80">
+                      {page[region].placements.length} element{page[region].placements.length === 1 ? '' : 's'}
+                    </span>
                   </span>
-                </span>
-                {meta.fixed && (
-                  <span title="Fixed region" className="shrink-0 text-on-surface-variant/70">
-                    <Lock className="h-3 w-3" />
-                  </span>
-                )}
+                  {meta.fixed && <span title="Fixed region" className="shrink-0 text-on-surface-variant/70"><Lock className="h-3 w-3" /></span>}
+                </div>
+                <RegionStyleControls
+                  region={region}
+                  value={{ ...DEFAULT_REGION_STYLE, ...page[region].style }}
+                  onChange={(patch) => onRegionStyleChange(region, patch)}
+                />
               </li>
             );
           })}
@@ -484,6 +649,67 @@ function PageSettings({
         <span className="font-mono font-bold text-on-surface">Esc</span> deselect.
       </p>
     </>
+  );
+}
+
+function RegionStyleControls({
+  region,
+  value,
+  onChange,
+}: {
+  region: RegionName;
+  value: RegionStyle;
+  onChange: (patch: Partial<RegionStyle>) => void;
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-1" data-testid={`page-designer-region-style-${region}`}>
+      <select aria-label={`${region} surface`} value={value.surface} onChange={(event) => onChange({ surface: event.target.value as RegionStyle['surface'] })} className="friendly-input px-1 py-1 text-[9px]">
+        <option value="transparent">Clear</option><option value="subtle">Soft</option><option value="card">Card</option>
+      </select>
+      <select aria-label={`${region} padding`} value={value.padding} onChange={(event) => onChange({ padding: event.target.value as RegionStyle['padding'] })} className="friendly-input px-1 py-1 text-[9px]">
+        <option value="none">No pad</option><option value="sm">Small pad</option><option value="md">Roomy</option>
+      </select>
+      <select aria-label={`${region} gap`} value={value.gap} onChange={(event) => onChange({ gap: event.target.value as RegionStyle['gap'] })} className="friendly-input px-1 py-1 text-[9px]">
+        <option value="compact">Tight</option><option value="comfortable">Normal</option><option value="spacious">Open</option>
+      </select>
+    </div>
+  );
+}
+
+function SegmentedSetting({
+  label,
+  value,
+  options,
+  testId,
+  columns = 3,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: Array<[string, string]>;
+  testId: string;
+  columns?: 2 | 3;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <section className="space-y-2">
+      <FieldLabel>{label}</FieldLabel>
+      <div className={`grid gap-1 rounded-xl border border-border/40 bg-surface-container-low p-1 ${columns === 2 ? 'grid-cols-2' : 'grid-cols-3'}`} data-testid={testId}>
+        {options.map(([key, optionLabel]) => (
+          <button
+            key={key}
+            type="button"
+            aria-pressed={value === key}
+            onClick={() => onChange(key)}
+            className={`rounded-lg px-1.5 py-2 text-[10px] font-bold transition-colors ${
+              value === key ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
+            }`}
+          >
+            {optionLabel}
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 

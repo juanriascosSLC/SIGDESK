@@ -1,4 +1,11 @@
-import type { LayoutRegion, PageLayout, PagePlacement, RegionName } from '@/features/catalog/metamodel';
+import type {
+  LayoutRegion,
+  PageAppearance,
+  PageLayout,
+  PagePlacement,
+  RegionStyle,
+  RegionName,
+} from '@/features/catalog/metamodel';
 
 export function getRegion(page: PageLayout, regionName: RegionName): LayoutRegion {
   return page[regionName];
@@ -38,4 +45,36 @@ export function updatePlacement(
 
 export function updateSidebarColumns(page: PageLayout, sidebarColumns: number): PageLayout {
   return { ...page, sidebarColumns };
+}
+
+export const DEFAULT_PAGE_APPEARANCE: PageAppearance = {
+  density: 'comfortable',
+  contentWidth: 'wide',
+  surfaceStyle: 'soft',
+};
+
+export function resolvePageAppearance(page: PageLayout): PageAppearance {
+  return { ...DEFAULT_PAGE_APPEARANCE, ...page.appearance };
+}
+
+export function updatePageAppearance(page: PageLayout, patch: Partial<PageAppearance>): PageLayout {
+  return { ...page, appearance: { ...resolvePageAppearance(page), ...patch } };
+}
+
+export const DEFAULT_REGION_STYLE: RegionStyle = {
+  surface: 'transparent',
+  padding: 'none',
+  gap: 'comfortable',
+};
+
+export function updateRegionStyle(
+  page: PageLayout,
+  regionName: RegionName,
+  patch: Partial<RegionStyle>,
+): PageLayout {
+  const region = page[regionName];
+  return setRegion(page, regionName, {
+    ...region,
+    style: { ...DEFAULT_REGION_STYLE, ...region.style, ...patch },
+  });
 }

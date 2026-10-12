@@ -231,6 +231,55 @@ test('click-to-add, resize from the panel, Delete and Ctrl+Z', async ({ page }) 
   await expect(page.getByTestId(/^page-designer-slot-cell-/).filter({ hasText: 'Divider' })).toHaveCount(1);
 });
 
+test('a full-page use-case template reflows every element and remains undoable', async ({ page }) => {
+  await openPageDesignerForINC(page);
+  const slots = page.getByTestId(/^page-designer-slot-cell-/);
+  const before = await slots.count();
+
+  await page.getByTestId('page-designer-template-guided').click();
+  await expect(slots).toHaveCount(before);
+  await expect(page.getByTestId('page-designer-region-wrapper-main').locator('[data-region-surface="card"]')).toBeVisible();
+  await expect(page.getByTestId('page-designer-region-wrapper-main').locator('[data-region-gap="spacious"]')).toBeVisible();
+  await expect(page.getByTestId('page-designer-region-wrapper-sidebar').locator('[data-region-surface="subtle"]')).toBeVisible();
+
+  await page.keyboard.press('Control+z');
+  await expect(slots).toHaveCount(before);
+  await expect(page.getByTestId('page-designer-region-wrapper-main').locator('[data-region-surface="transparent"]')).toBeVisible();
+});
+
+test('each region has safe theme-aware surface, padding and spacing controls', async ({ page }) => {
+  await openPageDesignerForINC(page);
+  const controls = page.getByTestId('page-designer-region-style-main');
+  await controls.getByLabel('main surface').selectOption('card');
+  await controls.getByLabel('main padding').selectOption('md');
+  await controls.getByLabel('main gap').selectOption('spacious');
+
+  const main = page.getByTestId('page-designer-region-wrapper-main');
+  await expect(main.locator('[data-region-surface="card"]')).toBeVisible();
+  await expect(main.locator('[data-region-padding="md"]')).toBeVisible();
+  await expect(main.locator('[data-region-gap="spacious"]')).toBeVisible();
+
+  await page.getByTestId('page-designer-preview-button').click();
+  const runtimeMain = page.getByTestId('page-designer-preview').getByTestId('page-layout-region-main');
+  await expect(runtimeMain).toHaveAttribute('data-region-surface', 'card');
+  await expect(runtimeMain).toHaveAttribute('data-region-padding', 'md');
+  await expect(runtimeMain).toHaveAttribute('data-region-gap', 'spacious');
+});
+
+test('visibility rules can visually author ALL and ANY groups without JSON', async ({ page }) => {
+  await openPageDesignerForINC(page);
+  await page.getByTestId('page-designer-palette-content-divider').click();
+  const editor = page.getByTestId('page-designer-visibility-advanced');
+  await editor.getByRole('switch').click();
+  await editor.getByRole('button', { name: 'All must match' }).click();
+  await expect(editor.getByText('Rule 1')).toBeVisible();
+  await expect(editor.getByText('Rule 2')).toBeVisible();
+  await editor.getByRole('button', { name: 'Add rule' }).click();
+  await expect(editor.getByText('Rule 3')).toBeVisible();
+  await editor.getByRole('button', { name: 'Match any' }).click();
+  await expect(editor.getByText('Show when at least one rule matches.')).toBeVisible();
+});
+
 test('responsive canvas switches between desktop, tablet and mobile without changing the saved page', async ({ page }) => {
   await openPageDesignerForINC(page);
   const canvas = page.getByTestId('page-designer-responsive-canvas');
@@ -266,6 +315,25 @@ test('responsive canvas switches between desktop, tablet and mobile without chan
   await expect(page.getByTestId(/^page-designer-slot-/)).toHaveCount(slotsBefore);
 });
 
+test('visual presets and granular page styling change the real responsive canvas', async ({ page }) => {
+  await openPageDesignerForINC(page);
+  const canvas = page.getByTestId('page-designer-responsive-canvas');
+  const skeleton = canvas.locator('[data-page-density]');
+
+  await page.getByTestId('page-designer-preset-operations').click();
+  await expect(skeleton).toHaveAttribute('data-page-density', 'compact');
+  await expect(skeleton).toHaveAttribute('data-page-width', 'full');
+  await expect(skeleton).toHaveAttribute('data-page-surface', 'flat');
+  await expect(page.getByTestId('page-designer-sidebar-3')).toHaveAttribute('aria-pressed', 'true');
+
+  await page.getByTestId('page-designer-density').getByRole('button', { name: 'Spacious' }).click();
+  await page.getByTestId('page-designer-width').getByRole('button', { name: 'Contained' }).click();
+  await page.getByTestId('page-designer-surface').getByRole('button', { name: 'Cards' }).click();
+  await expect(skeleton).toHaveAttribute('data-page-density', 'spacious');
+  await expect(skeleton).toHaveAttribute('data-page-width', 'contained');
+  await expect(skeleton).toHaveAttribute('data-page-surface', 'cards');
+});
+
 test('controlled card and callout components are editable and render on the real canvas', async ({ page }) => {
   await openPageDesignerForINC(page);
   const properties = page.getByTestId('page-designer-properties');
@@ -273,8 +341,10 @@ test('controlled card and callout components are editable and render on the real
   await page.getByTestId('page-designer-palette-content-card').click();
   await properties.getByLabel('Title').fill('Resolution checklist');
   await properties.getByLabel('Text').fill('Capture the diagnosis, action and verification.');
+  await properties.getByTestId('page-designer-content-tone').getByRole('button', { name: 'Success' }).click();
   const card = page.getByTestId(/^page-designer-slot-cell-/).filter({ hasText: 'Resolution checklist' });
   await expect(card).toContainText('Capture the diagnosis, action and verification.');
+  await expect(card.locator('[data-content-tone="success"]')).toBeVisible();
 
   await page.getByTestId('page-designer-palette-content-callout').click();
   await properties.getByLabel('Title').fill('Safety notice');

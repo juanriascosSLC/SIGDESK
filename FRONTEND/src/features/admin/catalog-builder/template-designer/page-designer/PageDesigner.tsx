@@ -43,6 +43,7 @@ import type {
   WidgetKey,
 } from '@/features/catalog/metamodel';
 import { PageRegionsSkeleton } from '@/features/catalog/runtime/PageLayoutRenderer';
+import { regionPresentationClasses, resolveRegionStyle } from '@/features/catalog/runtime/region-style';
 import { useDesignerHistory } from '../useDesignerHistory';
 import { DesignerPlacementContent } from './DesignerPlacementContent';
 import { DesignerRegionCanvas, type SlotDescriptor } from './DesignerRegionCanvas';
@@ -52,7 +53,8 @@ import { PageTemplatePreview } from './PageTemplatePreview';
 import { REGION_ORDER } from './region-meta';
 import { placementIcon, type PageLibraryItem } from './page-library';
 import type { AnyPageSurface } from './surface';
-import { updatePlacement, updateSidebarColumns } from './page-document-ops';
+import { updatePageAppearance, updatePlacement, updateRegionStyle, updateSidebarColumns } from './page-document-ops';
+import { applyPageExperienceTemplate } from './page-templates';
 import {
   addPaletteCell,
   appendItemToRegion,
@@ -499,6 +501,7 @@ export function PageDesigner({
     const RegionIcon = meta.icon;
     const count = countPlacements(regions, regionName);
     const highlighted = Boolean(activeDrag) && regionAccepts(regionName);
+    const regionStyle = resolveRegionStyle(activePage[regionName].style);
     return (
       <section
         data-testid={`page-designer-region-wrapper-${regionName}`}
@@ -521,25 +524,32 @@ export function PageDesigner({
             </span>
           )}
         </header>
-        <DesignerRegionCanvas
-          region={regions[regionName]}
-          regionName={regionName}
-          isDragActive={Boolean(activeDrag)}
-          dragAccepted={regionAccepts(regionName)}
-          locked={meta.fixed}
-          selectedId={selectedId}
-          describe={describe}
-          onSelect={select}
-          onRemove={handleRemove}
-          onDuplicate={handleDuplicate}
-          onMove={handleMove}
-          onResize={handleResizePreview}
-          onResizeEnd={handleResizeEnd}
-          renderCellContent={(placement) => (
-            <DesignerPlacementContent surface={surface} placement={placement} context={simulatedContext} />
-          )}
-          emptyHint={meta.emptyHint}
-        />
+        <div
+          className={regionPresentationClasses(regionStyle)}
+          data-region-surface={regionStyle.surface}
+          data-region-padding={regionStyle.padding}
+          data-region-gap={regionStyle.gap}
+        >
+          <DesignerRegionCanvas
+            region={regions[regionName]}
+            regionName={regionName}
+            isDragActive={Boolean(activeDrag)}
+            dragAccepted={regionAccepts(regionName)}
+            locked={meta.fixed}
+            selectedId={selectedId}
+            describe={describe}
+            onSelect={select}
+            onRemove={handleRemove}
+            onDuplicate={handleDuplicate}
+            onMove={handleMove}
+            onResize={handleResizePreview}
+            onResizeEnd={handleResizeEnd}
+            renderCellContent={(placement) => (
+              <DesignerPlacementContent surface={surface} placement={placement} context={simulatedContext} />
+            )}
+            emptyHint={meta.emptyHint}
+          />
+        </div>
       </section>
     );
   }
@@ -778,6 +788,7 @@ export function PageDesigner({
               >
                 <PageRegionsSkeleton
                   sidebarColumns={activePage.sidebarColumns}
+                  appearance={activePage.appearance}
                   stacked={designerViewport !== 'desktop'}
                   header={renderRegionCanvas('header')}
                   actions={renderRegionCanvas('actions')}
@@ -801,6 +812,17 @@ export function PageDesigner({
                 onDuplicate={handleDuplicate}
                 onRemove={handleRemove}
                 onSidebarColumnsChange={(value) => commitPageChange(updateSidebarColumns(activePage, value))}
+                onAppearanceChange={(patch) => commitPageChange(updatePageAppearance(activePage, patch))}
+                onRegionStyleChange={(region, patch) => commitPageChange(updateRegionStyle(activePage, region, patch))}
+                onApplyPreset={(sidebarColumns, appearance) => commitPageChange({
+                  ...activePage,
+                  sidebarColumns,
+                  appearance,
+                })}
+                onApplyTemplate={(template) => {
+                  setSelectedId(null);
+                  commitPageChange(applyPageExperienceTemplate(activePage, template, surface));
+                }}
                 onClose={() => setPropertiesOpen(false)}
               />
             )}

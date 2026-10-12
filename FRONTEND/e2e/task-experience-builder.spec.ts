@@ -59,3 +59,37 @@ test('administrator designs, validates and explicitly publishes a versioned task
   await page.getByRole('button', { name: 'Publish version' }).click();
   await expect.poll(() => calls.some((call) => call.url.endsWith('/publish'))).toBe(true);
 });
+
+test('administrator builds structured task sections, choice fields and operator guidance', async ({ page }) => {
+  await mockAuthenticatedAdmin(page, { forwardUnmatched: false });
+  const calls = await stubTaskTemplates(page);
+  await page.goto('/app/admin/task-experience');
+
+  await page.getByTestId('task-template-add-section').click();
+  const section = page.getByTestId('task-template-section-section_2');
+  await section.getByLabel('Section title').fill('Parts and logistics');
+  await section.getByLabel('Description').fill('Document the material decision and evidence.');
+  await section.getByRole('button', { name: 'Add field' }).click();
+  await section.getByLabel('Field label').fill('Parts decision');
+  await section.getByLabel('Input type').selectOption('select');
+  await section.getByLabel('Placeholder').fill('Choose a controlled outcome');
+  await section.getByRole('button', { name: 'Add choice' }).click();
+  await section.getByRole('button', { name: 'Add choice' }).click();
+  const choices = section.getByLabel(/^Choices /);
+  await choices.nth(0).fill('Required');
+  await choices.nth(1).fill('Not required');
+
+  await expect(page.getByTestId('task-template-preview')).toContainText('Parts and logistics');
+  await expect(page.getByTestId('task-template-preview')).toContainText('Parts decision');
+  await page.getByRole('button', { name: 'Save draft' }).click();
+
+  await expect.poll(() => calls.filter((call) => call.method === 'PATCH').length).toBe(1);
+  const saved = calls.find((call) => call.method === 'PATCH')?.body as { definition: typeof draft.definition };
+  expect(saved.definition.sections.at(-1)?.title).toBe('Parts and logistics');
+  expect(saved.definition.fields.at(-1)).toMatchObject({
+    label: 'Parts decision',
+    type: 'select',
+    placeholder: 'Choose a controlled outcome',
+    options: ['Required', 'Not required'],
+  });
+});

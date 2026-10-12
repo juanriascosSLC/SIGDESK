@@ -190,6 +190,24 @@ function isGridInteger(value: unknown, minimum: number, maximum: number): value 
   return typeof value === 'number' && Number.isInteger(value) && value >= minimum && value <= maximum;
 }
 
+function parseAppearance(value: unknown): PageLayout['appearance'] | null {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) return null;
+  const density = value.density;
+  const contentWidth = value.contentWidth;
+  const surfaceStyle = value.surfaceStyle;
+  if (
+    !['compact', 'comfortable', 'spacious'].includes(String(density)) ||
+    !['contained', 'wide', 'full'].includes(String(contentWidth)) ||
+    !['flat', 'soft', 'cards'].includes(String(surfaceStyle))
+  ) return null;
+  return {
+    density: density as NonNullable<PageLayout['appearance']>['density'],
+    contentWidth: contentWidth as NonNullable<PageLayout['appearance']>['contentWidth'],
+    surfaceStyle: surfaceStyle as NonNullable<PageLayout['appearance']>['surfaceStyle'],
+  };
+}
+
 function parseRegion(value: unknown): LayoutRegion | null {
   if (!isRecord(value) || !isGridInteger(value.columns, 1, 12) || !Array.isArray(value.placements)) {
     return null;
@@ -224,7 +242,22 @@ function parseRegion(value: unknown): LayoutRegion | null {
     ids.add(id);
     placements.push(candidate as unknown as PagePlacement);
   }
-  return { columns: value.columns, placements };
+  let style: LayoutRegion['style'];
+  if (value.style !== undefined) {
+    if (!isRecord(value.style)) return null;
+    const { surface, padding, gap } = value.style;
+    if (
+      !['transparent', 'subtle', 'card'].includes(String(surface)) ||
+      !['none', 'sm', 'md'].includes(String(padding)) ||
+      !['compact', 'comfortable', 'spacious'].includes(String(gap))
+    ) return null;
+    style = {
+      surface: surface as NonNullable<LayoutRegion['style']>['surface'],
+      padding: padding as NonNullable<LayoutRegion['style']>['padding'],
+      gap: gap as NonNullable<LayoutRegion['style']>['gap'],
+    };
+  }
+  return { columns: value.columns, placements, style };
 }
 
 // Runtime trust boundary for definitions persisted before strict publication
@@ -242,8 +275,9 @@ export function parseResolvedPageLayout(rawLayouts: unknown): PageLayout | null 
   const main = parseRegion(candidate.main);
   const sidebar = parseRegion(candidate.sidebar);
   const footer = parseRegion(candidate.footer);
-  if (!header || !actions || !main || !sidebar || !footer) return null;
-  return { sidebarColumns: candidate.sidebarColumns, header, actions, main, sidebar, footer };
+  const appearance = parseAppearance(candidate.appearance);
+  if (!header || !actions || !main || !sidebar || !footer || appearance === null) return null;
+  return { sidebarColumns: candidate.sidebarColumns, appearance, header, actions, main, sidebar, footer };
 }
 
 export const REGION_NAMES: RegionName[] = ['header', 'actions', 'main', 'sidebar', 'footer'];

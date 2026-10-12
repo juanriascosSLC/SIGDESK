@@ -46,21 +46,16 @@ async function waitForTicketProjection(request: APIRequestContext, id: string) {
     .toBe(200);
 }
 
-/** Sites are a shared, read-only dependency (resource_service via the Kong
- *  gateway) — never isolated per run, same as every other isolated-stack
- *  spec. "sitio" is `required: true` and `bindsTo: 'siteAssetId'` in the
- *  canonical fixture, so creating an INC entity without a real
- *  recursoId/assetContext 422s with RECURSO_INVALIDO (same finding as
- *  catalog-template-designer.spec.ts: passing `site: '...'` as plain data
- *  was always a no-op for a bindsTo field). */
-async function sharedSiteRecursoId(request: APIRequestContext): Promise<string> {
-  const response = await request.get(
-    `${process.env.PLAYWRIGHT_API_URL ?? 'http://127.0.0.1:8000'}/assets/sites?limit=1`,
-  );
-  const body = await jsonOrFailure<{ items?: Array<{ id: string }> }>(response, 'load one shared CMDB site');
-  const recursoId = body.items?.[0]?.id;
-  expect(recursoId, 'At least one synchronized CMDB site is required').toBeTruthy();
-  return recursoId!;
+/** The canonical fixture requires a site binding. The isolated tickets
+ *  binary already provides an in-process asset resolver, so the suite uses a
+ *  stable synthetic site and never borrows Kong, Inventory, a session token
+ *  or a row from the shared Resource database. */
+function isolatedSiteRecursoId(): string {
+  return '00000000-0000-4000-8000-000000000123';
+}
+
+function startPageDesignerStack() {
+  return startIsolatedCatalogStack({ resourceServiceUrl: '' });
 }
 
 async function openPageDesignerForINC(page: Page, stack: IsolatedCatalogStack) {
@@ -173,7 +168,7 @@ async function saveDraftAndPublish(page: Page, expectedNextVersion: number): Pro
 }
 
 test('opens the page designer and shows real page regions rendering the real widgets, not technical chips', async ({ page }) => {
-  const stack = await startIsolatedCatalogStack();
+  const stack = await startPageDesignerStack();
   try {
     await openPageDesignerForINC(page, stack);
     for (const region of ['header', 'actions', 'main', 'sidebar', 'footer'] as const) {
@@ -204,21 +199,21 @@ test('opens the page designer and shows real page regions rendering the real wid
 
 test('dragging SLA into main and Asset Details from sidebar to main is reflected on a newly created ticket', async ({
   page,
-  request,
 }) => {
-  const stack = await startIsolatedCatalogStack();
+  const stack = await startPageDesignerStack();
   try {
     const baseline = await getPublishedIncDefinition(stack.isolatedRequest);
-    const recursoId = await sharedSiteRecursoId(request);
+    const recursoId = isolatedSiteRecursoId();
 
     await openPageDesignerForINC(page, stack);
+    await page.getByTestId('page-designer-template-guided').click();
 
-    // "Service Level Agreement" (`inc-detail-sla`) is already placed in the
-    // main region in the isolated stack's fixture (see the mismatch note
-    // below) — dragging its already-placed palette entry onto the same
-    // region it already occupies is correctly a no-op (confirmed live: it
-    // never marks the draft dirty), so it's asserted here directly rather
-    // than re-dragged.
+    // The Guided Request template deliberately moves contextual widgets such
+    // as SLA into the sidebar. Move it back into main to prove that a full
+    // template remains an editable starting point, not a locked layout.
+    const slaSlot = page.getByTestId('page-designer-slot-cell-inc-detail-sla');
+    await slaSlot.hover();
+    await dragOntoEndOfRegion(page, slotDragHandle(page, 'inc-detail-sla'), 'main');
     await expect(page.getByTestId('page-designer-region-main').getByText('Service Level Agreement').first()).toBeVisible();
 
     // Move Asset Details from the sidebar into main by dragging its handle.
@@ -240,7 +235,28 @@ test('dragging SLA into main and Asset Details from sidebar to main is reflected
     await dragOntoEndOfRegion(page, assetDetailsHandle, 'main');
     await expect(page.getByTestId('page-designer-slot-cell-inc-detail-assets')).toBeVisible();
 
+    // Author a real compound visibility rule from the visual editor. Both
+    // clauses use `exists`, so the widget remains visible for the runtime
+    // ticket while proving ALL-group persistence without Advanced JSON.
+    await page.getByTestId('page-designer-slot-cell-inc-detail-assets').click();
+    const visibility = page.getByTestId('page-designer-visibility-advanced');
+    await visibility.getByRole('switch').click();
+    await visibility.getByRole('button', { name: 'All must match' }).click();
+    const operators = visibility.getByLabel('Operator');
+    await expect(operators).toHaveCount(2);
+    await operators.nth(0).selectOption('exists');
+    await operators.nth(1).selectOption('exists');
+
     const published = await saveDraftAndPublish(page, baseline.version + 1);
+    const publishedDetail = published.specification.detailPage as {
+      default: {
+        main: { style?: { surface?: string; padding?: string; gap?: string }; placements: Array<{ id: string; visibleWhen?: { all?: unknown[] } }> };
+      };
+    };
+    expect(publishedDetail.default.main.style).toEqual({ surface: 'card', padding: 'md', gap: 'spacious' });
+    expect(
+      publishedDetail.default.main.placements.find((placement) => placement.id === 'inc-detail-assets')?.visibleWhen?.all,
+    ).toHaveLength(2);
 
     const runtimeEntity = await jsonOrFailure<Entity>(
       await stack.isolatedRequest.post('/entities/INC', {
@@ -269,6 +285,13 @@ test('dragging SLA into main and Asset Details from sidebar to main is reflected
     // widget this test actually moved into main.
     await expect(page.getByTestId('page-layout-region-main').getByText('Service Level Agreement')).toBeVisible();
     await expect(page.getByTestId('page-layout-region-main').getByText('Related Assets')).toBeVisible();
+    await expect(page.getByTestId('page-layout-region-main')).toHaveAttribute('data-region-surface', 'card');
+    await expect(page.getByTestId('page-layout-region-main')).toHaveAttribute('data-region-padding', 'md');
+    await expect(page.getByTestId('page-layout-region-main')).toHaveAttribute('data-region-gap', 'spacious');
+    const runtimePage = page.locator('[data-page-density]');
+    await expect(runtimePage).toHaveAttribute('data-page-density', 'spacious');
+    await expect(runtimePage).toHaveAttribute('data-page-width', 'contained');
+    await expect(runtimePage).toHaveAttribute('data-page-surface', 'cards');
   } finally {
     await stack.cleanup();
   }
@@ -277,7 +300,7 @@ test('dragging SLA into main and Asset Details from sidebar to main is reflected
 test('resizing a placement reflows its row without overlaps and the published page keeps the new widths', async ({
   page,
 }) => {
-  const stack = await startIsolatedCatalogStack();
+  const stack = await startPageDesignerStack();
   try {
     const baseline = await getPublishedIncDefinition(stack.isolatedRequest);
     await openPageDesignerForINC(page, stack);
@@ -313,12 +336,11 @@ test('resizing a placement reflows its row without overlaps and the published pa
 // definition captured at creation. A redesign only affects new records.
 test('a ticket created before the page redesign keeps its historical data and layout', async ({
   page,
-  request,
 }) => {
-  const stack = await startIsolatedCatalogStack();
+  const stack = await startPageDesignerStack();
   try {
     const baseline = await getPublishedIncDefinition(stack.isolatedRequest);
-    const recursoId = await sharedSiteRecursoId(request);
+    const recursoId = isolatedSiteRecursoId();
     const historicalTitle = `Historical INC before page redesign ${randomUUID()}`;
     const historical = await jsonOrFailure<Entity>(
       await stack.isolatedRequest.post('/entities/INC', {

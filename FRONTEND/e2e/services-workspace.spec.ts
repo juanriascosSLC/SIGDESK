@@ -225,6 +225,8 @@ test('published task-template snapshot renders custom required fields and submit
 
   await expect(page.getByText('Camera Field Restoration')).toBeVisible();
   await page.getByRole('button', { name: 'Restoration completed' }).click();
+  await expect(page.getByTestId('task-template-instructions')).toContainText('Measure signal before leaving site.');
+  await expect(page.getByTestId('task-runtime-section-execution')).toContainText('Execution');
   await page.getByLabel('Work performed 1', { exact: true }).fill('Replaced and aligned the camera.');
   await page.getByLabel('Photo evidence 1', { exact: true }).fill('photo://camera-restored');
   await page.getByLabel('Final signal (dBm)').fill('-48');
