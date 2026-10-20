@@ -41,11 +41,10 @@ export interface SesionDTO {
 
 export const sessionService = {
   /** Exchanges the SIGTools identity for SIG-DESK's local authorization JWT. */
-  emitir: (identity: { email: string; name: string }): Promise<SesionDTO> => {
+  emitir: (): Promise<SesionDTO> => {
     const sigtoolsToken = getAccessToken();
     return apiRequest<SesionDTO>('/v1/session', {
       method: 'POST',
-      body: JSON.stringify({ email: identity.email, nombre: identity.name }),
       suppressAuthFailure: true,
       headers: sigtoolsToken
         ? { Authorization: 'Bearer ' + sigtoolsToken }

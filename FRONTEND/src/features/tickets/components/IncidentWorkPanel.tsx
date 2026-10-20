@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { CheckCircle2, ClipboardList, Clock3, Play, Search, Users, Wrench, X } from 'lucide-react';
 import { Dialog } from '@/components/ui/Dialog';
 import { getWorkflowAssignmentDirectory } from '@/features/automations/api';
@@ -162,9 +163,19 @@ export function IncidentWorkPanel({ ticketId, cycle, attachments, loading, error
         );
       })}</div>}
 
-      {cycle.clientActions.length > 0 && <div className="mt-5"><h3 className="text-sm font-black text-on-surface">Client / site actions</h3><div className="mt-2 space-y-2">{cycle.clientActions.map((action) => <article key={action.id} className="rounded-xl border border-border/40 bg-surface-container p-4"><p className="font-bold">Contact: {action.contactedPerson}</p><ul className="mt-2 list-inside list-disc text-sm text-on-surface-variant">{action.instructions.map((value, index) => <li key={index}>{value}</li>)}</ul>{action.outcomeCode ? <p className="mt-2 text-sm font-bold">Outcome: {action.outcomeCode}</p> : canManageClientActions && <div className="mt-3 flex gap-2"><button className="primary-button" onClick={() => open({ kind: 'complete-client', actionId: action.id, outcome: 'resolved' })}>Resolved</button><button className="secondary-button" onClick={() => open({ kind: 'complete-client', actionId: action.id, outcome: 'unresolved' })}>Still unresolved</button></div>}</article>)}</div></div>}
+      {cycle.clientActions.length > 0 && <div className="mt-5"><h3 className="text-sm font-black text-on-surface">Client / site actions</h3><div className="mt-2 space-y-2">{cycle.clientActions.map((action) => <article key={action.id} className="rounded-xl border border-border/40 bg-surface-container p-4">
+        <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-bold">Contact: {action.contactedPerson}</p><p className="mt-1 text-xs text-on-surface-variant">Performed {formatDateTime(action.performedAt, 'en-US')} · Responsible identity recorded</p></div><span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase ${action.outcomeCode === 'resolved' ? 'border-status-success-border bg-status-success-bg text-status-success-fg' : action.outcomeCode === 'unresolved' ? 'border-status-warning-border bg-status-warning-bg text-status-warning-fg' : 'border-border text-on-surface-variant'}`}>{action.outcomeCode || 'Awaiting outcome'}</span></div>
+        <div className="mt-3 grid gap-3 md:grid-cols-2"><div><p className="text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Instructions</p><ul className="mt-1 list-inside list-disc text-sm text-on-surface-variant">{action.instructions.map((value, index) => <li key={index}>{value}</li>)}</ul></div><div><p className="text-[10px] font-black uppercase tracking-wider text-on-surface-variant">Evidence</p>{action.evidence.length ? <ul className="mt-1 list-inside list-disc text-sm text-on-surface-variant">{action.evidence.map((value, index) => <li key={index}>{value}</li>)}</ul> : <p className="mt-1 text-sm text-on-surface-variant">No evidence references.</p>}</div></div>
+        {action.outcomeNotes.length > 0 && <p className="mt-3 text-sm text-on-surface-variant"><strong className="text-on-surface">Outcome notes:</strong> {action.outcomeNotes.join(' · ')}</p>}
+        {!action.outcomeCode && canManageClientActions && <div className="mt-3 flex gap-2"><button className="primary-button" onClick={() => open({ kind: 'complete-client', actionId: action.id, outcome: 'resolved' })}>Resolved</button><button className="secondary-button" onClick={() => open({ kind: 'complete-client', actionId: action.id, outcome: 'unresolved' })}>Still unresolved</button></div>}
+      </article>)}</div></div>}
 
-      {cycle.serviceCycles.length > 0 && <div className="mt-5"><h3 className="text-sm font-black">Governed Services cycles</h3><div className="mt-2 grid gap-2 md:grid-cols-2">{cycle.serviceCycles.map((serviceCycle) => <div key={serviceCycle.changeId} className="rounded-xl border border-border/40 bg-surface-container p-3 text-xs"><p className="font-mono font-bold">RFC #{serviceCycle.changeId}</p><p className="mt-2 text-on-surface-variant">Parts {serviceCycle.parts} · Purchasing {serviceCycle.purchasing} · Field work {serviceCycle.fieldWork} · Restoration {serviceCycle.restoration} · Finance {serviceCycle.financial} · Closeout {serviceCycle.closeout}</p>{serviceCycle.additionalCycleOpen && <p className="mt-2 font-bold text-status-warning-fg">A follow-up service cycle is being created.</p>}</div>)}</div></div>}
+      {cycle.serviceCycles.length > 0 && <div className="mt-5"><h3 className="text-sm font-black">Governed Services cycles</h3><p className="mt-1 text-xs text-on-surface-variant">Every gate must finish successfully or be explicitly marked not required before the incident can close.</p><div className="mt-3 grid gap-3 lg:grid-cols-2">{cycle.serviceCycles.map((serviceCycle) => <article key={serviceCycle.changeId} className="rounded-xl border border-border/40 bg-surface-container p-4 text-xs">
+        <div className="flex items-start justify-between gap-3"><div><p className="font-mono font-bold">RFC #{serviceCycle.changeId}</p>{serviceCycle.previousChangeId && <p className="mt-1 text-on-surface-variant">Follow-up to RFC #{serviceCycle.previousChangeId}</p>}</div>{can(PERMISSIONS.changesView) && <Link className="font-bold text-primary hover:underline" to={`/app/changes/${encodeURIComponent(serviceCycle.changeId)}`}>Open RFC</Link>}</div>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">{([['Parts', serviceCycle.parts], ['Purchasing', serviceCycle.purchasing], ['Field work', serviceCycle.fieldWork], ['Restoration', serviceCycle.restoration], ['Finance', serviceCycle.financial], ['Closeout', serviceCycle.closeout]] as const).map(([label, status]) => <ServiceGate key={label} label={label} status={status} />)}</div>
+        {serviceCycle.additionalCycleOpen && <p className="mt-3 rounded-lg border border-status-warning-border bg-status-warning-bg p-2 font-bold text-status-warning-fg">A separate follow-up service cycle is open. Approved history remains unchanged.</p>}
+        {serviceCycle.completedAt && <p className="mt-3 text-on-surface-variant">Completed {formatDateTime(serviceCycle.completedAt, 'en-US')}</p>}
+      </article>)}</div></div>}
 
       <Dialog open={Boolean(dialog)} onClose={() => !busy && setDialog(undefined)} preventDismiss={busy} title={dialog?.kind === 'duplicate' ? 'Mark duplicate incident' : dialog?.kind === 'client-action' ? 'Record client / site action' : dialog?.kind === 'complete-client' ? 'Complete client / site action' : dialog?.kind === 'complete-work' ? outcomeLabels[dialog.outcome] : 'Incident action'} footer={<><button className="secondary-button" onClick={() => setDialog(undefined)} disabled={busy}>Cancel</button><button className="primary-button" onClick={submitDialog} disabled={busy || (dialog?.kind === 'duplicate' ? !primaryTicket : dialog?.kind === 'client-action' ? !contactedPerson.trim() || !instructions.trim() || evidence.length === 0 : !notes.trim() || (dialog?.kind === 'complete-work' && evidence.length === 0))}>Confirm</button></>}>
         {dialog?.kind === 'duplicate' ? <div className="space-y-3">
@@ -178,6 +189,17 @@ export function IncidentWorkPanel({ ticketId, cycle, attachments, loading, error
       </Dialog>
     </section>
   );
+}
+
+function ServiceGate({ label, status }: { label: string; status: 'pending' | 'successful' | 'failed' | 'not_required' }) {
+  const style = status === 'successful'
+    ? 'border-status-success-border bg-status-success-bg text-status-success-fg'
+    : status === 'failed'
+      ? 'border-status-danger-border bg-status-danger-bg text-status-danger-fg'
+      : status === 'not_required'
+        ? 'border-status-neutral-border bg-status-neutral-bg text-status-neutral-fg'
+        : 'border-status-warning-border bg-status-warning-bg text-status-warning-fg';
+  return <div className={`rounded-lg border p-2 ${style}`}><p className="text-[9px] font-black uppercase tracking-wider opacity-80">{label}</p><p className="mt-1 font-bold capitalize">{status.replaceAll('_', ' ')}</p></div>;
 }
 
 function EvidenceField({ value, onChange, attachments }: { value: string; onChange: (value: string) => void; attachments: TicketAttachment[] }) {

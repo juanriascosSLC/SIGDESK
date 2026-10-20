@@ -152,19 +152,29 @@ const CLEARED_STATE: AuthState = {
  *  and `Docs/howto/bootstrap-primer-admin.md` is the documented way to
  *  close that gap, not an error this screen should surface as a login
  *  failure. */
-async function getAuthorization(user: { email: string; name: string }): Promise<{
+async function getAuthorization(): Promise<{
   roleId: string | null;
   deskUserId: string | null;
   permissions: string[];
+  expiresIn: number | null;
 }> {
   try {
-    const sesion = await sessionService.emitir(user);
+    const sesion = await sessionService.emitir();
     setSigDeskToken(sesion.access_token);
-    return { roleId: sesion.role_id || null, deskUserId: sesion.usuario?.id ?? null, permissions: sesion.permissions ?? [] };
+    return {
+      roleId: sesion.role_id || null,
+      deskUserId: sesion.usuario?.id ?? null,
+      permissions: sesion.permissions ?? [],
+      expiresIn: sesion.expires_in > 0 ? sesion.expires_in : null,
+    };
   } catch {
     setSigDeskToken(null);
-    return { roleId: null, deskUserId: null, permissions: [] };
+    return { roleId: null, deskUserId: null, permissions: [], expiresIn: null };
   }
+}
+
+function sessionRenewalDelayMs(expiresInSeconds: number): number {
+  return Math.max(250, Math.floor(expiresInSeconds * 1000 * 0.8));
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -172,11 +182,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ...CLEARED_STATE,
     isLoading: true,
   });
+  const [nextSessionRenewalAt, setNextSessionRenewalAt] = useState<number | null>(null);
 
   const clearAuthState = useCallback(() => {
     localStorage.removeItem(ACCESS_LEVEL_KEY);
     setAccessToken(null);
     setSigDeskToken(null);
+    setNextSessionRenewalAt(null);
     setState(CLEARED_STATE);
   }, []);
 
@@ -190,10 +202,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const user = await authService.getMe();
     const savedLevel = localStorage.getItem(ACCESS_LEVEL_KEY);
     if (user === null) {
+      setNextSessionRenewalAt(null);
       setState(CLEARED_STATE);
       return;
     }
-    const authorization = await getAuthorization(user);
+    const authorization = await getAuthorization();
     setState({
       user,
       accessLevel: savedLevel ? parseInt(savedLevel, 10) : null,
@@ -203,6 +216,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading: false,
       isAuthenticated: true,
     });
+    setNextSessionRenewalAt(
+      authorization.expiresIn
+        ? Date.now() + sessionRenewalDelayMs(authorization.expiresIn)
+        : null,
+    );
   }, []);
 
   useEffect(() => {
@@ -215,6 +233,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, 0);
     return () => window.clearTimeout(restoreTimer);
   }, [refresh]);
+
+  useEffect(() => {
+    if (!state.isAuthenticated || nextSessionRenewalAt === null) return;
+    const delay = Math.max(0, nextSessionRenewalAt - Date.now());
+    const renewalTimer = window.setTimeout(() => {
+      void refresh().catch(clearAuthState);
+    }, delay);
+    return () => window.clearTimeout(renewalTimer);
+  }, [clearAuthState, nextSessionRenewalAt, refresh, state.isAuthenticated]);
 
   const login = useCallback(async (username: string, password: string) => {
     const response = await authService.login(username, password);
